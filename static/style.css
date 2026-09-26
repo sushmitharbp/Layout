@@ -1618,8 +1618,49 @@ body {
 }
 
 /* ===================================================================
-   Modals (Hidden by default)
+   Modals & Overlays
    =================================================================== */
+
+.sidebar-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    background: rgba(15, 23, 42, 0.45);
+    backdrop-filter: blur(2px);
+    z-index: 95;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sidebar-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.mobile-new-chat-btn {
+    display: none;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 12px;
+    background: #ffffff;
+    color: var(--text-primary);
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-md);
+    font-size: 0.80rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: var(--shadow-sm);
+    transition: all 0.15s ease;
+}
+
+.mobile-new-chat-btn:hover {
+    background: var(--bg-sidebar-hover);
+    border-color: var(--primary);
+}
 
 .modal-backdrop {
     position: fixed;
@@ -1627,24 +1668,63 @@ body {
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(15, 23, 42, 0.45);
+    height: 100dvh;
+    background: rgba(15, 23, 42, 0.55);
     backdrop-filter: blur(4px);
-    display: none !important;
+    display: none;
     align-items: center;
     justify-content: center;
-    z-index: 1000;
-    padding: 20px;
+    z-index: 1200;
+    padding: 16px;
+}
+
+.modal-backdrop.active,
+.modal-backdrop[style*="display: flex"] {
+    display: flex !important;
 }
 
 .modal-dialog {
     background: #ffffff;
     border-radius: var(--radius-lg);
-    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-    max-width: 90vw;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.05);
+    max-width: 92vw;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+}
+
+.modal-dialog.image-modal-dialog {
+    width: 900px;
+    max-width: 95vw;
+}
+
+.modal-controls {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.zoom-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #f8fafc;
+    border: 1px solid var(--border-medium);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.15s;
+}
+
+.zoom-btn:hover {
+    background: #ffffff;
+    color: var(--primary);
+    border-color: var(--primary);
 }
 
 .modal-dialog.help-dialog {
@@ -1738,35 +1818,405 @@ body {
    Responsive Mobile Support
    =================================================================== */
 
+/* ===================================================================
+   Responsive Mobile & Tablet Support
+   =================================================================== */
+
+/* Tablets & Small Laptops (<= 992px) */
+@media (max-width: 992px) {
+    :root {
+        --sidebar-width: 260px;
+    }
+
+    .rm-cards-grid {
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 12px;
+    }
+}
+
+/* Mobile Screens (<= 768px) */
 @media (max-width: 768px) {
+    html, body {
+        height: 100vh;
+        height: 100dvh;
+        width: 100vw;
+        overflow: hidden;
+    }
+
+    .app-container {
+        height: 100vh;
+        height: 100dvh;
+        width: 100vw;
+        position: relative;
+    }
+
+    /* Off-canvas Slide-out Drawer */
     .sidebar {
         position: fixed;
         top: 0;
         left: 0;
         bottom: 0;
+        width: min(86vw, 320px);
+        max-width: 86vw;
+        z-index: 100;
         transform: translateX(-100%);
+        transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: none;
     }
 
     .sidebar.open {
         transform: translateX(0);
-        box-shadow: var(--shadow-lg);
+        box-shadow: 0 0 50px rgba(0, 0, 0, 0.25);
     }
 
-    .mobile-menu-btn,
+    .mobile-menu-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 36px;
+        height: 36px;
+        background: #ffffff;
+        border: 1px solid var(--border-medium);
+        border-radius: var(--radius-sm);
+        color: var(--text-primary);
+        font-size: 1.05rem;
+        cursor: pointer;
+    }
+
     .mobile-close {
-        display: block;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        background: #ffffff;
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-sm);
+        color: var(--text-secondary);
+        font-size: 0.95rem;
+        cursor: pointer;
     }
 
+    .mobile-new-chat-btn {
+        display: inline-flex;
+    }
+
+    /* Top Navigation */
+    .top-nav {
+        height: 50px;
+        padding: 0 12px;
+    }
+
+    .nav-left {
+        gap: 8px;
+        min-width: 0;
+    }
+
+    .nav-titles-box {
+        min-width: 0;
+    }
+
+    .nav-title {
+        font-size: 0.88rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .nav-subtitle {
+        display: none; /* Hide long subtitle on mobile to keep navbar sleek */
+    }
+
+    /* Chat Feed */
     .chat-feed {
-        padding: 16px 14px 130px;
+        padding: 12px 10px 105px;
+        gap: 14px;
     }
 
-    .chat-input-section {
-        padding: 12px 14px 16px;
+    .message-wrapper {
+        gap: 8px;
+    }
+
+    .bot-avatar {
+        width: 28px;
+        height: 28px;
+        font-size: 0.76rem;
+    }
+
+    .message-bubble.bot-bubble {
+        font-size: 0.88rem;
+        line-height: 1.5;
     }
 
     .message-bubble.user-bubble {
-        max-width: 88%;
+        max-width: 90%;
+        font-size: 0.88rem;
+        padding: 8px 13px;
+        border-radius: 16px 16px 3px 16px;
+    }
+
+    .workflow-steps {
+        margin: 6px 0 10px 14px;
+        font-size: 0.82rem;
+    }
+
+    /* Suggestions & Action Chips */
+    .chip {
+        padding: 5px 12px;
+        font-size: 0.78rem;
+    }
+
+    /* RM Cards Grid */
+    .rm-cards-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+        margin-top: 10px;
+    }
+
+    .rm-card {
+        padding: 12px;
+        border-radius: var(--radius-md);
+        gap: 10px;
+    }
+
+    .rm-code-title {
+        font-size: 0.88rem;
+    }
+
+    .fetch-layout-btn {
+        font-size: 0.80rem;
+        padding: 8px 10px;
+        min-height: 40px;
+    }
+
+    /* Part Header Card */
+    .part-header-card {
+        padding: 10px 12px;
+        gap: 8px;
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .part-title-group h3 {
+        font-size: 0.95rem;
+    }
+
+    /* Engineering PRINT Sheet & Tables on Mobile */
+    .excel-print-sheet-wrapper {
+        margin-top: 10px;
+        border-radius: var(--radius-md);
+    }
+
+    .print-sheet-toolbar {
+        padding: 8px 10px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+
+    .toolbar-title {
+        font-size: 0.82rem;
+        flex-wrap: wrap;
+        width: 100%;
+    }
+
+    .toolbar-actions {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+    }
+
+    .sheet-action-btn {
+        padding: 5px 10px;
+        font-size: 0.76rem;
+    }
+
+    .excel-document {
+        padding: 10px 8px;
+    }
+
+    .doc-header-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 6px;
+        padding-bottom: 4px;
+        margin-bottom: 6px;
+    }
+
+    .doc-main-title {
+        font-size: 1.05rem;
+    }
+
+    .doc-part-banner {
+        font-size: 0.80rem;
+        width: 100%;
+        padding: 4px 6px;
+        word-break: break-all;
+    }
+
+    .doc-section-bar {
+        font-size: 0.78rem;
+        padding: 4px 6px;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 2px;
+    }
+
+    /* Horizontal Scrollable Tables on Mobile */
+    .table-scroll-wrapper {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        border-radius: 4px;
+        box-shadow: inset -6px 0 6px -4px rgba(0, 0, 0, 0.15);
+    }
+
+    .excel-table {
+        font-size: 0.70rem;
+        min-width: 580px; /* Ensures table columns remain readable with horizontal swipe */
+    }
+
+    .excel-table th,
+    .excel-table td {
+        padding: 3px 4px;
+    }
+
+    .sheet-count-input {
+        width: 44px;
+        font-size: 0.82rem;
+    }
+
+    /* Blueprint CAD Image on Mobile */
+    .doc-blueprint-frame {
+        padding: 4px;
+    }
+
+    .blueprint-canvas {
+        min-height: 180px;
+        max-height: 280px;
+    }
+
+    .blueprint-cad-img {
+        max-height: 260px;
+    }
+
+    .blueprint-blank-space {
+        min-height: 160px;
+        height: 200px;
+    }
+
+    .blueprint-zoom-hint {
+        font-size: 0.62rem;
+        padding: 2px 6px;
+    }
+
+    /* Floating Chat Input Bar */
+    .chat-input-section {
+        padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 8px));
+        background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 20%, #ffffff 100%);
+    }
+
+    .input-container {
+        padding: 3px 5px 3px 12px;
+        border-radius: 22px;
+    }
+
+    .input-prefix-icon {
+        font-size: 0.85rem;
+    }
+
+    #chatInput {
+        /* CRITICAL: 16px prevents iOS Safari from automatically zooming into the input */
+        font-size: 16px !important;
+        padding: 6px 0;
+    }
+
+    .send-btn {
+        width: 34px;
+        height: 34px;
+    }
+
+    .send-btn i {
+        font-size: 0.80rem;
+    }
+
+    .input-hint {
+        display: none; /* Hide small input hint on mobile phones to save vertical screen space */
+    }
+
+    .input-autocomplete-box {
+        bottom: calc(100% + 4px);
+        max-height: 180px;
+    }
+
+    .autocomplete-item {
+        padding: 8px 12px;
+        font-size: 0.80rem;
+    }
+
+    /* Fullscreen CAD Modal on Mobile */
+    .modal-backdrop {
+        padding: 8px;
+    }
+
+    .modal-dialog {
+        width: 96vw;
+        max-width: 96vw;
+        max-height: 94vh;
+        border-radius: var(--radius-md);
+    }
+
+    .modal-header {
+        padding: 10px 12px;
+    }
+
+    .modal-header h3 {
+        font-size: 0.88rem;
+    }
+
+    .modal-body {
+        padding: 8px;
+    }
+
+    .modal-body img {
+        max-height: 72vh;
+    }
+}
+
+/* Extra Small Phones (<= 480px) */
+@media (max-width: 480px) {
+    .brand-text h2 {
+        font-size: 0.95rem;
+    }
+
+    .stat-num {
+        font-size: 0.85rem;
+    }
+
+    .stat-label {
+        font-size: 0.62rem;
+    }
+
+    .top-nav {
+        height: 48px;
+        padding: 0 8px;
+    }
+
+    .mobile-new-chat-btn span {
+        display: none; /* Show only plus icon on tiny screens */
+    }
+
+    .mobile-new-chat-btn {
+        padding: 6px 8px;
+    }
+
+    .chat-feed {
+        padding: 8px 6px 95px;
+    }
+
+    .chat-input-section {
+        padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 6px));
     }
 }
 

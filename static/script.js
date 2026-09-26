@@ -41,6 +41,17 @@ const helpModalCloseBtn = document.getElementById("helpModalCloseBtn");
 const mobileMenuBtn = document.getElementById("mobileMenuBtn");
 const sidebarCloseBtn = document.getElementById("sidebarCloseBtn");
 const sidebar = document.getElementById("sidebar");
+const sidebarOverlay = document.getElementById("sidebarOverlay");
+
+function openMobileSidebar() {
+    if (sidebar) sidebar.classList.add("open");
+    if (sidebarOverlay) sidebarOverlay.classList.add("active");
+}
+
+function closeMobileSidebar() {
+    if (sidebar) sidebar.classList.remove("open");
+    if (sidebarOverlay) sidebarOverlay.classList.remove("active");
+}
 
 // ===================================================================
 // Initialization
@@ -139,10 +150,13 @@ function initEventListeners() {
 
     // Mobile Sidebar
     if (mobileMenuBtn) {
-        mobileMenuBtn.addEventListener("click", () => sidebar.classList.add("open"));
+        mobileMenuBtn.addEventListener("click", openMobileSidebar);
     }
     if (sidebarCloseBtn) {
-        sidebarCloseBtn.addEventListener("click", () => sidebar.classList.remove("open"));
+        sidebarCloseBtn.addEventListener("click", closeMobileSidebar);
+    }
+    if (sidebarOverlay) {
+        sidebarOverlay.addEventListener("click", closeMobileSidebar);
     }
 }
 
@@ -698,14 +712,14 @@ function renderPartChoices(data) {
 // ===================================================================
 
 function handleChipClick(partNo) {
+    chatInput.value = partNo;
     handleSendMessage(partNo);
 }
 
 function selectSamplePart(partNo) {
+    closeMobileSidebar();
+    chatInput.value = partNo;
     handleSendMessage(partNo);
-    if (window.innerWidth <= 768) {
-        sidebar.classList.remove("open");
-    }
 }
 
 function fetchLayoutForRM(rmCode, partNo) {
@@ -735,10 +749,14 @@ function openFullscreenModal(imgUrl, title) {
     }
     resetZoom();
     imageModal.style.display = "flex";
+    imageModal.classList.add("active");
 }
 
 function closeImageModal() {
-    if (imageModal) imageModal.style.display = "none";
+    if (imageModal) {
+        imageModal.style.display = "none";
+        imageModal.classList.remove("active");
+    }
 }
 
 function updateZoom(delta) {
@@ -928,6 +946,7 @@ function appendErrorMessage(msg) {
 }
 
 function resetSession() {
+    closeMobileSidebar();
     state.currentPart = null;
     state.currentRm = null;
     state.chatHistory = [];
@@ -962,3 +981,19 @@ function exportConversation() {
     a.click();
     URL.revokeObjectURL(url);
 }
+
+// Bind Global Window Handlers for Dynamic HTML Elements
+window.selectSamplePart = selectSamplePart;
+window.handleChipClick = handleChipClick;
+window.fetchLayoutForRM = fetchLayoutForRM;
+window.handleActionClick = handleActionClick;
+window.resetSession = resetSession;
+window.openFullscreenModal = openFullscreenModal;
+window.closeImageModal = closeImageModal;
+window.printEngineeringDocument = printEngineeringDocument;
+window.recalcSheetQuantities = recalcSheetQuantities;
+window.handleSendMessage = handleSendMessage;
+window.openMobileSidebar = openMobileSidebar;
+window.closeMobileSidebar = closeMobileSidebar;
+window.getYieldColor = getYieldColor;
+

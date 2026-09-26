@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link rel="stylesheet" href="/static/style.css?v=14">
+    <link rel="stylesheet" href="/static/style.css?v=15">
 </head>
 <body>
     <div class="app-container">
@@ -92,6 +92,9 @@
             </div>
         </aside>
 
+        <!-- Mobile Drawer Backdrop Overlay -->
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
         <!-- Main Chat Canvas -->
         <main class="main-content">
             <!-- Top Navigation Bar -->
@@ -105,11 +108,17 @@
                             <span class="status-pulse"></span>
                             <span class="status-dot"></span>
                         </div>
-                        <div>
+                        <div class="nav-titles-box">
                             <h1 class="nav-title">Layout & RM ERP Chatbot</h1>
                             <p class="nav-subtitle">Enter any Part Number to explore RM ERP Codes & Layout Diagrams</p>
                         </div>
                     </div>
+                </div>
+                <div class="nav-right">
+                    <button class="mobile-new-chat-btn" onclick="resetSession()" title="New Chat" aria-label="New Chat">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>New</span>
+                    </button>
                 </div>
             </header>
 
@@ -190,6 +199,28 @@
         </main>
     </div>
 
-    <script src="/static/script.js?v=14"></script>
+    <!-- Fullscreen CAD Layout Image Modal -->
+    <div class="modal-backdrop" id="imageModal" style="display: none;">
+        <div class="modal-dialog image-modal-dialog">
+            <div class="modal-header">
+                <div>
+                    <h3 id="modalLayoutTitle">CAD Layout Diagram</h3>
+                    <small id="modalLayoutSubtitle"></small>
+                </div>
+                <div class="modal-controls">
+                    <button class="icon-btn zoom-btn" id="zoomInBtn" title="Zoom In" aria-label="Zoom In"><i class="fa-solid fa-magnifying-glass-plus"></i></button>
+                    <button class="icon-btn zoom-btn" id="zoomOutBtn" title="Zoom Out" aria-label="Zoom Out"><i class="fa-solid fa-magnifying-glass-minus"></i></button>
+                    <button class="icon-btn zoom-btn" id="zoomResetBtn" title="Reset Zoom" aria-label="Reset Zoom"><i class="fa-solid fa-arrows-rotate"></i></button>
+                    <a class="icon-btn zoom-btn" id="downloadImageBtn" download title="Download CAD Image" aria-label="Download Image"><i class="fa-solid fa-download"></i></a>
+                    <button class="modal-close" id="modalCloseBtn" aria-label="Close modal"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            </div>
+            <div class="modal-body modal-image-body">
+                <img id="modalImage" src="" alt="Fullscreen CAD Layout">
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js?v=15"></script>
 </body>
 </html>
