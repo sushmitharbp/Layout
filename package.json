@@ -1,0 +1,20 @@
+{
+  "name": "sheetlayout-ai",
+  "version": "1.0.0",
+  "description": "SheetLayout AI — Engineering Layout & RM ERP Assistant",
+  "main": "app.py",
+  "scripts": {
+    "dev": "python app.py",
+    "start": "python app.py",
+    "extract": "python extract_data_and_images.py"
+  },
+  "keywords": [
+    "cad",
+    "engineering",
+    "sheet-metal",
+    "layout",
+    "rm-erp"
+  ],
+  "author": "",
+  "license": "ISC"
+}

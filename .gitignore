@@ -1,0 +1,29 @@
+# Environment variables & secrets (CRITICAL: NEVER COMMIT API KEYS)
+.env
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environment
+venv/
+env/
+ENV/
+.venv/
+
+# Large raw source files (data_store.json has all extracted data)
+*.xlsx
+*.csv
+
+# Temporary / testing
+extracted_sample/
+test_api.py
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

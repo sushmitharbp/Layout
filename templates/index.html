@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SheetLayout AI — Engineering Layout & RM ERP Assistant</title>
+    <meta name="description" content="AI Chatbot to query standardized sheet metal layouts, RM ERP codes, blank sizing, material yield, and CAD layout drawings from standardization engineering data.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/static/style.css?v=14">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <div class="brand-icon">
+                        <i class="fa-solid fa-shapes"></i>
+                    </div>
+                    <div class="brand-text">
+                        <h2>SheetLayout <span>AI</span></h2>
+                        <span class="badge-engineering">CAD & RM ERP</span>
+                    </div>
+                </div>
+                <button class="icon-btn mobile-close" id="sidebarCloseBtn" aria-label="Close Sidebar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- New Chat Button (ChatGPT/Claude Style) -->
+            <div class="new-chat-wrapper">
+                <button class="new-chat-btn" onclick="resetSession()">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>New Chat</span>
+                </button>
+            </div>
+
+            <!-- Stats Bar -->
+            <div class="stats-card">
+                <div class="stat-item">
+                    <span class="stat-num" id="statParts">{{ stats.total_unique_parts }}</span>
+                    <span class="stat-label">Parts</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-num" id="statLayouts">{{ stats.total_images_extracted }}</span>
+                    <span class="stat-label">Layouts</span>
+                </div>
+                <div class="stat-divider"></div>
+                <div class="stat-item">
+                    <span class="stat-num" id="statConfigs">{{ stats.total_records }}</span>
+                    <span class="stat-label">Configs</span>
+                </div>
+            </div>
+
+            <!-- Search Lookup Bar in Sidebar -->
+            <div class="sidebar-search-box">
+                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                <input type="text" id="quickSearchInput" placeholder="Quick search part #..." autocomplete="off">
+                <div class="quick-search-dropdown" id="quickSearchDropdown"></div>
+            </div>
+
+            <!-- Quick Sample Parts -->
+            <div class="sidebar-section">
+                <div class="section-title">
+                    <span><i class="fa-solid fa-bolt"></i> Sample Parts</span>
+                    <small>Click to test</small>
+                </div>
+                <div class="sample-list" id="sampleList">
+                    {% for sample in samples %}
+                    <button class="sample-btn" data-part="{{ sample.part_no }}" onclick="selectSamplePart('{{ sample.part_no }}')">
+                        <div class="sample-btn-info">
+                            <span class="sample-part-name">{{ sample.part_no }}</span>
+                            <span class="sample-rm-badge">{{ sample.rm_count }} RM Codes</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right sample-arrow"></i>
+                    </button>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Sidebar Actions Footer -->
+            <div class="sidebar-footer">
+                <button class="clear-chat-btn" id="clearChatBtn">
+                    <i class="fa-solid fa-trash-can"></i> New Session
+                </button>
+            </div>
+        </aside>
+
+        <!-- Main Chat Canvas -->
+        <main class="main-content">
+            <!-- Top Navigation Bar -->
+            <header class="top-nav">
+                <div class="nav-left">
+                    <button class="icon-btn mobile-menu-btn" id="mobileMenuBtn" aria-label="Toggle Menu">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div class="assistant-status">
+                        <div class="status-pulse-wrapper">
+                            <span class="status-pulse"></span>
+                            <span class="status-dot"></span>
+                        </div>
+                        <div>
+                            <h1 class="nav-title">Layout & RM ERP Chatbot</h1>
+                            <p class="nav-subtitle">Enter any Part Number to explore RM ERP Codes & Layout Diagrams</p>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Chat Message Feed -->
+            <div class="chat-feed" id="chatFeed">
+                <!-- Welcome Bot Message -->
+                <div class="message-wrapper bot animate-in">
+                    <div class="bot-avatar">
+                        <i class="fa-solid fa-microchip"></i>
+                    </div>
+                    <div class="message-bubble bot-bubble">
+                        <div class="bubble-header">
+                            <span class="sender-name">Layout AI Assistant</span>
+                            <span class="message-time">Just now</span>
+                        </div>
+                        <div class="bubble-content">
+                            <p>Hello! 👋 I am your <strong>Sheet Metal Layout & RM ERP Assistant</strong> for the Layout Standardization Master database.</p>
+                            <p>How it works:</p>
+                            <ol class="workflow-steps">
+                                <li><strong>Step 1:</strong> Give me any <strong>Part Number</strong> (e.g. <code>MBA01008 - Item 1</code> or base part <code>MBA01008</code>).</li>
+                                <li><strong>Step 2:</strong> I will display all <strong>RM ERP Codes</strong> present for that part along with Blank sizes, Sheet Grade, and Material Yields.</li>
+                                <li><strong>Step 3:</strong> Click <strong>"Fetch Layout"</strong> on any RM ERP Code to view its technical layout drawing and cutting plan.</li>
+                            </ol>
+                            <div class="quick-chips-group">
+                                <span class="chip-label"><i class="fa-solid fa-wand-magic-sparkles"></i> Try a sample:</span>
+                                <div class="chips-container">
+                                    <button class="chip" onclick="handleChipClick('MBA01008 - Item 1')">MBA01008 - Item 1</button>
+                                    <button class="chip" onclick="handleChipClick('X5L00214 - Item 1')">X5L00214 - Item 1</button>
+                                    <button class="chip" onclick="handleChipClick('MBA01010 - Item')">MBA01010 - Item</button>
+                                    <button class="chip" onclick="handleChipClick('MB121017 - Item 11(X6C17014)')">MB121017 - Item 11</button>
+                                    <button class="chip" onclick="handleChipClick('F4931410 - Item 1')">F4931410 - Item 1</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Typing Indicator (Hidden by default) -->
+            <div class="typing-indicator-wrapper" id="typingIndicator" style="display: none;">
+                <div class="bot-avatar small">
+                    <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div class="typing-bubble">
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                    <span class="dot"></span>
+                </div>
+            </div>
+
+            <!-- Input Bar & Search Suggestions -->
+            <div class="chat-input-section">
+                <!-- Autocomplete Dropdown above input -->
+                <div class="input-autocomplete-box" id="inputAutocomplete"></div>
+
+                <form class="chat-input-form" id="chatForm">
+                    <div class="input-container">
+                        <i class="fa-solid fa-barcode input-prefix-icon"></i>
+                        <input 
+                            type="text" 
+                            id="chatInput" 
+                            placeholder="Enter Part Number (e.g. MBA01008, X5L00214, F4931410)..." 
+                            autocomplete="off"
+                            required
+                        >
+                        <button type="button" class="input-clear-btn" id="inputClearBtn" style="display: none;" title="Clear input">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                        <button type="submit" class="send-btn" id="sendBtn" aria-label="Send message" title="Search Part Number">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </button>
+                    </div>
+                </form>
+                <div class="input-hint">
+                    <span><i class="fa-solid fa-circle-info"></i> Press <strong>Enter</strong> to search. Instant lookup across 1,010+ standardized engineering parts.</span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="/static/script.js?v=14"></script>
+</body>
+</html>
