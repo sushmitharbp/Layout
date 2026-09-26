@@ -1927,9 +1927,9 @@ body {
         display: none; /* Hide long subtitle on mobile to keep navbar sleek */
     }
 
-    /* Chat Feed */
+    /* Chat Feed — enough bottom padding to clear the fixed input bar */
     .chat-feed {
-        padding: 12px 10px 105px;
+        padding: 12px 10px 70px;
         gap: 14px;
     }
 
@@ -2111,15 +2111,43 @@ body {
         padding: 2px 6px;
     }
 
-    /* Floating Chat Input Bar */
+    /* Floating Chat Input Bar — FIXED on mobile, not absolute */
+    .main-content {
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: relative;
+    }
+
     .chat-input-section {
-        padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 8px));
-        background: linear-gradient(180deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 20%, #ffffff 100%);
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        padding: 6px 10px calc(6px + env(safe-area-inset-bottom, 6px));
+        background: #ffffff;
+        border-top: 1px solid var(--border-subtle);
+        z-index: 60;
+        pointer-events: auto;
+        /* Remove the gradient on mobile — solid white is more reliable */
+        background: #ffffff;
+    }
+
+    .chat-input-form,
+    .input-autocomplete-box,
+    .input-hint {
+        pointer-events: auto;
+    }
+
+    .chat-input-form {
+        max-width: 100%;
     }
 
     .input-container {
-        padding: 3px 5px 3px 12px;
+        padding: 4px 5px 4px 12px;
         border-radius: 22px;
+        gap: 6px;
+        min-height: 44px; /* Apple's recommended minimum touch target */
     }
 
     .input-prefix-icon {
@@ -2132,27 +2160,36 @@ body {
         padding: 6px 0;
     }
 
+    #chatInput::placeholder {
+        font-size: 14px;
+    }
+
     .send-btn {
         width: 34px;
         height: 34px;
+        flex-shrink: 0;
     }
 
     .send-btn i {
-        font-size: 0.80rem;
+        font-size: 0.82rem;
     }
 
     .input-hint {
-        display: none; /* Hide small input hint on mobile phones to save vertical screen space */
+        display: none;
     }
 
     .input-autocomplete-box {
-        bottom: calc(100% + 4px);
-        max-height: 180px;
+        position: fixed;
+        bottom: 58px; /* sits above the input bar */
+        left: 8px;
+        right: 8px;
+        max-height: 200px;
+        border-radius: var(--radius-md);
     }
 
     .autocomplete-item {
-        padding: 8px 12px;
-        font-size: 0.80rem;
+        padding: 10px 12px;
+        font-size: 0.82rem;
     }
 
     /* Fullscreen CAD Modal on Mobile */
@@ -2212,7 +2249,7 @@ body {
     }
 
     .chat-feed {
-        padding: 8px 6px 95px;
+        padding: 8px 6px 65px;
     }
 
     .chat-input-section {
