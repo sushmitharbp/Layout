@@ -53,6 +53,31 @@ document.addEventListener("DOMContentLoaded", () => {
     initRole();
     loadStats();
     loadOrders();
+
+    const sheetsInput = document.getElementById("sheetsRequired");
+    if (sheetsInput) {
+        sheetsInput.addEventListener("input", () => {
+            const val = parseFloat(sheetsInput.value) || 0;
+            if (currentIntelData && currentIntelData.rm_opening_stock) {
+                const onhand = currentIntelData.rm_opening_stock.onhand_stock || 0;
+                const isSuff = onhand >= val;
+                const stockCheck = document.getElementById("constraintStock");
+                const badge = document.getElementById("stockStatusBadge");
+                if (stockCheck) stockCheck.checked = isSuff;
+                if (badge) {
+                    if (isSuff) {
+                        badge.className = "intel-badge in-stock";
+                        badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Stock Available (${onhand} Sheets onhand)`;
+                    } else {
+                        const shortfall = (val - onhand).toFixed(1);
+                        badge.className = "intel-badge stock-shortage";
+                        badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Stock Shortfall: ${shortfall} Sheets required (${onhand} onhand)`;
+                    }
+                }
+                recalculateWorkflowRoute();
+            }
+        });
+    }
 });
 
 // Role Management
@@ -259,6 +284,12 @@ function openCreateModal() {
     if (moNumInput) moNumInput.value = randomMoNum;
 
     selectedPartData = null;
+    currentIntelData = null;
+    const intelCard = document.getElementById("erpIntelligenceCard");
+    if (intelCard) intelCard.style.display = "none";
+    const historyWrap = document.getElementById("moHistoryTableWrap");
+    if (historyWrap) historyWrap.style.display = "none";
+
     toggleLayoutType(true);
     recalculateWorkflowRoute();
     if (modal) modal.style.display = "flex";
@@ -376,6 +407,22 @@ function onRmErpChanged(rmCode) {
     }
 
     recalculateWorkflowRoute();
+
+    // Live ERP & Stock Intelligence Call
+    const partNo = document.getElementById("partNoInput")?.value?.trim();
+    const sheetsNeeded = parseFloat(document.getElementById("sheetsRequired")?.value) || 1;
+    if (partNo) {
+        fetchAndDisplayIntelligence(
+            partNo,
+            record.rm_erp || rmCode,
+            record.grade,
+            record.thickness,
+            record.length,
+            record.width,
+            sheetsNeeded,
+            false
+        );
+    }
 }
 
 function toggleLayoutType(isStandard) {
@@ -480,6 +527,18 @@ async function openReviewModal(moNumber) {
         activeReviewMo = await res.json();
         renderReviewModal(activeReviewMo);
         document.getElementById("reviewModal").style.display = "flex";
+
+        // Fetch ERP & Stock intelligence for the reviewed MO
+        fetchAndDisplayIntelligence(
+            activeReviewMo.part_no,
+            activeReviewMo.rm_erp,
+            activeReviewMo.grade,
+            activeReviewMo.thickness,
+            activeReviewMo.length,
+            activeReviewMo.width,
+            activeReviewMo.sheets_required || 1,
+            true
+        );
     } catch (err) {
         console.error("Failed to load MO details:", err);
     }
@@ -734,5 +793,168 @@ function formatDate(isoStr) {
         });
     } catch (e) {
         return isoStr;
+    }
+}
+
+// ERP, Stock & MRP Intelligence Functions
+let currentIntelData = null;
+
+async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, length, width, sheetsNeeded, isReview = false) {
+    if (!partNo) return;
+    const cardId = isReview ? "reviewErpIntelCard" : "erpIntelligenceCard";
+    const card = document.getElementById(cardId);
+    if (!card) return;
+
+    card.style.display = "block";
+    const badge = document.getElementById(isReview ? "reviewStockStatusBadge" : "stockStatusBadge");
+    if (badge) {
+        badge.className = "intel-badge";
+        badge.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Checking Inventory &amp; MOs...`;
+    }
+
+    try {
+        const params = new URLSearchParams({
+            rm: rmCode || "",
+            grade: grade || "",
+            thickness: thickness || "",
+            length: length || "",
+            width: width || "",
+            sheets: sheetsNeeded || 1
+        });
+        const res = await fetch(`/api/intelligence/part/${encodeURIComponent(partNo)}?${params.toString()}`);
+        if (!res.ok) return;
+        const intel = await res.json();
+        if (!isReview) currentIntelData = intel;
+
+        renderIntelligenceCard(intel, isReview);
+    } catch (err) {
+        console.error("Failed to load ERP & Stock intelligence:", err);
+    }
+}
+
+function renderIntelligenceCard(intel, isReview = false) {
+    const prefix = isReview ? "review" : "";
+    
+    // 1. RM Opening Stock
+    const rmStockEl = document.getElementById(`${prefix}IntelRmStock`);
+    const rmDetailEl = document.getElementById(`${prefix}IntelRmDetail`);
+    const rm = intel.rm_opening_stock;
+    if (rmStockEl) {
+        rmStockEl.textContent = rm ? `${rm.onhand_stock || 0} Sheets` : "0 Sheets";
+    }
+    if (rmDetailEl) {
+        if (rm) {
+            const wtStr = rm.total_weight ? `${Number(rm.total_weight).toLocaleString()} kg` : "0 kg";
+            const priceStr = rm.last_po_price ? ` | PO: ₹${rm.last_po_price}` : "";
+            rmDetailEl.textContent = `${rm.item_code} (${wtStr}${priceStr})`;
+        } else {
+            rmDetailEl.textContent = "Not in Main Store inventory";
+        }
+    }
+
+    // 2. Parts Opening Stock (FG & WIP)
+    const fgStockEl = document.getElementById(`${prefix}IntelFgStock`);
+    const fgDetailEl = document.getElementById(`${prefix}IntelFgDetail`);
+    const partsStock = intel.parts_opening_stock || {};
+    const fgItems = partsStock.items || [];
+    if (fgStockEl) {
+        fgStockEl.textContent = `${partsStock.total_onhand_qty || 0} Nos`;
+    }
+    if (fgDetailEl) {
+        if (fgItems.length > 0) {
+            const categories = [...new Set(fgItems.map(i => i.category || "Stock"))].join(", ");
+            fgDetailEl.textContent = `${fgItems.length} SKU(s) in 002 (${categories})`;
+        } else {
+            fgDetailEl.textContent = "0 Nos in 002 - FG & WIP store";
+        }
+    }
+
+    // 3. MRP Monthly Schedule
+    const mrpTotalEl = document.getElementById(`${prefix}IntelMrpTotal`);
+    const mrpDetailEl = document.getElementById(`${prefix}IntelMrpDetail`);
+    const mrp = intel.mrp_schedule || {};
+    if (mrpTotalEl) {
+        mrpTotalEl.textContent = mrp.monthly_total !== null && mrp.monthly_total !== undefined 
+            ? `${mrp.monthly_total} Nos` 
+            : "- Nos";
+    }
+    if (mrpDetailEl) {
+        if (mrp.weekly_breakdown) {
+            const w = mrp.weekly_breakdown;
+            mrpDetailEl.textContent = `Wk1:${w.wk1 || 0} | Wk2:${w.wk2 || 0} | Wk3:${w.wk3 || 0} | Wk4:${w.wk4 || 0} | Wk5:${w.wk5 || 0}`;
+        } else {
+            mrpDetailEl.textContent = "No active monthly schedule in Sales MRP";
+        }
+    }
+
+    // 4. Previous MOs in ERP
+    const moCountEl = document.getElementById(`${prefix}IntelMoCount`);
+    const prevMos = intel.previous_mos || { records: [], total_found: 0 };
+    if (moCountEl) {
+        moCountEl.textContent = `${prevMos.total_found || 0} MOs`;
+    }
+
+    // Populate Previous MOs Table
+    const tableBody = document.getElementById(isReview ? "reviewMoHistoryTableBody" : "moHistoryTableBody");
+    if (tableBody) {
+        if (!prevMos.records || prevMos.records.length === 0) {
+            tableBody.innerHTML = `<tr><td colspan="6" class="text-muted" style="text-align:center; padding: 12px;">No previous MO records found for this part in ERP MO Report.</td></tr>`;
+        } else {
+            tableBody.innerHTML = prevMos.records.map(m => {
+                const isReleased = (m.status || "").toUpperCase() === "RELEASED";
+                const isCompleted = (m.status || "").toUpperCase() === "COMPLETED";
+                const badgeStyle = isReleased 
+                    ? "background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem;" 
+                    : isCompleted
+                    ? "background: #dcfce7; color: #16a34a; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem;"
+                    : "background: #f1f5f9; color: #475569; padding: 2px 8px; border-radius: 4px; font-weight: 600; font-size: 0.75rem;";
+                return `
+                    <tr>
+                        <td><strong>${escapeHtml(m.mo_doc_no)}</strong></td>
+                        <td>${escapeHtml(m.doc_date || '-')}</td>
+                        <td><span style="${badgeStyle}">${escapeHtml(m.status || 'LOGGED')}</span></td>
+                        <td><strong>${m.no_of_sheets !== null && m.no_of_sheets !== undefined ? m.no_of_sheets : '-'}</strong></td>
+                        <td><code>${escapeHtml(m.cutting_plan_no || '-')}</code></td>
+                        <td><small title="${escapeHtml(m.parent_desc || '')}">${escapeHtml(m.parent_code || '-')}</small></td>
+                    </tr>
+                `;
+            }).join("");
+        }
+    }
+
+    // Stock Feasibility Check & Routing Constraint
+    const feas = intel.stock_feasibility || {};
+    const badge = document.getElementById(isReview ? "reviewStockStatusBadge" : "stockStatusBadge");
+    if (badge) {
+        if (feas.is_sufficient) {
+            badge.className = "intel-badge in-stock";
+            badge.innerHTML = `<i class="fa-solid fa-circle-check"></i> Stock Available (${feas.sheets_onhand} Sheets onhand)`;
+        } else {
+            badge.className = "intel-badge stock-shortage";
+            const onhandTxt = feas.sheets_onhand > 0 ? `${feas.sheets_onhand} onhand` : "0 in stock";
+            badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Stock Shortfall: ${feas.shortfall} Sheets required (${onhandTxt})`;
+        }
+    }
+
+    if (!isReview) {
+        const stockConstraint = document.getElementById("constraintStock");
+        if (stockConstraint) {
+            stockConstraint.checked = !!feas.is_sufficient;
+            recalculateWorkflowRoute();
+        }
+    }
+}
+
+function toggleMoHistoryTable() {
+    const wrap = document.getElementById("moHistoryTableWrap");
+    if (wrap) {
+        wrap.style.display = (wrap.style.display === "none" || !wrap.style.display) ? "block" : "none";
+    }
+}
+
+function toggleReviewMoHistoryTable() {
+    const wrap = document.getElementById("reviewMoHistoryTableWrap");
+    if (wrap) {
+        wrap.style.display = (wrap.style.display === "none" || !wrap.style.display) ? "block" : "none";
     }
 }

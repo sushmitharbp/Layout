@@ -162,6 +162,7 @@ def logout():
 
 @app.route("/dashboard")
 @app.route("/mo")
+@app.route("/mo_portal")
 def dashboard():
     """Role-based Workspace with Floating Chatbot in bottom-right corner"""
     role = session.get("role")
@@ -311,6 +312,125 @@ def chat():
                 ]
             })
 
+    # Case A.2: Check for ERP Intelligence / MO Report / Stock / MRP Queries
+    is_mo_history_query = any(k in msg_lower for k in ["previous mo", "past mo", "mo history", "mo report", "mos created", "earlier mo"])
+    is_rm_stock_query = any(k in msg_lower for k in ["rm stock", "main store", "raw material stock", "opening stock of rm", "rm opening"])
+    is_part_stock_query = any(k in msg_lower for k in ["parts opening", "parts stock", "fg stock", "wip stock", "opening stock for part", "fg & wip"])
+    is_mrp_query = any(k in msg_lower for k in ["monthly schedule", "mrp schedule", "sales schedule", "schedule from mrp", "schedule for the part"])
+    is_clearance_query = any(k in msg_lower for k in ["clearance", "stock check", "can we shear", "inventory check"])
+
+    if is_mo_history_query or is_rm_stock_query or is_part_stock_query or is_mrp_query or is_clearance_query:
+        # Detect part or rm code from query or current context
+        detected_parts = SHEET_AI.extract_part_numbers(message) or find_parts_by_query(message)
+        if not detected_parts:
+            for t in re.findall(r'[a-zA-Z0-9_-]{4,}', message):
+                tk = normalize_key(t)
+                if tk in ERP_STOCK_SERVICE.previous_mos or tk in ERP_STOCK_SERVICE.parts_stock or tk in ERP_STOCK_SERVICE.mrp_schedule:
+                    detected_parts.append(t)
+                    break
+
+        query_part = detected_parts[0] if detected_parts else current_part
+        query_rm = target_rm or current_rm
+        if not query_rm:
+            for t in re.findall(r'[a-zA-Z0-9_.*-]{4,}', message):
+                tk = normalize_key(t)
+                if tk in ERP_STOCK_SERVICE.rm_stock or tk in ERP_STOCK_SERVICE.previous_mos_by_rm:
+                    query_rm = t
+                    break
+
+        # If previous MO history requested
+        if is_mo_history_query and (query_part or query_rm):
+            mos = ERP_STOCK_SERVICE.get_previous_mos(query_part or "", rm_code=query_rm)
+            if mos:
+                mo_rows = []
+                for m in mos[:6]:
+                    mo_rows.append(f"• **MO Doc #{m['mo_doc_no']}** | Date: `{m.get('doc_date') or '-'}` | Status: `{m.get('status')}` | Sheets: **{m.get('no_of_sheets') or '-'}** | Plan: `{m.get('cutting_plan_no') or '-'}` | Parent: `{m.get('parent_code') or '-'}`")
+                reply = f"Found **{len(mos)} previous Manufacturing Order(s)** in ERP for **{query_part or query_rm}**:\n\n" + "\n".join(mo_rows)
+                if len(mos) > 6:
+                    reply += f"\n\n*(Showing top 6 of {len(mos)} previous orders)*"
+                return jsonify({
+                    "reply": reply,
+                    "type": "erp_intelligence",
+                    "part_no": query_part,
+                    "records": mos
+                })
+            else:
+                return jsonify({
+                    "reply": f"No previous MO records found in ERP MO Report for **{query_part or query_rm}**.",
+                    "type": "info"
+                })
+
+        # If RM stock query
+        if is_rm_stock_query and (query_rm or query_part):
+            rm_code_to_check = query_rm
+            if not rm_code_to_check and query_part and query_part in PARTS:
+                recs = PARTS[query_part]["records"]
+                if recs:
+                    rm_code_to_check = recs[0].get("rm_erp")
+            
+            rm_data = ERP_STOCK_SERVICE.get_rm_opening_stock(rm_code_to_check or "")
+            if rm_data:
+                wt_val = rm_data.get('total_weight')
+                wt_str = f"{float(wt_val):,.1f} kg" if wt_val else "-"
+                price_str = f"₹{rm_data.get('last_po_price')}" if rm_data.get('last_po_price') else "N/A"
+                reply = (
+                    f"📦 **RM Opening Stock (Main Store)** for `{rm_data.get('item_code')}`:\n\n"
+                    f"• **Onhand Stock:** **{rm_data.get('onhand_stock')} Sheets**\n"
+                    f"• **Total Weight:** {wt_str}\n"
+                    f"• **Description:** {rm_data.get('item_desc')}\n"
+                    f"• **Last PO Price:** {price_str}\n"
+                    f"• **UOM:** {rm_data.get('uom', 'NOS')}"
+                )
+                return jsonify({"reply": reply, "type": "erp_intelligence", "data": rm_data})
+            else:
+                return jsonify({"reply": f"No RM stock record found in Main Store for `{rm_code_to_check}`.", "type": "info"})
+
+        # If parts stock (FG & WIP) query
+        if is_part_stock_query and query_part:
+            fg_items = ERP_STOCK_SERVICE.get_parts_opening_stock(query_part)
+            if fg_items:
+                total_qty = sum(it.get("onhand_stock", 0) for it in fg_items)
+                item_lines = [f"• **{it['item_code']}** ({it.get('category', 'Stock')}): **{it.get('onhand_stock', 0)} Nos**" for it in fg_items[:5]]
+                reply = f"🏭 **Parts Opening Stock (002 - FG & WIP)** for **{query_part}**:\n\n• **Total Onhand:** **{total_qty} Nos** across {len(fg_items)} item(s)\n" + "\n".join(item_lines)
+                return jsonify({"reply": reply, "type": "erp_intelligence", "items": fg_items})
+            else:
+                return jsonify({"reply": f"No opening stock records found in 002 - FG & WIP for **{query_part}**.", "type": "info"})
+
+        # If MRP monthly schedule query
+        if is_mrp_query and query_part:
+            mrp_data = ERP_STOCK_SERVICE.get_mrp_monthly_schedule(query_part)
+            if mrp_data:
+                first = mrp_data[0].get("monthly_schedule", {})
+                w1, w2, w3, w4, w5 = first.get("wk1", 0), first.get("wk2", 0), first.get("wk3", 0), first.get("wk4", 0), first.get("wk5", 0)
+                tot = first.get("monthly_total", 0)
+                bal = first.get("balance_planning", 0)
+                reply = (
+                    f"📅 **MRP Monthly Planning Schedule** for **{query_part}**:\n\n"
+                    f"• **Total Monthly Target:** **{tot} Nos**\n"
+                    f"• **Weekly Plan:** W1: {w1} | W2: {w2} | W3: {w3} | W4: {w4} | W5: {w5}\n"
+                    f"• **Stock at Planning:** {first.get('fg_pc_stock', 0)} Nos\n"
+                    f"• **Balance for Planning:** {bal} Nos"
+                )
+                return jsonify({"reply": reply, "type": "erp_intelligence", "mrp": mrp_data})
+            else:
+                return jsonify({"reply": f"No active schedule found in Sales MRP for **{query_part}**.", "type": "info"})
+
+        # Comprehensive Clearance Query
+        if query_part:
+            intel = ERP_STOCK_SERVICE.get_part_comprehensive_intelligence(query_part, rm_code=query_rm)
+            onhand_rm = intel["rm_opening_stock"].get("onhand_stock", 0) if intel["rm_opening_stock"] else 0
+            fg_tot = intel["parts_opening_stock"]["total_onhand_qty"]
+            mrp_tot = intel["mrp_schedule"]["monthly_total"] or "-"
+            prev_mo_cnt = intel["previous_mos"]["total_found"]
+            reply = (
+                f"📊 **Complete ERP & Inventory Clearance Intelligence** for **{query_part}**:\n\n"
+                f"1. **RM Opening Stock (Main Store):** **{onhand_rm} Sheets** onhand\n"
+                f"2. **Parts Opening Stock (002 FG & WIP):** **{fg_tot} Nos** available\n"
+                f"3. **Monthly MRP Schedule:** **{mrp_tot} Nos**\n"
+                f"4. **Previous MOs Created:** **{prev_mo_cnt} past MO records** logged in ERP MO Report\n"
+            )
+            return jsonify({"reply": reply, "type": "erp_intelligence", "intel": intel})
+
     # Case B: Questions & Analytical Inquiries about Sheet Data
     question_triggers = [
         "what", "how", "which", "why", "who", "when", "where",
@@ -390,8 +510,10 @@ def chat():
 # =====================================================================
 from werkzeug.utils import secure_filename
 from mo_workflow import MOWorkflowEngine, ROLES
+from erp_stock_service import ERPStockService
 
 MO_ENGINE = MOWorkflowEngine()
+ERP_STOCK_SERVICE = ERPStockService()
 MO_UPLOAD_DIR = os.path.join(app.root_path, "static", "uploads", "mo_documents")
 os.makedirs(MO_UPLOAD_DIR, exist_ok=True)
 ALLOWED_MO_EXTENSIONS = {"png", "jpg", "jpeg", "pdf", "webp", "dwg", "dxf"}
@@ -399,6 +521,53 @@ ALLOWED_MO_EXTENSIONS = {"png", "jpg", "jpeg", "pdf", "webp", "dwg", "dxf"}
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_MO_EXTENSIONS
 
+
+# =====================================================================
+# ERP, Stock & MRP Intelligence Routes
+# =====================================================================
+@app.route("/api/intelligence/part/<path:part_no>")
+def get_part_intelligence(part_no):
+    """
+    Returns previous MOs, RM opening stock in Main Store,
+    FG & WIP opening stock, and MRP monthly schedule for a part.
+    """
+    rm_code = request.args.get("rm")
+    grade = request.args.get("grade")
+    thickness = request.args.get("thickness")
+    length = request.args.get("length")
+    width = request.args.get("width")
+    sheets_needed = request.args.get("sheets", 1)
+
+    data = ERP_STOCK_SERVICE.get_part_comprehensive_intelligence(
+        part_no=part_no,
+        rm_code=rm_code,
+        grade=grade,
+        thickness=float(thickness) if thickness else None,
+        length=float(length) if length else None,
+        width=float(width) if width else None,
+        sheets_needed=float(sheets_needed) if sheets_needed else 1
+    )
+    return jsonify(data)
+
+
+@app.route("/api/intelligence/rm/<path:rm_code>")
+def get_rm_intelligence(rm_code):
+    """Returns RM Opening stock in Main Store"""
+    grade = request.args.get("grade")
+    thickness = request.args.get("thickness")
+    length = request.args.get("length")
+    width = request.args.get("width")
+
+    stock = ERP_STOCK_SERVICE.get_rm_opening_stock(
+        rm_code=rm_code,
+        grade=grade,
+        thickness=float(thickness) if thickness else None,
+        length=float(length) if length else None,
+        width=float(width) if width else None
+    )
+    if not stock:
+        return jsonify({"found": False, "rm_code": rm_code})
+    return jsonify({"found": True, "stock": stock})
 
 
 @app.route("/api/mo/roles")

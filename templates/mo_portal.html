@@ -227,6 +227,81 @@
                         </div>
                     </div>
 
+                    <!-- Live ERP, Stock & MRP Intelligence Card -->
+                    <div class="erp-intelligence-card" id="erpIntelligenceCard" style="display: none;">
+                        <div class="erp-intel-header">
+                            <div class="intel-title">
+                                <i class="fa-solid fa-chart-pie"></i>
+                                <span>ERP &amp; Inventory Clearance Intelligence</span>
+                            </div>
+                            <span class="intel-badge" id="stockStatusBadge">Checking Stock...</span>
+                        </div>
+                        
+                        <div class="erp-intel-grid">
+                            <!-- 1. RM Opening Stock (Main Store) -->
+                            <div class="intel-box rm-box">
+                                <div class="intel-box-title">
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    <span>RM Opening Stock (Main Store)</span>
+                                </div>
+                                <div class="intel-box-value" id="intelRmStock">0 Sheets</div>
+                                <div class="intel-box-detail" id="intelRmDetail">Loading sheet stock...</div>
+                            </div>
+
+                            <!-- 2. Parts FG & WIP Stock (002 - FG & WIP) -->
+                            <div class="intel-box fg-box">
+                                <div class="intel-box-title">
+                                    <i class="fa-solid fa-boxes-stacked"></i>
+                                    <span>Parts Opening Stock (FG &amp; WIP)</span>
+                                </div>
+                                <div class="intel-box-value" id="intelFgStock">0 Nos</div>
+                                <div class="intel-box-detail" id="intelFgDetail">Finished goods &amp; child stock</div>
+                            </div>
+
+                            <!-- 3. MRP Monthly Schedule (Sales & BOM) -->
+                            <div class="intel-box mrp-box">
+                                <div class="intel-box-title">
+                                    <i class="fa-solid fa-calendar-days"></i>
+                                    <span>Monthly Schedule (MRP)</span>
+                                </div>
+                                <div class="intel-box-value" id="intelMrpTotal">- Nos</div>
+                                <div class="intel-box-detail" id="intelMrpDetail">Monthly planning schedule</div>
+                            </div>
+
+                            <!-- 4. Previous MOs in ERP -->
+                            <div class="intel-box mo-history-box" onclick="toggleMoHistoryTable()">
+                                <div class="intel-box-title">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                    <span>Previous MOs Created</span>
+                                </div>
+                                <div class="intel-box-value" id="intelMoCount">0 MOs</div>
+                                <div class="intel-box-detail">Click to view previous order history <i class="fa-solid fa-chevron-down"></i></div>
+                            </div>
+                        </div>
+
+                        <!-- Collapsible Previous MOs Table -->
+                        <div class="mo-history-table-wrap" id="moHistoryTableWrap" style="display: none;">
+                            <div class="history-table-title"><i class="fa-solid fa-list-check"></i> Previous MO Records in ERP for Part:</div>
+                            <div class="table-scroll-mini">
+                                <table class="mini-table">
+                                    <thead>
+                                        <tr>
+                                            <th>MO Doc No</th>
+                                            <th>Date</th>
+                                            <th>Status</th>
+                                            <th>Sheets Cut</th>
+                                            <th>Cutting Plan</th>
+                                            <th>Parent Code</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="moHistoryTableBody">
+                                        <tr><td colspan="6">No previous MOs found.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Layout Type Selection -->
                     <div class="form-group layout-type-group">
                         <label>Layout Standardization Status <span class="required">*</span></label>
@@ -331,6 +406,81 @@
 
                 <!-- MO Summary Grid -->
                 <div class="review-details-grid" id="reviewDetailsGrid"></div>
+
+                <!-- Live ERP, Stock & MRP Intelligence in Review Modal -->
+                <div class="erp-intelligence-card" id="reviewErpIntelCard" style="display: none; margin-bottom: 20px;">
+                    <div class="erp-intel-header">
+                        <div class="intel-title">
+                            <i class="fa-solid fa-chart-pie"></i>
+                            <span>Live Stock &amp; ERP Intelligence</span>
+                        </div>
+                        <span class="intel-badge" id="reviewStockStatusBadge">Verifying Stock...</span>
+                    </div>
+                    
+                    <div class="erp-intel-grid">
+                        <!-- 1. RM Opening Stock (Main Store) -->
+                        <div class="intel-box rm-box">
+                            <div class="intel-box-title">
+                                <i class="fa-solid fa-layer-group"></i>
+                                <span>RM Opening Stock (Main Store)</span>
+                            </div>
+                            <div class="intel-box-value" id="reviewIntelRmStock">- Sheets</div>
+                            <div class="intel-box-detail" id="reviewIntelRmDetail">Main Store Inventory</div>
+                        </div>
+
+                        <!-- 2. Parts FG & WIP Stock (002 - FG & WIP) -->
+                        <div class="intel-box fg-box">
+                            <div class="intel-box-title">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                                <span>Parts Opening Stock (FG &amp; WIP)</span>
+                            </div>
+                            <div class="intel-box-value" id="reviewIntelFgStock">- Nos</div>
+                            <div class="intel-box-detail" id="reviewIntelFgDetail">Finished goods &amp; child stock</div>
+                        </div>
+
+                        <!-- 3. MRP Monthly Schedule (Sales & BOM) -->
+                        <div class="intel-box mrp-box">
+                            <div class="intel-box-title">
+                                <i class="fa-solid fa-calendar-days"></i>
+                                <span>Monthly Schedule (MRP)</span>
+                            </div>
+                            <div class="intel-box-value" id="reviewIntelMrpTotal">- Nos</div>
+                            <div class="intel-box-detail" id="reviewIntelMrpDetail">Monthly planning schedule</div>
+                        </div>
+
+                        <!-- 4. Previous MOs in ERP -->
+                        <div class="intel-box mo-history-box" onclick="toggleReviewMoHistoryTable()">
+                            <div class="intel-box-title">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span>Previous MOs in ERP</span>
+                            </div>
+                            <div class="intel-box-value" id="reviewIntelMoCount">- MOs</div>
+                            <div class="intel-box-detail">Click to view order history <i class="fa-solid fa-chevron-down"></i></div>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible Previous MOs Table in Review -->
+                    <div class="mo-history-table-wrap" id="reviewMoHistoryTableWrap" style="display: none;">
+                        <div class="history-table-title"><i class="fa-solid fa-list-check"></i> Previous MO Records in ERP for Part:</div>
+                        <div class="table-scroll-mini">
+                            <table class="mini-table">
+                                <thead>
+                                    <tr>
+                                        <th>MO Doc No</th>
+                                        <th>Date</th>
+                                        <th>Status</th>
+                                        <th>Sheets Cut</th>
+                                        <th>Cutting Plan</th>
+                                        <th>Parent Code</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="reviewMoHistoryTableBody">
+                                    <tr><td colspan="6">No previous MOs found.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
                 <!-- Uploaded Document Preview if available -->
                 <div class="review-doc-section" id="reviewDocSection" style="display: none;">

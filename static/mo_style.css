@@ -1251,4 +1251,167 @@ body {
     .form-row {
         flex-direction: column;
     }
+    .erp-intel-grid {
+        grid-template-columns: 1fr;
+    }
 }
+
+/* =====================================================================
+   ERP & Stock Intelligence Card
+   ===================================================================== */
+.erp-intelligence-card {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+    animation: fadeIn 0.2s ease-out;
+    margin-top: 4px;
+}
+
+.erp-intel-header {
+    background: #f1f5f9;
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.intel-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.intel-title i {
+    color: #2563eb;
+}
+
+.intel-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: #e2e8f0;
+    color: var(--text-main);
+}
+
+.intel-badge.ok {
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+}
+
+.intel-badge.shortfall {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+.erp-intel-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 12px;
+}
+
+.intel-box {
+    background: #f8fafc;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 10px 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    transition: all 0.15s;
+}
+
+.intel-box.mo-history-box {
+    cursor: pointer;
+}
+
+.intel-box.mo-history-box:hover {
+    background: #f1f5f9;
+    border-color: #94a3b8;
+}
+
+.intel-box-title {
+    font-size: 0.70rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.intel-box.rm-box .intel-box-title i { color: #d97706; }
+.intel-box.fg-box .intel-box-title i { color: #2563eb; }
+.intel-box.mrp-box .intel-box-title i { color: #059669; }
+.intel-box.mo-history-box .intel-box-title i { color: #7c3aed; }
+
+.intel-box-value {
+    font-family: 'Outfit', sans-serif;
+    font-size: 1.12rem;
+    font-weight: 700;
+    color: var(--text-main);
+}
+
+.intel-box-detail {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    line-height: 1.25;
+}
+
+/* Collapsible Previous MOs Table */
+.mo-history-table-wrap {
+    padding: 10px 14px 14px;
+    border-top: 1px solid var(--border-color);
+    background: #ffffff;
+}
+
+.history-table-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.table-scroll-mini {
+    max-height: 190px;
+    overflow-y: auto;
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+}
+
+.mini-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.76rem;
+}
+
+.mini-table th {
+    background: #f8fafc;
+    padding: 6px 10px;
+    font-size: 0.70rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    position: sticky;
+    top: 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.mini-table td {
+    padding: 6px 10px;
+    border-bottom: 1px solid #f1f5f9;
+    color: var(--text-main);
+}
+
