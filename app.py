@@ -13,11 +13,10 @@ from flask import Flask, render_template, request, jsonify, send_from_directory
 
 app = Flask(__name__)
 
-# Load data store into memory
-DATA_FILE = "data_store.json"
-print("Loading data store...")
-with open(DATA_FILE, "r", encoding="utf-8") as f:
-    DATA_STORE = json.load(f)
+# Load data store from Supabase database (with fallback to local data_store.json)
+from db_supabase import load_data_store
+
+DATA_STORE, DATA_SOURCE = load_data_store()
 
 PARTS = DATA_STORE["parts"]
 BASE_PARTS = DATA_STORE["base_parts"]
@@ -28,7 +27,7 @@ ALL_RECORDS = DATA_STORE["records"]
 from sheet_intelligence import SheetIntelligenceEngine
 SHEET_AI = SheetIntelligenceEngine(DATA_STORE)
 
-print(f"Loaded {len(PARTS)} unique parts, {len(BASE_PARTS)} base parts, {len(ALL_RECORDS)} records.")
+print(f"[{DATA_SOURCE.upper()}] Loaded {len(PARTS)} unique parts, {len(BASE_PARTS)} base parts, {len(ALL_RECORDS)} records.")
 print("Sheet Intelligence Engine initialized.")
 
 def normalize_key(s):
