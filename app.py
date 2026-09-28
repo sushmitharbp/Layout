@@ -285,5 +285,137 @@ def chat():
     return jsonify(answer_result)
 
 
+# =====================================================================
+# Manufacturing Order (MO) Approval Workflow Routes
+# =====================================================================
+from werkzeug.utils import secure_filename
+from mo_workflow import MOWorkflowEngine, ROLES
+
+MO_ENGINE = MOWorkflowEngine()
+MO_UPLOAD_DIR = os.path.join(app.root_path, "static", "uploads", "mo_documents")
+os.makedirs(MO_UPLOAD_DIR, exist_ok=True)
+ALLOWED_MO_EXTENSIONS = {"png", "jpg", "jpeg", "pdf", "webp", "dwg", "dxf"}
+
+def allowed_file(filename):
+    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_MO_EXTENSIONS
+
+
+@app.route("/mo")
+def mo_portal():
+    """MO Approval Application View"""
+    return render_template("mo_portal.html", roles=ROLES)
+
+
+@app.route("/api/mo/roles")
+def get_mo_roles():
+    """Get all departments and role definitions"""
+    return jsonify(ROLES)
+
+
+@app.route("/api/mo/stats")
+def get_mo_stats():
+    """Get pending counts for all departments"""
+    return jsonify(MO_ENGINE.get_stats())
+
+
+@app.route("/api/mo/list")
+def list_mos():
+    """List MOs with optional filters for role, stage, status"""
+    role = request.args.get("role")
+    stage = request.args.get("stage")
+    status = request.args.get("status")
+    mos = MO_ENGINE.list_mos(role=role, stage=stage, status=status)
+    return jsonify(mos)
+
+
+@app.route("/api/mo/<mo_number>")
+def get_mo_detail(mo_number):
+    """Get detailed MO view with complete audit trail"""
+    mo = MO_ENGINE.get_mo(mo_number)
+    if not mo:
+        return jsonify({"error": "Manufacturing Order not found"}), 404
+    return jsonify(mo)
+
+
+@app.route("/api/mo/create", methods=["POST"])
+def create_mo():
+    """Shearing team creates an MO with constraints evaluation & optional document upload"""
+    if request.content_type and "multipart/form-data" in request.content_type:
+        form = request.form
+        data = {
+            "mo_number": form.get("mo_number"),
+            "part_no": form.get("part_no"),
+            "base_part": form.get("base_part"),
+            "rm_erp": form.get("rm_erp"),
+            "grade": form.get("grade"),
+            "layout_name": form.get("layout_name"),
+            "is_standard_layout": form.get("is_standard_layout", "true").lower() in ("true", "1", "yes"),
+            "thickness": float(form.get("thickness", 0)) if form.get("thickness") else None,
+            "length": float(form.get("length", 0)) if form.get("length") else None,
+            "width": float(form.get("width", 0)) if form.get("width") else None,
+            "target_qty": int(form.get("target_qty", 1)) if form.get("target_qty") else 1,
+            "sheets_required": float(form.get("sheets_required", 1)) if form.get("sheets_required") else 1,
+            "notes": form.get("notes", "")
+        }
+
+        # Handle constraints json
+        constraints_str = form.get("constraints_status")
+        if constraints_str:
+            try:
+                data["constraints_status"] = json.loads(constraints_str)
+            except Exception:
+                data["constraints_status"] = {"all_satisfied": True}
+        else:
+            data["constraints_status"] = {
+                "stock_available": form.get("constraint_stock", "true").lower() == "true",
+                "yield_satisfied": form.get("constraint_yield", "true").lower() == "true",
+                "all_satisfied": (
+                    form.get("constraint_stock", "true").lower() == "true" and
+                    form.get("constraint_yield", "true").lower() == "true"
+                )
+            }
+
+        # Handle uploaded document file for non-standard layouts
+        if "layout_doc" in request.files:
+            file = request.files["layout_doc"]
+            if file and file.filename and allowed_file(file.filename):
+                filename = secure_filename(f"mo_{int(time.time())}_{file.filename}")
+                filepath = os.path.join(MO_UPLOAD_DIR, filename)
+                file.save(filepath)
+                data["layout_doc_url"] = f"/static/uploads/mo_documents/{filename}"
+                data["layout_doc_filename"] = file.filename
+    else:
+        data = request.json or {}
+
+    created_by = request.headers.get("X-Role", "shearing")
+    record = MO_ENGINE.create_mo(data, created_by_role=created_by)
+    return jsonify(record), 201
+
+
+@app.route("/api/mo/<mo_number>/approve", methods=["POST"])
+def approve_mo(mo_number):
+    """Approve an MO and advance workflow to next stage"""
+    body = request.json or {}
+    role = body.get("role") or request.headers.get("X-Role") or "shearing"
+    remarks = body.get("remarks", "Approved")
+    mo, err = MO_ENGINE.approve_mo(mo_number, role, remarks)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(mo)
+
+
+@app.route("/api/mo/<mo_number>/reject", methods=["POST"])
+def reject_mo(mo_number):
+    """Reject an MO with required reason"""
+    body = request.json or {}
+    role = body.get("role") or request.headers.get("X-Role") or "shearing"
+    reason = body.get("reason", "")
+    mo, err = MO_ENGINE.reject_mo(mo_number, role, reason)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(mo)
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+

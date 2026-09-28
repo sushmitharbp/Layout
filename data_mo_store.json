@@ -1,0 +1,113 @@
+[
+  {
+    "mo_number": "MO-2026-001",
+    "part_no": "MBA01008 - Item 1",
+    "base_part": "MBA01008",
+    "rm_erp": "4.8*2350*1500",
+    "grade": "YS",
+    "is_standard_layout": true,
+    "layout_name": "Standardized Layout Plan - 1",
+    "thickness": 4.8,
+    "length": 2350.0,
+    "width": 1500.0,
+    "target_qty": 150,
+    "sheets_required": 15.0,
+    "layout_doc_url": "",
+    "layout_doc_filename": "",
+    "constraints_status": {
+      "stock_available": true,
+      "yield_satisfied": true,
+      "all_satisfied": true
+    },
+    "workflow_path": "DIRECT_ERP",
+    "current_stage": "ERP",
+    "status": "PENDING_ERP",
+    "audit_trail": [
+      {
+        "action": "CREATED",
+        "actor_role": "shearing",
+        "actor_name": "Shearing (Production) Team",
+        "timestamp": "2026-09-28T09:30:00Z",
+        "stage": "ERP",
+        "remarks": "Standardized layout order created by Shearing. All constraints satisfied — fast-tracked to ERP approval."
+      }
+    ],
+    "created_by": "shearing",
+    "created_at": "2026-09-28T09:30:00Z",
+    "updated_at": "2026-09-28T09:30:00Z"
+  },
+  {
+    "mo_number": "MO-2026-002",
+    "part_no": "X5L00214 - Item 1",
+    "base_part": "X5L00214",
+    "rm_erp": "4.8*2440*1220",
+    "grade": "YS",
+    "is_standard_layout": true,
+    "layout_name": "Standardized Layout Plan - 1",
+    "thickness": 4.8,
+    "length": 2440.0,
+    "width": 1220.0,
+    "target_qty": 80,
+    "sheets_required": 10.0,
+    "layout_doc_url": "",
+    "layout_doc_filename": "",
+    "constraints_status": {
+      "stock_available": false,
+      "yield_satisfied": true,
+      "all_satisfied": false
+    },
+    "workflow_path": "PURCHASE_ERP",
+    "current_stage": "PURCHASE",
+    "status": "PENDING_PURCHASE",
+    "audit_trail": [
+      {
+        "action": "CREATED",
+        "actor_role": "shearing",
+        "actor_name": "Shearing (Production) Team",
+        "timestamp": "2026-09-28T09:45:00Z",
+        "stage": "PURCHASE",
+        "remarks": "RM sheet coil stock insufficient in inventory. Routing to Purchase team for procurement clearance."
+      }
+    ],
+    "created_by": "shearing",
+    "created_at": "2026-09-28T09:45:00Z",
+    "updated_at": "2026-09-28T09:45:00Z"
+  },
+  {
+    "mo_number": "MO-2026-003",
+    "part_no": "MBA01010 - Item",
+    "base_part": "MBA01010",
+    "rm_erp": "5.8*2190*1350",
+    "grade": "YS",
+    "is_standard_layout": false,
+    "layout_name": "Custom Non-Standard Plan",
+    "thickness": 5.8,
+    "length": 2190.0,
+    "width": 1350.0,
+    "target_qty": 60,
+    "sheets_required": 8.0,
+    "layout_doc_url": "/static/layout_images/img_r2_c5.jpg",
+    "layout_doc_filename": "engineering_drawing_mba01010_rev2.jpg",
+    "constraints_status": {
+      "stock_available": true,
+      "yield_satisfied": false,
+      "all_satisfied": false
+    },
+    "workflow_path": "KRYSALIS_PURCHASE_ERP",
+    "current_stage": "KRYSALIS",
+    "status": "PENDING_KRYSALIS",
+    "audit_trail": [
+      {
+        "action": "CREATED",
+        "actor_role": "shearing",
+        "actor_name": "Shearing (Production) Team",
+        "timestamp": "2026-09-28T10:00:00Z",
+        "stage": "KRYSALIS",
+        "remarks": "Non-standard layout drawing attached. Submitted for Consultants (Krysalis) technical approval."
+      }
+    ],
+    "created_by": "shearing",
+    "created_at": "2026-09-28T10:00:00Z",
+    "updated_at": "2026-09-28T10:00:00Z"
+  }
+]

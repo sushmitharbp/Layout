@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MO Workflow & Approval Portal — SheetLayout AI</title>
+    <meta name="description" content="Manufacturing Order (MO) Approval Workflow system with separate logins for Shearing, Krysalis Consultants, Purchase, and ERP teams.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/static/mo_style.css?v=1">
+</head>
+<body>
+    <div class="mo-app-layout">
+        <!-- Top Navigation Bar -->
+        <header class="mo-top-nav">
+            <div class="mo-nav-left">
+                <a href="/" class="back-chatbot-btn" title="Back to Chatbot">
+                    <i class="fa-solid fa-arrow-left"></i>
+                    <span>Chatbot</span>
+                </a>
+                <div class="mo-brand">
+                    <div class="mo-brand-icon">
+                        <i class="fa-solid fa-industry"></i>
+                    </div>
+                    <div>
+                        <h1 class="mo-brand-title">SheetLayout <span>AI</span></h1>
+                        <span class="mo-portal-badge">MO Approval Workflow</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Role / Department Switcher -->
+            <div class="mo-nav-right">
+                <div class="role-selector-wrapper">
+                    <label for="roleSelect" class="role-select-label"><i class="fa-solid fa-user-shield"></i> Logged in as:</label>
+                    <div class="role-select-box">
+                        <select id="roleSelect" onchange="changeRole(this.value)">
+                            <option value="shearing" selected>🔨 Shearing (Production) Team</option>
+                            <option value="krysalis">🔍 Consultants (Krysalis) Team</option>
+                            <option value="purchase">🛒 Purchase Team</option>
+                            <option value="erp">💻 ERP Team</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="active-role-pill" id="activeRolePill">
+                    <span class="role-dot"></span>
+                    <span id="activeRoleName">Shearing Team</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Workspace -->
+        <main class="mo-main-content">
+            <!-- KPI Statistics Cards -->
+            <section class="mo-stats-grid">
+                <div class="mo-stat-card" onclick="filterByTab('all')">
+                    <div class="stat-icon total"><i class="fa-solid fa-clipboard-list"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statTotal">0</span>
+                        <span class="stat-label">Total MOs</span>
+                    </div>
+                </div>
+                <div class="mo-stat-card" onclick="filterByTab('krysalis')">
+                    <div class="stat-icon krysalis"><i class="fa-solid fa-compass-drafting"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statKrysalis">0</span>
+                        <span class="stat-label">Pending Krysalis</span>
+                    </div>
+                </div>
+                <div class="mo-stat-card" onclick="filterByTab('purchase')">
+                    <div class="stat-icon purchase"><i class="fa-solid fa-cart-shopping"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statPurchase">0</span>
+                        <span class="stat-label">Pending Purchase</span>
+                    </div>
+                </div>
+                <div class="mo-stat-card" onclick="filterByTab('erp')">
+                    <div class="stat-icon erp"><i class="fa-solid fa-network-wired"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statErp">0</span>
+                        <span class="stat-label">Pending ERP</span>
+                    </div>
+                </div>
+                <div class="mo-stat-card" onclick="filterByTab('released')">
+                    <div class="stat-icon released"><i class="fa-solid fa-circle-check"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statReleased">0</span>
+                        <span class="stat-label">Released to ERP</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Action & Filter Bar -->
+            <section class="mo-toolbar">
+                <div class="mo-tabs">
+                    <button class="mo-tab-btn active" data-tab="all" onclick="filterByTab('all')">All Orders</button>
+                    <button class="mo-tab-btn" data-tab="my_action" onclick="filterByTab('my_action')">
+                        <i class="fa-solid fa-bell"></i> Action Required (<span id="myActionCount">0</span>)
+                    </button>
+                    <button class="mo-tab-btn" data-tab="pending" onclick="filterByTab('pending')">Pending Approval</button>
+                    <button class="mo-tab-btn" data-tab="released" onclick="filterByTab('released')">Released</button>
+                    <button class="mo-tab-btn" data-tab="rejected" onclick="filterByTab('rejected')">Rejected</button>
+                </div>
+
+                <div class="mo-toolbar-actions">
+                    <div class="mo-search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="moSearchInput" placeholder="Search by MO#, Part, or RM..." oninput="handleSearch(this.value)">
+                    </div>
+                    <button class="btn btn-primary" id="openCreateMoBtn" onclick="openCreateModal()">
+                        <i class="fa-solid fa-plus"></i> Create New MO
+                    </button>
+                </div>
+            </section>
+
+            <!-- Manufacturing Orders List Table / Grid -->
+            <section class="mo-table-container">
+                <div class="mo-table-responsive">
+                    <table class="mo-table">
+                        <thead>
+                            <tr>
+                                <th>MO Number</th>
+                                <th>Part & Base Part</th>
+                                <th>RM ERP & Grade</th>
+                                <th>Layout Type</th>
+                                <th>Workflow Route & Progress</th>
+                                <th>Current Stage</th>
+                                <th>Status</th>
+                                <th style="text-align: right;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="moTableBody">
+                            <tr>
+                                <td colspan="8" class="loading-cell">
+                                    <i class="fa-solid fa-circle-notch fa-spin"></i> Loading Manufacturing Orders...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Modal: Create New MO (Shearing Team) -->
+    <div class="mo-modal-backdrop" id="createMoModal" style="display: none;">
+        <div class="mo-modal-dialog">
+            <div class="mo-modal-header">
+                <div>
+                    <h3><i class="fa-solid fa-file-circle-plus"></i> Create Manufacturing Order</h3>
+                    <p>Production Shearing team initiates MO with layout specifications and constraint check</p>
+                </div>
+                <button class="modal-close-btn" onclick="closeCreateModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <form id="createMoForm" onsubmit="submitCreateMo(event)" enctype="multipart/form-data">
+                <div class="mo-modal-body">
+                    <!-- Basic Information Row -->
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="moNumber">MO Number <span class="required">*</span></label>
+                            <input type="text" id="moNumber" name="mo_number" required placeholder="e.g. MO-2026-0842">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="targetQty">Target Quantity (Units) <span class="required">*</span></label>
+                            <input type="number" id="targetQty" name="target_qty" value="100" min="1" required>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="sheetsRequired">Sheets Required <span class="required">*</span></label>
+                            <input type="number" step="0.1" id="sheetsRequired" name="sheets_required" value="10" min="0.1" required>
+                        </div>
+                    </div>
+
+                    <!-- Part Lookup with Live Database Search -->
+                    <div class="form-group relative">
+                        <label for="partNoInput">Part Number <span class="required">* (Searches Master Database)</span></label>
+                        <div class="part-search-input-wrap">
+                            <i class="fa-solid fa-barcode"></i>
+                            <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)">
+                            <div class="part-dropdown-results" id="partDropdownResults" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Auto-filled Technical Specifications -->
+                    <div class="tech-spec-grid" id="techSpecGrid">
+                        <div class="spec-field">
+                            <span class="spec-label">Base Part:</span>
+                            <input type="text" id="basePartInput" name="base_part" readonly placeholder="Auto-populated">
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">RM ERP Code:</span>
+                            <select id="rmErpSelect" name="rm_erp" onchange="onRmErpChanged(this.value)">
+                                <option value="">Select Part First</option>
+                            </select>
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Grade:</span>
+                            <input type="text" id="gradeInput" name="grade" readonly placeholder="Auto-populated">
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Sheet Size (T*L*W):</span>
+                            <input type="text" id="sheetSizeInput" readonly placeholder="Auto-populated">
+                            <input type="hidden" id="thicknessInput" name="thickness">
+                            <input type="hidden" id="lengthInput" name="length">
+                            <input type="hidden" id="widthInput" name="width">
+                        </div>
+                    </div>
+
+                    <!-- Layout Type Selection -->
+                    <div class="form-group layout-type-group">
+                        <label>Layout Standardization Status <span class="required">*</span></label>
+                        <div class="radio-cards-wrap">
+                            <label class="radio-card standard active" id="radioCardStd">
+                                <input type="radio" name="is_standard_layout" value="true" checked onchange="toggleLayoutType(true)">
+                                <div class="radio-content">
+                                    <div class="radio-title"><i class="fa-solid fa-circle-check"></i> Standardized Layout</div>
+                                    <div class="radio-desc">Pre-approved technical layout from master sheet data.</div>
+                                </div>
+                            </label>
+                            <label class="radio-card non-standard" id="radioCardNonStd">
+                                <input type="radio" name="is_standard_layout" value="false" onchange="toggleLayoutType(false)">
+                                <div class="radio-content">
+                                    <div class="radio-title"><i class="fa-solid fa-triangle-exclamation"></i> Non-Standard Layout</div>
+                                    <div class="radio-desc">Requires mandatory layout document upload and Krysalis review.</div>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Non-Standard Document Upload Box (Shown when Non-Standard is selected) -->
+                    <div class="form-group doc-upload-box" id="docUploadBox" style="display: none;">
+                        <label for="layoutDocFile"><i class="fa-solid fa-file-arrow-up"></i> Upload Layout Document <span class="required">* (Required for Non-Standard)</span></label>
+                        <div class="dropzone" id="docDropzone" onclick="document.getElementById('layoutDocFile').click()">
+                            <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                            <div class="drop-text">Click or drag layout document here</div>
+                            <small>Supported formats: PDF, PNG, JPG, CAD/DWG, DXF</small>
+                            <span class="file-chosen-name" id="fileChosenName">No file selected</span>
+                        </div>
+                        <input type="file" id="layoutDocFile" name="layout_doc" style="display: none;" onchange="onFileSelected(this)">
+                    </div>
+
+                    <!-- Constraint Verification Panel -->
+                    <div class="constraints-panel">
+                        <div class="constraints-header">
+                            <h4><i class="fa-solid fa-scale-balanced"></i> Constraint Verification Check</h4>
+                            <span class="info-badge">MRP & Stock Clearance</span>
+                        </div>
+                        <div class="constraint-item">
+                            <label class="toggle-control">
+                                <input type="checkbox" id="constraintStock" name="constraint_stock" checked onchange="recalculateWorkflowRoute()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="constraint-text">
+                                <strong>RM Stock Available in Inventory</strong>
+                                <small>Verify raw material sheet coils / blanks are in stock or allocated.</small>
+                            </div>
+                        </div>
+                        <div class="constraint-item">
+                            <label class="toggle-control">
+                                <input type="checkbox" id="constraintYield" name="constraint_yield" checked onchange="recalculateWorkflowRoute()">
+                                <span class="toggle-slider"></span>
+                            </label>
+                            <div class="constraint-text">
+                                <strong>Target Yield & Scrap Criteria Satisfied</strong>
+                                <small>Verify cutting plan yields satisfy standard thresholds (&gt; 90%).</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Live Workflow Route Preview Banner -->
+                    <div class="workflow-route-preview" id="routePreviewBanner">
+                        <div class="route-icon"><i class="fa-solid fa-bolt"></i></div>
+                        <div class="route-info">
+                            <strong id="routeTitle">Route: Fast-Track to ERP Direct</strong>
+                            <p id="routeDesc">Standardized layout with all constraints met. Order skips Krysalis &amp; Purchase and routes directly to ERP release.</p>
+                        </div>
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-group" style="margin-top: 12px;">
+                        <label for="moNotes">Production Notes / Work Center</label>
+                        <textarea id="moNotes" name="notes" rows="2" placeholder="Optional notes for approving teams (e.g. Shearing Machine #2, Urgent customer batch)..."></textarea>
+                    </div>
+                </div>
+
+                <div class="mo-modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitMoBtn">
+                        <i class="fa-solid fa-paper-plane"></i> Submit Manufacturing Order
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Review, Audit Trail & Approval Modal -->
+    <div class="mo-modal-backdrop" id="reviewModal" style="display: none;">
+        <div class="mo-modal-dialog review-dialog">
+            <div class="mo-modal-header">
+                <div>
+                    <h3 id="reviewMoTitle">Review Manufacturing Order</h3>
+                    <p id="reviewMoSubtitle">Detailed specifications, progress stepper, and team signoffs</p>
+                </div>
+                <button class="modal-close-btn" onclick="closeReviewModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="mo-modal-body">
+                <!-- Stepper Pipeline -->
+                <div class="stepper-wrap" id="stepperWrap"></div>
+
+                <!-- MO Summary Grid -->
+                <div class="review-details-grid" id="reviewDetailsGrid"></div>
+
+                <!-- Uploaded Document Preview if available -->
+                <div class="review-doc-section" id="reviewDocSection" style="display: none;">
+                    <h4><i class="fa-solid fa-file-lines"></i> Attached Layout Document</h4>
+                    <div class="doc-preview-card" id="docPreviewCard"></div>
+                </div>
+
+                <!-- Audit Trail Timeline -->
+                <div class="audit-trail-section">
+                    <h4><i class="fa-solid fa-clock-rotate-left"></i> Approval &amp; Activity History</h4>
+                    <div class="timeline" id="auditTimeline"></div>
+                </div>
+
+                <!-- Approval / Action Panel (Shown if active role matches stage) -->
+                <div class="action-panel" id="actionPanel" style="display: none;">
+                    <div class="action-panel-header">
+                        <h4 id="actionPanelTitle"><i class="fa-solid fa-stamp"></i> Department Signoff</h4>
+                        <span class="role-badge" id="actionPanelRole">Role</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="approvalRemarks">Remarks / Notes:</label>
+                        <input type="text" id="approvalRemarks" placeholder="Enter any verification remarks or approval notes...">
+                    </div>
+                    <div class="action-buttons-row">
+                        <button class="btn btn-danger" onclick="promptRejectMo()">
+                            <i class="fa-solid fa-xmark"></i> Reject Order
+                        </button>
+                        <button class="btn btn-success" onclick="confirmApproveMo()">
+                            <i class="fa-solid fa-check"></i> Approve &amp; Advance
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mo-modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeReviewModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="/static/mo_app.js?v=1"></script>
+</body>
+</html>
