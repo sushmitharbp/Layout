@@ -11,10 +11,42 @@ let selectedPartData = null;
 let activeReviewMo = null;
 
 const ROLE_CONFIGS = {
-    shearing: { name: "Shearing Team", stage: null, pillClass: "shearing" },
-    krysalis: { name: "Krysalis Consultants", stage: "KRYSALIS", pillClass: "krysalis" },
-    purchase: { name: "Purchase Team", stage: "PURCHASE", pillClass: "purchase" },
-    erp: { name: "ERP Team", stage: "ERP", pillClass: "erp" }
+    shearing: {
+        name: "Shearing (Production)",
+        title: "Shearing Production Workspace",
+        desc: "Create Manufacturing Orders, select cutting layouts, verify stock constraints, and route for approvals.",
+        icon: "fa-industry",
+        stage: null,
+        pillClass: "shearing",
+        showCreateBtn: true
+    },
+    krysalis: {
+        name: "Consultants (Krysalis)",
+        title: "Consultants (Krysalis) Layout Review",
+        desc: "Review and verify non-standard layout documents, technical blank nesting, and cutting plan feasibility.",
+        icon: "fa-compass-drafting",
+        stage: "KRYSALIS",
+        pillClass: "krysalis",
+        showCreateBtn: false
+    },
+    purchase: {
+        name: "Purchase Team",
+        title: "Purchase & Procurement Clearance",
+        desc: "Review raw material coil stock shortages, material yields, steel grade pricing, and supplier clearances.",
+        icon: "fa-cart-shopping",
+        stage: "PURCHASE",
+        pillClass: "purchase",
+        showCreateBtn: false
+    },
+    erp: {
+        name: "ERP Team",
+        title: "ERP Master Data & Release Gateway",
+        desc: "Final authorization and release of fast-tracked standard orders and purchase-cleared MOs to live ERP.",
+        icon: "fa-network-wired",
+        stage: "ERP",
+        pillClass: "erp",
+        showCreateBtn: false
+    }
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -45,6 +77,26 @@ function updateRoleUI() {
     if (nameSpan) nameSpan.textContent = roleInfo.name;
     if (pill) {
         pill.className = `active-role-pill ${roleInfo.pillClass}`;
+    }
+
+    // Update banner
+    const banner = document.getElementById("deptWorkspaceBanner");
+    const bannerTitle = document.getElementById("bannerDeptTitle");
+    const bannerDesc = document.getElementById("bannerDeptDesc");
+    const bannerIcon = document.getElementById("bannerDeptIcon");
+    const bannerBtn = document.getElementById("bannerActionBtn");
+
+    if (banner) banner.className = `dept-workspace-banner ${roleInfo.pillClass}`;
+    if (bannerTitle) bannerTitle.textContent = roleInfo.title;
+    if (bannerDesc) bannerDesc.textContent = roleInfo.desc;
+    if (bannerIcon) bannerIcon.innerHTML = `<i class="fa-solid ${roleInfo.icon}"></i>`;
+    if (bannerBtn) {
+        bannerBtn.style.display = roleInfo.showCreateBtn ? "inline-flex" : "none";
+    }
+
+    const openCreateMoBtn = document.getElementById("openCreateMoBtn");
+    if (openCreateMoBtn) {
+        openCreateMoBtn.style.display = roleInfo.showCreateBtn ? "inline-flex" : "none";
     }
 }
 

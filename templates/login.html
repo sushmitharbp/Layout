@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — SheetLayout AI & MO Approval System</title>
+    <meta name="description" content="Department Login for Shearing Production, Krysalis Consultants, Purchase, and ERP Approval Workflow.">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --bg-page: #f8fafc;
+            --bg-card: #ffffff;
+            --border: #e2e8f0;
+            --primary: #0f172a;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --radius-md: 12px;
+            --radius-lg: 18px;
+            --shadow-card: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-card);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .login-header {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: #ffffff;
+            padding: 36px 32px 30px;
+            text-align: center;
+            position: relative;
+        }
+
+        .brand-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255, 255, 255, 0.12);
+            padding: 4px 12px;
+            border-radius: 9999px;
+            font-size: 0.76rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            color: #38bdf8;
+        }
+
+        .login-header h1 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.85rem;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .login-header h1 span {
+            color: #38bdf8;
+        }
+
+        .login-header p {
+            font-size: 0.92rem;
+            color: #94a3b8;
+            margin-top: 6px;
+            max-width: 580px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .login-body {
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .section-title {
+            text-align: center;
+        }
+
+        .section-title h2 {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        .section-title p {
+            font-size: 0.84rem;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* 4 Department Cards Grid */
+        .departments-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+        }
+
+        .dept-card {
+            border: 2px solid var(--border);
+            border-radius: var(--radius-md);
+            padding: 20px;
+            background: #ffffff;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+            text-align: left;
+        }
+
+        .dept-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.08);
+        }
+
+        .dept-card.shearing:hover { border-color: #2563eb; }
+        .dept-card.krysalis:hover { border-color: #7c3aed; }
+        .dept-card.purchase:hover { border-color: #d97706; }
+        .dept-card.erp:hover { border-color: #059669; }
+
+        .dept-card-top {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+        }
+
+        .dept-icon {
+            width: 46px;
+            height: 46px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.35rem;
+            flex-shrink: 0;
+        }
+
+        .shearing .dept-icon { background: #eff6ff; color: #2563eb; }
+        .krysalis .dept-icon { background: #f5f3ff; color: #7c3aed; }
+        .purchase .dept-icon { background: #fffbeb; color: #d97706; }
+        .erp .dept-icon { background: #ecfdf5; color: #059669; }
+
+        .dept-info h3 {
+            font-size: 1.02rem;
+            font-weight: 700;
+            color: var(--text-main);
+            line-height: 1.3;
+        }
+
+        .dept-badge {
+            display: inline-block;
+            font-size: 0.70rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            padding: 2px 7px;
+            border-radius: 4px;
+            margin-top: 3px;
+        }
+
+        .shearing .dept-badge { background: #dbeafe; color: #1e40af; }
+        .krysalis .dept-badge { background: #ede9fe; color: #5b21b6; }
+        .purchase .dept-badge { background: #fef3c7; color: #92400e; }
+        .erp .dept-badge { background: #d1fae5; color: #065f46; }
+
+        .dept-desc {
+            font-size: 0.80rem;
+            color: var(--text-muted);
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+        .dept-btn {
+            margin-top: 14px;
+            width: 100%;
+            padding: 9px 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: #ffffff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: opacity 0.15s;
+        }
+
+        .shearing .dept-btn { background: #2563eb; }
+        .krysalis .dept-btn { background: #7c3aed; }
+        .purchase .dept-btn { background: #d97706; }
+        .erp .dept-btn { background: #059669; }
+
+        .dept-btn:hover {
+            opacity: 0.92;
+        }
+
+        /* Footer */
+        .login-footer {
+            background: #f8fafc;
+            border-top: 1px solid var(--border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+        }
+
+        .footer-link {
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .footer-link:hover {
+            text-decoration: underline;
+        }
+
+        @media (max-width: 680px) {
+            .departments-grid {
+                grid-template-columns: 1fr;
+            }
+            .login-header {
+                padding: 24px 20px;
+            }
+            .login-body {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <!-- Header -->
+        <header class="login-header">
+            <div class="brand-badge"><i class="fa-solid fa-industry"></i> Enterprise ERP &amp; Layout Workflow</div>
+            <h1>SheetLayout <span>AI</span></h1>
+            <p>Manufacturing Order (MO) Approval Workflow with role-based routing between Shearing, Consultants (Krysalis), Purchase, and ERP.</p>
+        </header>
+
+        <!-- Department Sign-in Body -->
+        <main class="login-body">
+            <div class="section-title">
+                <h2>Select Your Department Login</h2>
+                <p>Choose your team to open your customized production or approval workspace.</p>
+            </div>
+
+            <div class="departments-grid">
+                <!-- 1. Shearing Production -->
+                <div class="dept-card shearing" onclick="loginAs('shearing')">
+                    <div class="dept-card-top">
+                        <div class="dept-icon"><i class="fa-solid fa-industry"></i></div>
+                        <div class="dept-info">
+                            <h3>Shearing Team</h3>
+                            <span class="dept-badge">Production Floor</span>
+                        </div>
+                    </div>
+                    <p class="dept-desc">Initiate Manufacturing Orders from 1,010+ parts, select layouts, check stock constraints, and upload custom drawings.</p>
+                    <button type="button" class="dept-btn">
+                        <span>Sign In as Shearing</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <!-- 2. Consultants (Krysalis) -->
+                <div class="dept-card krysalis" onclick="loginAs('krysalis')">
+                    <div class="dept-card-top">
+                        <div class="dept-icon"><i class="fa-solid fa-compass-drafting"></i></div>
+                        <div class="dept-info">
+                            <h3>Consultants (Krysalis)</h3>
+                            <span class="dept-badge">Design &amp; Layout Clearance</span>
+                        </div>
+                    </div>
+                    <p class="dept-desc">Review and verify non-standard layout documents, technical blank nesting, sheet dimensions, and cutting feasibility.</p>
+                    <button type="button" class="dept-btn">
+                        <span>Sign In as Krysalis</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <!-- 3. Purchase Team -->
+                <div class="dept-card purchase" onclick="loginAs('purchase')">
+                    <div class="dept-card-top">
+                        <div class="dept-icon"><i class="fa-solid fa-cart-shopping"></i></div>
+                        <div class="dept-info">
+                            <h3>Purchase Team</h3>
+                            <span class="dept-badge">Procurement &amp; Inventory</span>
+                        </div>
+                    </div>
+                    <p class="dept-desc">Evaluate raw material coil stock shortages, material yields, steel grade pricing, and supplier procurement clearances.</p>
+                    <button type="button" class="dept-btn">
+                        <span>Sign In as Purchase</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+
+                <!-- 4. ERP Team -->
+                <div class="dept-card erp" onclick="loginAs('erp')">
+                    <div class="dept-card-top">
+                        <div class="dept-icon"><i class="fa-solid fa-network-wired"></i></div>
+                        <div class="dept-info">
+                            <h3>ERP Team</h3>
+                            <span class="dept-badge">Final Master Data Release</span>
+                        </div>
+                    </div>
+                    <p class="dept-desc">Final gatekeeper for both fast-tracked standard layouts and cleared orders. Release MOs directly to live production ERP.</p>
+                    <button type="button" class="dept-btn">
+                        <span>Sign In as ERP</span>
+                        <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Hidden Form for Login Submission -->
+        <form id="loginForm" method="POST" action="/login" style="display: none;">
+            <input type="hidden" name="role" id="roleInput">
+        </form>
+
+        <!-- Footer -->
+        <footer class="login-footer">
+            <span>SheetLayout AI &bull; Layout Standardization Master Database</span>
+            <a href="/chat-full" class="footer-link"><i class="fa-solid fa-robot"></i> Direct Chatbot View</a>
+        </footer>
+    </div>
+
+    <script>
+        function loginAs(role) {
+            document.getElementById("roleInput").value = role;
+            document.getElementById("loginForm").submit();
+        }
+    </script>
+</body>
+</html>

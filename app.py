@@ -10,9 +10,10 @@ import os
 import json
 import re
 import time
-from flask import Flask, render_template, request, jsonify, send_from_directory
+from flask import Flask, render_template, request, jsonify, send_from_directory, session, redirect, url_for
 
 app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "sheetlayout-super-secret-key-2026")
 
 # Load data store from Supabase database (with fallback to local data_store.json)
 from db_supabase import load_data_store
@@ -84,8 +85,106 @@ def find_parts_by_query(query):
     return matches[:15]
 
 
+DEPARTMENT_CREDENTIALS = {
+    "shearing": {
+        "username": "shearing",
+        "name": "Shearing (Production) Team",
+        "title": "Shearing Production Workspace",
+        "badge": "Production",
+        "icon": "fa-industry",
+        "role": "shearing",
+        "desc": "Create Manufacturing Orders, select cutting layouts, verify stock constraints, and route for approvals."
+    },
+    "krysalis": {
+        "username": "krysalis",
+        "name": "Consultants (Krysalis) Team",
+        "title": "Consultants (Krysalis) Layout Review",
+        "badge": "Design & Layout",
+        "icon": "fa-compass-drafting",
+        "role": "krysalis",
+        "desc": "Review and verify non-standard layout documents, technical blank nesting, and cutting plan feasibility."
+    },
+    "purchase": {
+        "username": "purchase",
+        "name": "Purchase Team",
+        "title": "Purchase & Procurement Clearance",
+        "badge": "Procurement",
+        "icon": "fa-cart-shopping",
+        "role": "purchase",
+        "desc": "Review raw material coil stock shortages, material yields, steel grade pricing, and supplier clearances."
+    },
+    "erp": {
+        "username": "erp",
+        "name": "ERP Team",
+        "title": "ERP Master Data & Release Gateway",
+        "badge": "ERP Systems",
+        "icon": "fa-network-wired",
+        "role": "erp",
+        "desc": "Final authorization and release of fast-tracked standard orders and purchase-cleared MOs to live ERP."
+    }
+}
+
+
 @app.route("/")
 def index():
+    """First, user must login; otherwise redirect to role workspace"""
+    role = session.get("role")
+    if not role or role not in DEPARTMENT_CREDENTIALS:
+        return redirect(url_for("login"))
+    return redirect(url_for("dashboard"))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """Department Login page"""
+    if request.method == "POST":
+        role = request.form.get("role") or (request.json or {}).get("role")
+        if role in DEPARTMENT_CREDENTIALS:
+            session["role"] = role
+            session["user_name"] = DEPARTMENT_CREDENTIALS[role]["name"]
+            if request.is_json:
+                return jsonify({"success": True, "redirect": url_for("dashboard")})
+            return redirect(url_for("dashboard"))
+        return render_template("login.html", error="Please select a valid department.", departments=DEPARTMENT_CREDENTIALS)
+
+    if session.get("role") in DEPARTMENT_CREDENTIALS:
+        return redirect(url_for("dashboard"))
+
+    return render_template("login.html", departments=DEPARTMENT_CREDENTIALS)
+
+
+@app.route("/logout")
+def logout():
+    """Sign out of current department"""
+    session.clear()
+    return redirect(url_for("login"))
+
+
+@app.route("/dashboard")
+@app.route("/mo")
+def dashboard():
+    """Role-based Workspace with Floating Chatbot in bottom-right corner"""
+    role = session.get("role")
+    if not role or role not in DEPARTMENT_CREDENTIALS:
+        # Default fallback to shearing for instant access
+        session["role"] = "shearing"
+        session["user_name"] = DEPARTMENT_CREDENTIALS["shearing"]["name"]
+        role = "shearing"
+
+    user_info = DEPARTMENT_CREDENTIALS[role]
+    return render_template(
+        "mo_portal.html",
+        current_role=role,
+        user_info=user_info,
+        roles=ROLES,
+        stats=STATS,
+        samples=SAMPLES
+    )
+
+
+@app.route("/chat-full")
+def chat_full():
+    """Full-screen Chatbot canvas view"""
     return render_template("index.html", stats=STATS, samples=SAMPLES)
 
 
@@ -300,11 +399,6 @@ ALLOWED_MO_EXTENSIONS = {"png", "jpg", "jpeg", "pdf", "webp", "dwg", "dxf"}
 def allowed_file(filename):
     return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_MO_EXTENSIONS
 
-
-@app.route("/mo")
-def mo_portal():
-    """MO Approval Application View"""
-    return render_template("mo_portal.html", roles=ROLES)
 
 
 @app.route("/api/mo/roles")

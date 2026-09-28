@@ -12,17 +12,14 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/mo_style.css?v=1">
+    <link rel="stylesheet" href="/static/mo_style.css?v=2">
+    <link rel="stylesheet" href="/static/mo_chat_widget.css?v=1">
 </head>
 <body>
     <div class="mo-app-layout">
         <!-- Top Navigation Bar -->
         <header class="mo-top-nav">
             <div class="mo-nav-left">
-                <a href="/" class="back-chatbot-btn" title="Back to Chatbot">
-                    <i class="fa-solid fa-arrow-left"></i>
-                    <span>Chatbot</span>
-                </a>
                 <div class="mo-brand">
                     <div class="mo-brand-icon">
                         <i class="fa-solid fa-industry"></i>
@@ -34,13 +31,13 @@
                 </div>
             </div>
 
-            <!-- Role / Department Switcher -->
+            <!-- Role / Department Switcher & User Actions -->
             <div class="mo-nav-right">
                 <div class="role-selector-wrapper">
-                    <label for="roleSelect" class="role-select-label"><i class="fa-solid fa-user-shield"></i> Logged in as:</label>
+                    <label for="roleSelect" class="role-select-label"><i class="fa-solid fa-user-shield"></i> Department:</label>
                     <div class="role-select-box">
                         <select id="roleSelect" onchange="changeRole(this.value)">
-                            <option value="shearing" selected>🔨 Shearing (Production) Team</option>
+                            <option value="shearing">🔨 Shearing (Production) Team</option>
                             <option value="krysalis">🔍 Consultants (Krysalis) Team</option>
                             <option value="purchase">🛒 Purchase Team</option>
                             <option value="erp">💻 ERP Team</option>
@@ -51,11 +48,30 @@
                     <span class="role-dot"></span>
                     <span id="activeRoleName">Shearing Team</span>
                 </div>
+                <a href="/logout" class="mo-logout-btn" title="Sign Out of Department">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                    <span>Logout</span>
+                </a>
             </div>
         </header>
 
         <!-- Main Workspace -->
         <main class="mo-main-content">
+            <!-- Dynamic Department Workspace Welcome Banner -->
+            <div class="dept-workspace-banner" id="deptWorkspaceBanner">
+                <div class="banner-left">
+                    <div class="banner-icon" id="bannerDeptIcon"><i class="fa-solid fa-industry"></i></div>
+                    <div>
+                        <h2 id="bannerDeptTitle">Shearing Production Workspace</h2>
+                        <p id="bannerDeptDesc">Create Manufacturing Orders, select cutting layouts, verify stock constraints, and route for approvals.</p>
+                    </div>
+                </div>
+                <div class="banner-right">
+                    <button class="btn btn-primary" id="bannerActionBtn" onclick="openCreateModal()">
+                        <i class="fa-solid fa-plus"></i> Create New MO
+                    </button>
+                </div>
+            </div>
             <!-- KPI Statistics Cards -->
             <section class="mo-stats-grid">
                 <div class="mo-stat-card" onclick="filterByTab('all')">
@@ -356,6 +372,7 @@
     </div>
 
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=1"></script>
+    <script src="/static/mo_app.js?v=2"></script>
+    <script src="/static/mo_chat_widget.js?v=1"></script>
 </body>
 </html>
