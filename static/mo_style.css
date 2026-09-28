@@ -583,30 +583,43 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(15, 23, 42, 0.5);
-    backdrop-filter: blur(3px);
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    padding: 20px;
+    padding: 20px 16px;
+    overflow-y: auto;
 }
 
 .mo-modal-dialog {
     background: #ffffff;
     border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
     width: 100%;
-    max-width: 680px;
-    max-height: 90vh;
+    max-width: 700px;
+    max-height: calc(100vh - 40px);
+    height: auto;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    margin: auto;
+    position: relative;
     animation: modalScaleIn 0.2s ease-out;
 }
 
 .mo-modal-dialog.review-dialog {
-    max-width: 780px;
+    max-width: 840px;
+    max-height: 90vh;
+}
+
+.mo-modal-dialog form {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
 
 @keyframes modalScaleIn {
@@ -615,11 +628,13 @@ body {
 }
 
 .mo-modal-header {
-    padding: 18px 24px;
+    padding: 16px 24px;
     border-bottom: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     justify-content: space-between;
+    flex-shrink: 0;
+    background: #ffffff;
 }
 
 .mo-modal-header h3 {
@@ -642,10 +657,11 @@ body {
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     cursor: pointer;
-    padding: 6px;
-    border-radius: 4px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    transition: all 0.15s;
 }
 
 .modal-close-btn:hover {
@@ -655,10 +671,39 @@ body {
 
 .mo-modal-body {
     padding: 20px 24px;
-    overflow-y: auto;
+    overflow-y: auto !important;
+    overflow-x: hidden;
+    flex: 1 1 auto;
+    min-height: 0; /* CRITICAL: Enables scrolling in flex container */
     display: flex;
     flex-direction: column;
     gap: 16px;
+    overscroll-behavior: contain;
+    /* Clean custom scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.mo-modal-body::-webkit-scrollbar {
+    width: 6px;
+}
+
+.mo-modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.mo-modal-body::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+}
+
+.mo-modal-body::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Prevent flexbox from collapsing child sections */
+.mo-modal-body > * {
+    flex-shrink: 0;
 }
 
 .mo-modal-footer {
@@ -668,6 +713,7 @@ body {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+    flex-shrink: 0;
 }
 
 /* Forms */
