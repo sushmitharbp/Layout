@@ -101,7 +101,7 @@ class MOWorkflowEngine:
         }
 
     def create_mo(self, mo_data, created_by_role="shearing"):
-        """Create a new Manufacturing Order and route to first stage"""
+        """Create a new Material Order and route to first stage"""
         is_std = bool(mo_data.get("is_standard_layout", True))
         constraints = mo_data.get("constraints_status", {})
         constraints_satisfied = constraints.get("all_satisfied", True)
@@ -145,20 +145,22 @@ class MOWorkflowEngine:
             "updated_at": now_iso
         }
 
-        # Try save to Supabase, fallback to local file
+        # Try save to Supabase (material_orders or manufacturing_orders), fallback to local file
         saved = False
         if self.use_supabase:
-            try:
-                res = requests.post(
-                    f"{SUPABASE_URL}/rest/v1/manufacturing_orders",
-                    headers=self._get_supabase_headers(),
-                    json=record,
-                    timeout=10
-                )
-                if res.status_code in (200, 201):
-                    saved = True
-            except Exception as e:
-                print(f"[MO Workflow] Supabase insert error: {e}")
+            for tbl in ["material_orders", "manufacturing_orders"]:
+                try:
+                    res = requests.post(
+                        f"{SUPABASE_URL}/rest/v1/{tbl}",
+                        headers=self._get_supabase_headers(),
+                        json=record,
+                        timeout=10
+                    )
+                    if res.status_code in (200, 201):
+                        saved = True
+                        break
+                except Exception as e:
+                    print(f"[MO Workflow] Supabase insert error on {tbl}: {e}")
 
         if not saved:
             self._save_local(record)
@@ -169,22 +171,25 @@ class MOWorkflowEngine:
         """List MOs with optional filtering"""
         mos = []
         if self.use_supabase:
-            try:
-                params = ["select=*&order=created_at.desc"]
-                if stage:
-                    params.append(f"current_stage=eq.{stage}")
-                if status:
-                    params.append(f"status=eq.{status}")
-                query_str = "&".join(params)
-                res = requests.get(
-                    f"{SUPABASE_URL}/rest/v1/manufacturing_orders?{query_str}",
-                    headers=self._get_supabase_headers(),
-                    timeout=10
-                )
-                if res.status_code == 200:
-                    mos = res.json()
-            except Exception as e:
-                print(f"[MO Workflow] Supabase query error: {e}")
+            params = ["select=*&order=created_at.desc"]
+            if stage:
+                params.append(f"current_stage=eq.{stage}")
+            if status:
+                params.append(f"status=eq.{status}")
+            query_str = "&".join(params)
+
+            for tbl in ["material_orders", "manufacturing_orders"]:
+                try:
+                    res = requests.get(
+                        f"{SUPABASE_URL}/rest/v1/{tbl}?{query_str}",
+                        headers=self._get_supabase_headers(),
+                        timeout=10
+                    )
+                    if res.status_code == 200:
+                        mos = res.json()
+                        break
+                except Exception as e:
+                    print(f"[MO Workflow] Supabase query error on {tbl}: {e}")
 
         if not mos:
             mos = self._load_local()
@@ -198,18 +203,19 @@ class MOWorkflowEngine:
     def get_mo(self, mo_number):
         """Get single MO by MO number"""
         if self.use_supabase:
-            try:
-                res = requests.get(
-                    f"{SUPABASE_URL}/rest/v1/manufacturing_orders?mo_number=eq.{mo_number}&select=*",
-                    headers=self._get_supabase_headers(),
-                    timeout=10
-                )
-                if res.status_code == 200:
-                    items = res.json()
-                    if items:
-                        return items[0]
-            except Exception:
-                pass
+            for tbl in ["material_orders", "manufacturing_orders"]:
+                try:
+                    res = requests.get(
+                        f"{SUPABASE_URL}/rest/v1/{tbl}?mo_number=eq.{mo_number}&select=*",
+                        headers=self._get_supabase_headers(),
+                        timeout=10
+                    )
+                    if res.status_code == 200:
+                        items = res.json()
+                        if items:
+                            return items[0]
+                except Exception:
+                    pass
 
         mos = self._load_local()
         for m in mos:
@@ -221,7 +227,7 @@ class MOWorkflowEngine:
         """Process role approval and advance to next stage in workflow"""
         mo = self.get_mo(mo_number)
         if not mo:
-            return None, "Manufacturing Order not found."
+            return None, "Material Order not found."
 
         current_stage = mo.get("current_stage")
         role_info = ROLES.get(role, {})
@@ -271,7 +277,7 @@ class MOWorkflowEngine:
 
         mo = self.get_mo(mo_number)
         if not mo:
-            return None, "Manufacturing Order not found."
+            return None, "Material Order not found."
 
         current_stage = mo.get("current_stage")
         role_info = ROLES.get(role, {})
@@ -335,13 +341,16 @@ class MOWorkflowEngine:
 
     def _update_mo(self, mo):
         if self.use_supabase:
-            try:
-                requests.patch(
-                    f"{SUPABASE_URL}/rest/v1/manufacturing_orders?mo_number=eq.{mo['mo_number']}",
-                    headers=self._get_supabase_headers(),
-                    json=mo,
-                    timeout=10
-                )
-            except Exception:
-                pass
+            for tbl in ["material_orders", "manufacturing_orders"]:
+                try:
+                    res = requests.patch(
+                        f"{SUPABASE_URL}/rest/v1/{tbl}?mo_number=eq.{mo['mo_number']}",
+                        headers=self._get_supabase_headers(),
+                        json=mo,
+                        timeout=10
+                    )
+                    if res.status_code in (200, 204):
+                        break
+                except Exception:
+                    pass
         self._save_local(mo)

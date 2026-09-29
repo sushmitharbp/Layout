@@ -1,5 +1,5 @@
 /**
- * SheetLayout AI — Manufacturing Order (MO) Approval Portal Client Logic
+ * SheetLayout AI — Material Order (MO) Approval Portal Client Logic
  * Handles role switching, live part search, constraints checking,
  * dynamic workflow preview, document upload, and team signoffs.
  */
@@ -14,7 +14,7 @@ const ROLE_CONFIGS = {
     shearing: {
         name: "Shearing (Production)",
         title: "Shearing Production Workspace",
-        desc: "Create Manufacturing Orders, select cutting layouts, verify stock constraints, and route for approvals.",
+        desc: "Create Material Orders, select cutting layouts, verify stock constraints, and route for approvals.",
         icon: "fa-industry",
         stage: null,
         pillClass: "shearing",
@@ -209,7 +209,7 @@ function renderOrders(searchQuery = "") {
     }
 
     if (filtered.length === 0) {
-        tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">No Manufacturing Orders found matching criteria.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="8" class="loading-cell">No Material Orders found matching criteria.</td></tr>`;
         return;
     }
 
@@ -505,7 +505,7 @@ async function submitCreateMo(e) {
             closeCreateModal();
             await loadStats();
             await loadOrders();
-            alert("Manufacturing Order created and routed successfully!");
+            alert("Material Order created and routed successfully!");
         } else {
             const err = await res.json();
             alert(`Error creating MO: ${err.error || 'Submission failed'}`);
@@ -515,7 +515,7 @@ async function submitCreateMo(e) {
         alert("Failed to submit MO. Please check network connection.");
     } finally {
         submitBtn.disabled = false;
-        submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Submit Manufacturing Order`;
+        submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Submit Material Order`;
     }
 }
 
@@ -742,7 +742,7 @@ async function confirmApproveMo() {
 
 async function promptRejectMo() {
     if (!activeReviewMo) return;
-    const reason = prompt("Please enter the reason for rejecting this Manufacturing Order:");
+    const reason = prompt("Please enter the reason for rejecting this Material Order:");
     if (!reason || !reason.trim()) {
         alert("Rejection reason is required.");
         return;

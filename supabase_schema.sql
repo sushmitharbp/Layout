@@ -46,12 +46,14 @@ ALTER TABLE public.layout_records ENABLE ROW LEVEL SECURITY;
 
 -- 4. Policies
 -- Allow anyone to read layout records (public read)
+DROP POLICY IF EXISTS "Allow public read on layout_records" ON public.layout_records;
 CREATE POLICY "Allow public read on layout_records"
     ON public.layout_records
     FOR SELECT
     USING (true);
 
 -- Allow authenticated / service_role full insert/update/delete access
+DROP POLICY IF EXISTS "Allow service role write access on layout_records" ON public.layout_records;
 CREATE POLICY "Allow service role write access on layout_records"
     ON public.layout_records
     FOR ALL
@@ -62,9 +64,9 @@ CREATE POLICY "Allow service role write access on layout_records"
 COMMENT ON TABLE public.layout_records IS 'Master standardized sheet metal layout records, blank sizes, and RM ERP data';
 
 -- =====================================================================
--- 5. Manufacturing Orders (MO) Approval Workflow Table
+-- 5. Material Orders (MO) Approval Workflow Table
 -- =====================================================================
-CREATE TABLE IF NOT EXISTS public.manufacturing_orders (
+CREATE TABLE IF NOT EXISTS public.material_orders (
     id BIGSERIAL PRIMARY KEY,
     mo_number TEXT UNIQUE NOT NULL,
     part_no TEXT NOT NULL,
@@ -90,28 +92,33 @@ CREATE TABLE IF NOT EXISTS public.manufacturing_orders (
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
--- Performance Indexes on manufacturing_orders
-CREATE INDEX IF NOT EXISTS idx_mo_number ON public.manufacturing_orders(mo_number);
-CREATE INDEX IF NOT EXISTS idx_mo_part_no ON public.manufacturing_orders(part_no);
-CREATE INDEX IF NOT EXISTS idx_mo_current_stage ON public.manufacturing_orders(current_stage);
-CREATE INDEX IF NOT EXISTS idx_mo_status ON public.manufacturing_orders(status);
+-- Performance Indexes on material_orders
+CREATE INDEX IF NOT EXISTS idx_material_orders_mo_num ON public.material_orders(mo_number);
+CREATE INDEX IF NOT EXISTS idx_material_orders_part_no ON public.material_orders(part_no);
+CREATE INDEX IF NOT EXISTS idx_material_orders_stage ON public.material_orders(current_stage);
+CREATE INDEX IF NOT EXISTS idx_material_orders_status ON public.material_orders(status);
 
 -- Enable RLS
-ALTER TABLE public.manufacturing_orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.material_orders ENABLE ROW LEVEL SECURITY;
 
--- Allow public read and full service role write access
-CREATE POLICY "Allow public read on manufacturing_orders"
-    ON public.manufacturing_orders
+-- Allow public read and full write access
+DROP POLICY IF EXISTS "Allow public read on material_orders" ON public.material_orders;
+CREATE POLICY "Allow public read on material_orders"
+    ON public.material_orders
     FOR SELECT
     USING (true);
 
-CREATE POLICY "Allow write access on manufacturing_orders"
-    ON public.manufacturing_orders
+DROP POLICY IF EXISTS "Allow write access on material_orders" ON public.material_orders;
+CREATE POLICY "Allow write access on material_orders"
+    ON public.material_orders
     FOR ALL
     USING (true)
     WITH CHECK (true);
 
-COMMENT ON TABLE public.manufacturing_orders IS 'MO Approval workflow records with stage tracking, Krysalis, Purchase and ERP signoffs';
+COMMENT ON TABLE public.material_orders IS 'Material Order (MO) workflow records with stage tracking, Krysalis, Purchase and ERP signoffs';
+
+-- Optional backward compatibility view if manufacturing_orders is queried
+CREATE OR REPLACE VIEW public.manufacturing_orders AS SELECT * FROM public.material_orders;
 
 -- =====================================================================
 -- 6. ERP Entry MO Report Table (Previous MOs Created)
@@ -258,5 +265,18 @@ CREATE INDEX IF NOT EXISTS idx_mrp_bom_erp ON public.mrp_rm_sheet_bom(erp_part_n
 ALTER TABLE public.mrp_rm_sheet_bom ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read on mrp_rm_sheet_bom" ON public.mrp_rm_sheet_bom FOR SELECT USING (true);
 CREATE POLICY "Allow write on mrp_rm_sheet_bom" ON public.mrp_rm_sheet_bom FOR ALL USING (true) WITH CHECK (true);
+
+-- =====================================================================
+-- 11. GRANT PERMISSIONS TO ANON & AUTHENTICATED ROLES
+-- (Prevents 'permission denied for table' errors when using anon key)
+-- =====================================================================
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
+
 
 

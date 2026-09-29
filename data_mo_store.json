@@ -1,5 +1,42 @@
 [
   {
+    "mo_number": "MO-2026-7120",
+    "part_no": "MBA01008 - Item 2",
+    "base_part": "MBA01008",
+    "rm_erp": "7*2520*1500",
+    "grade": "YS",
+    "is_standard_layout": true,
+    "layout_name": null,
+    "thickness": 7.0,
+    "length": 2520.0,
+    "width": 1500.0,
+    "target_qty": 100,
+    "sheets_required": 10.0,
+    "layout_doc_url": "",
+    "layout_doc_filename": "",
+    "constraints_status": {
+      "stock_available": false,
+      "yield_satisfied": false,
+      "all_satisfied": false
+    },
+    "workflow_path": "PURCHASE_ERP",
+    "current_stage": "PURCHASE",
+    "status": "PENDING_PURCHASE",
+    "audit_trail": [
+      {
+        "action": "CREATED",
+        "actor_role": "shearing",
+        "actor_name": "Shearing (Production) Team",
+        "timestamp": "2026-09-28T14:36:24.041149Z",
+        "stage": "PURCHASE",
+        "remarks": "MO initiated by Shearing team."
+      }
+    ],
+    "created_by": "shearing",
+    "created_at": "2026-09-28T14:36:24.041149Z",
+    "updated_at": "2026-09-28T14:36:24.041149Z"
+  },
+  {
     "mo_number": "MO-INTEL-SHORTFALL-002",
     "part_no": "MBA01010",
     "base_part": "MBA01010",

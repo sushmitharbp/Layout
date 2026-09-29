@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MO Workflow & Approval Portal — SheetLayout AI</title>
-    <meta name="description" content="Manufacturing Order (MO) Approval Workflow system with separate logins for Shearing, Krysalis Consultants, Purchase, and ERP teams.">
+    <meta name="description" content="Material Order (MO) Approval Workflow system with separate logins for Shearing, Krysalis Consultants, Purchase, and ERP teams.">
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -63,7 +63,7 @@
                     <div class="banner-icon" id="bannerDeptIcon"><i class="fa-solid fa-industry"></i></div>
                     <div>
                         <h2 id="bannerDeptTitle">Shearing Production Workspace</h2>
-                        <p id="bannerDeptDesc">Create Manufacturing Orders, select cutting layouts, verify stock constraints, and route for approvals.</p>
+                        <p id="bannerDeptDesc">Create Material Orders, select cutting layouts, verify stock constraints, and route for approvals.</p>
                     </div>
                 </div>
                 <div class="banner-right">
@@ -134,7 +134,7 @@
                 </div>
             </section>
 
-            <!-- Manufacturing Orders List Table / Grid -->
+            <!-- Material Orders List Table / Grid -->
             <section class="mo-table-container">
                 <div class="mo-table-responsive">
                     <table class="mo-table">
@@ -153,7 +153,7 @@
                         <tbody id="moTableBody">
                             <tr>
                                 <td colspan="8" class="loading-cell">
-                                    <i class="fa-solid fa-circle-notch fa-spin"></i> Loading Manufacturing Orders...
+                                    <i class="fa-solid fa-circle-notch fa-spin"></i> Loading Material Orders...
                                 </td>
                             </tr>
                         </tbody>
@@ -168,7 +168,7 @@
         <div class="mo-modal-dialog">
             <div class="mo-modal-header">
                 <div>
-                    <h3><i class="fa-solid fa-file-circle-plus"></i> Create Manufacturing Order</h3>
+                    <h3><i class="fa-solid fa-file-circle-plus"></i> Create Material Order</h3>
                     <p>Production Shearing team initiates MO with layout specifications and constraint check</p>
                 </div>
                 <button class="modal-close-btn" onclick="closeCreateModal()"><i class="fa-solid fa-xmark"></i></button>
@@ -382,7 +382,7 @@
                 <div class="mo-modal-footer">
                     <button type="button" class="btn btn-secondary" onclick="closeCreateModal()">Cancel</button>
                     <button type="submit" class="btn btn-primary" id="submitMoBtn">
-                        <i class="fa-solid fa-paper-plane"></i> Submit Manufacturing Order
+                        <i class="fa-solid fa-paper-plane"></i> Submit Material Order
                     </button>
                 </div>
             </form>
@@ -394,7 +394,7 @@
         <div class="mo-modal-dialog review-dialog">
             <div class="mo-modal-header">
                 <div>
-                    <h3 id="reviewMoTitle">Review Manufacturing Order</h3>
+                    <h3 id="reviewMoTitle">Review Material Order</h3>
                     <p id="reviewMoSubtitle">Detailed specifications, progress stepper, and team signoffs</p>
                 </div>
                 <button class="modal-close-btn" onclick="closeReviewModal()"><i class="fa-solid fa-xmark"></i></button>

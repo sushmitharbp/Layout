@@ -506,7 +506,7 @@ def chat():
 
 
 # =====================================================================
-# Manufacturing Order (MO) Approval Workflow Routes
+# Material Order (MO) Approval Workflow Routes
 # =====================================================================
 from werkzeug.utils import secure_filename
 from mo_workflow import MOWorkflowEngine, ROLES
@@ -597,7 +597,7 @@ def get_mo_detail(mo_number):
     """Get detailed MO view with complete audit trail"""
     mo = MO_ENGINE.get_mo(mo_number)
     if not mo:
-        return jsonify({"error": "Manufacturing Order not found"}), 404
+        return jsonify({"error": "Material Order not found"}), 404
     return jsonify(mo)
 
 
