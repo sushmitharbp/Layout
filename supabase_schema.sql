@@ -113,3 +113,150 @@ CREATE POLICY "Allow write access on manufacturing_orders"
 
 COMMENT ON TABLE public.manufacturing_orders IS 'MO Approval workflow records with stage tracking, Krysalis, Purchase and ERP signoffs';
 
+-- =====================================================================
+-- 6. ERP Entry MO Report Table (Previous MOs Created)
+-- Source: ERP Entry - 2.xlsx -> MO Report
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.erp_mo_reports (
+    id BIGSERIAL PRIMARY KEY,
+    mo_doc_no TEXT NOT NULL,
+    doc_date TEXT,
+    order_status TEXT DEFAULT '',
+    cutting_order_no TEXT DEFAULT '',
+    cutting_order_date TEXT,
+    rm_code TEXT DEFAULT '',
+    rm_desc TEXT DEFAULT '',
+    uom TEXT DEFAULT 'NOS',
+    number_of_sheets NUMERIC,
+    reference_date TEXT,
+    reference_no TEXT DEFAULT '',
+    start_date TEXT,
+    due_date TEXT,
+    cutting_plan_no TEXT DEFAULT '',
+    parent_code TEXT DEFAULT '',
+    parent_desc TEXT DEFAULT '',
+    uom_code TEXT DEFAULT '',
+    parent_qty_per_sheet NUMERIC,
+    total_parent_qty NUMERIC,
+    rm_weight NUMERIC,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_erp_mo_doc_no ON public.erp_mo_reports(mo_doc_no);
+CREATE INDEX IF NOT EXISTS idx_erp_mo_parent_code ON public.erp_mo_reports(parent_code);
+CREATE INDEX IF NOT EXISTS idx_erp_mo_rm_code ON public.erp_mo_reports(rm_code);
+CREATE INDEX IF NOT EXISTS idx_erp_mo_cutting_plan ON public.erp_mo_reports(cutting_plan_no);
+ALTER TABLE public.erp_mo_reports ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on erp_mo_reports" ON public.erp_mo_reports FOR SELECT USING (true);
+CREATE POLICY "Allow write on erp_mo_reports" ON public.erp_mo_reports FOR ALL USING (true) WITH CHECK (true);
+
+-- =====================================================================
+-- 7. RM Opening Stock Table (Main Store Raw Material Inventory)
+-- Source: Unit 1 - Daily Stock Report 27.09.26.xlsx -> MAIN STORE
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.rm_main_store_stock (
+    id BIGSERIAL PRIMARY KEY,
+    item_code TEXT NOT NULL,
+    item_desc TEXT DEFAULT '',
+    uom TEXT DEFAULT 'NOS',
+    store_desc TEXT DEFAULT 'MAIN STORES',
+    onhand_stock NUMERIC DEFAULT 0,
+    category_desc TEXT DEFAULT '',
+    weight NUMERIC,
+    total_weight NUMERIC,
+    std_cost NUMERIC,
+    last_po_price NUMERIC,
+    stock_value NUMERIC,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_rm_stock_item_code ON public.rm_main_store_stock(item_code);
+CREATE INDEX IF NOT EXISTS idx_rm_stock_desc ON public.rm_main_store_stock(item_desc);
+ALTER TABLE public.rm_main_store_stock ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on rm_main_store_stock" ON public.rm_main_store_stock FOR SELECT USING (true);
+CREATE POLICY "Allow write on rm_main_store_stock" ON public.rm_main_store_stock FOR ALL USING (true) WITH CHECK (true);
+
+-- =====================================================================
+-- 8. Parts Opening Stock Table (002 - FG & WIP Inventory)
+-- Source: Unit 1 - Daily Stock Report 27.09.26.xlsx -> 002 - FG & WIP
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.parts_fg_wip_stock (
+    id BIGSERIAL PRIMARY KEY,
+    item_code TEXT NOT NULL,
+    item_desc TEXT DEFAULT '',
+    uom TEXT DEFAULT 'NOS',
+    store_desc TEXT DEFAULT 'FG AND WIP STORES',
+    onhand_stock NUMERIC DEFAULT 0,
+    category_desc TEXT DEFAULT '',
+    weight NUMERIC,
+    total_weight NUMERIC,
+    std_cost NUMERIC,
+    std_stock_value NUMERIC,
+    details TEXT DEFAULT '',
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_fg_wip_item_code ON public.parts_fg_wip_stock(item_code);
+CREATE INDEX IF NOT EXISTS idx_fg_wip_category ON public.parts_fg_wip_stock(category_desc);
+ALTER TABLE public.parts_fg_wip_stock ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on parts_fg_wip_stock" ON public.parts_fg_wip_stock FOR SELECT USING (true);
+CREATE POLICY "Allow write on parts_fg_wip_stock" ON public.parts_fg_wip_stock FOR ALL USING (true) WITH CHECK (true);
+
+-- =====================================================================
+-- 9. MRP Monthly Sales Schedule Table
+-- Source: MRP - AL - Sep'26 Schedule.xlsx -> Schedule given by Sales
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.mrp_sales_schedules (
+    id BIGSERIAL PRIMARY KEY,
+    sl_no INTEGER,
+    part_no TEXT NOT NULL,
+    part_name TEXT DEFAULT '',
+    wk1 NUMERIC DEFAULT 0,
+    wk2 NUMERIC DEFAULT 0,
+    wk3 NUMERIC DEFAULT 0,
+    wk4 NUMERIC DEFAULT 0,
+    wk5 NUMERIC DEFAULT 0,
+    monthly_total NUMERIC DEFAULT 0,
+    fg_pc_stock NUMERIC DEFAULT 0,
+    godown NUMERIC DEFAULT 0,
+    qc NUMERIC DEFAULT 0,
+    balance_planning NUMERIC DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mrp_part_no ON public.mrp_sales_schedules(part_no);
+ALTER TABLE public.mrp_sales_schedules ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on mrp_sales_schedules" ON public.mrp_sales_schedules FOR SELECT USING (true);
+CREATE POLICY "Allow write on mrp_sales_schedules" ON public.mrp_sales_schedules FOR ALL USING (true) WITH CHECK (true);
+
+-- =====================================================================
+-- 10. MRP RM Sheet BOM Table
+-- Source: MRP - AL - Sep'26 Schedule.xlsx -> RM sheet BOM
+-- =====================================================================
+CREATE TABLE IF NOT EXISTS public.mrp_rm_sheet_bom (
+    id BIGSERIAL PRIMARY KEY,
+    sl_no INTEGER,
+    parent_part_no TEXT NOT NULL,
+    child_part_no TEXT DEFAULT '',
+    os_part TEXT DEFAULT '',
+    erp_part_no TEXT DEFAULT '',
+    scope TEXT DEFAULT '',
+    offtake NUMERIC DEFAULT 1,
+    grade TEXT DEFAULT '',
+    blank_length NUMERIC,
+    blank_width NUMERIC,
+    blank_thickness NUMERIC,
+    blank_weight NUMERIC,
+    sheet_length NUMERIC,
+    sheet_width NUMERIC,
+    sheet_thickness NUMERIC,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_mrp_bom_parent ON public.mrp_rm_sheet_bom(parent_part_no);
+CREATE INDEX IF NOT EXISTS idx_mrp_bom_erp ON public.mrp_rm_sheet_bom(erp_part_no);
+ALTER TABLE public.mrp_rm_sheet_bom ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read on mrp_rm_sheet_bom" ON public.mrp_rm_sheet_bom FOR SELECT USING (true);
+CREATE POLICY "Allow write on mrp_rm_sheet_bom" ON public.mrp_rm_sheet_bom FOR ALL USING (true) WITH CHECK (true);
+
+
