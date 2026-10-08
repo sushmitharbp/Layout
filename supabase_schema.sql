@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS public.material_orders (
     current_stage TEXT NOT NULL,  -- 'KRYSALIS', 'PURCHASE', 'ERP', 'COMPLETED', 'REJECTED'
     status TEXT NOT NULL,         -- 'PENDING_KRYSALIS', 'PENDING_PURCHASE', 'PENDING_ERP', 'RELEASED_TO_ERP', 'REJECTED'
     audit_trail JSONB DEFAULT '[]'::jsonb,
+    endbits JSONB DEFAULT '[]'::jsonb,
     created_by TEXT DEFAULT 'shearing',
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
@@ -210,35 +211,16 @@ CREATE POLICY "Allow public read on parts_fg_wip_stock" ON public.parts_fg_wip_s
 CREATE POLICY "Allow write on parts_fg_wip_stock" ON public.parts_fg_wip_stock FOR ALL USING (true) WITH CHECK (true);
 
 -- =====================================================================
--- 9. MRP Monthly Sales Schedule Table
--- Source: MRP - AL - Sep'26 Schedule.xlsx -> Schedule given by Sales
+-- 9. (DEPRECATED) Drop MRP Monthly Sales Schedule Table
+-- The sales schedule table is replaced by mrp_rm_sheet_bom
 -- =====================================================================
-CREATE TABLE IF NOT EXISTS public.mrp_sales_schedules (
-    id BIGSERIAL PRIMARY KEY,
-    sl_no INTEGER,
-    part_no TEXT NOT NULL,
-    part_name TEXT DEFAULT '',
-    wk1 NUMERIC DEFAULT 0,
-    wk2 NUMERIC DEFAULT 0,
-    wk3 NUMERIC DEFAULT 0,
-    wk4 NUMERIC DEFAULT 0,
-    wk5 NUMERIC DEFAULT 0,
-    monthly_total NUMERIC DEFAULT 0,
-    fg_pc_stock NUMERIC DEFAULT 0,
-    godown NUMERIC DEFAULT 0,
-    qc NUMERIC DEFAULT 0,
-    balance_planning NUMERIC DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_mrp_part_no ON public.mrp_sales_schedules(part_no);
-ALTER TABLE public.mrp_sales_schedules ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow public read on mrp_sales_schedules" ON public.mrp_sales_schedules FOR SELECT USING (true);
-CREATE POLICY "Allow write on mrp_sales_schedules" ON public.mrp_sales_schedules FOR ALL USING (true) WITH CHECK (true);
+DROP TABLE IF EXISTS public.mrp_sales_schedules CASCADE;
 
 -- =====================================================================
--- 10. MRP RM Sheet BOM Table
+-- 10. MRP RM Sheet BOM Table (Complete 28 Columns)
 -- Source: MRP - AL - Sep'26 Schedule.xlsx -> RM sheet BOM
+-- Contains parent schedule_qty, child total_qty (MRP count), inhouse_qty,
+-- balance_qty, existing_sheet_used, components_per_sheet, remarks, etc.
 -- =====================================================================
 CREATE TABLE IF NOT EXISTS public.mrp_rm_sheet_bom (
     id BIGSERIAL PRIMARY KEY,
@@ -257,10 +239,39 @@ CREATE TABLE IF NOT EXISTS public.mrp_rm_sheet_bom (
     sheet_length NUMERIC,
     sheet_width NUMERIC,
     sheet_thickness NUMERIC,
+    sheet_weight NUMERIC,
+    existing_sheet_used TEXT DEFAULT '',
+    components_per_sheet NUMERIC,
+    schedule_qty NUMERIC,
+    total_qty NUMERIC,
+    inhouse_erp_qty NUMERIC DEFAULT 0,
+    outsource_erp_qty NUMERIC DEFAULT 0,
+    balance_qty NUMERIC,
+    sheet_working NUMERIC,
+    no_of_sheets NUMERIC,
+    total_sheet_weight NUMERIC,
+    remarks TEXT DEFAULT '',
+    remarks_2 TEXT DEFAULT '',
     created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
 );
 
+-- In case table already exists in Supabase, add new columns if missing:
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS sheet_weight NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS existing_sheet_used TEXT DEFAULT '';
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS components_per_sheet NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS schedule_qty NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS total_qty NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS inhouse_erp_qty NUMERIC DEFAULT 0;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS outsource_erp_qty NUMERIC DEFAULT 0;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS balance_qty NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS sheet_working NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS no_of_sheets NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS total_sheet_weight NUMERIC;
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS remarks TEXT DEFAULT '';
+ALTER TABLE public.mrp_rm_sheet_bom ADD COLUMN IF NOT EXISTS remarks_2 TEXT DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS idx_mrp_bom_parent ON public.mrp_rm_sheet_bom(parent_part_no);
+CREATE INDEX IF NOT EXISTS idx_mrp_bom_child ON public.mrp_rm_sheet_bom(child_part_no);
 CREATE INDEX IF NOT EXISTS idx_mrp_bom_erp ON public.mrp_rm_sheet_bom(erp_part_no);
 ALTER TABLE public.mrp_rm_sheet_bom ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow public read on mrp_rm_sheet_bom" ON public.mrp_rm_sheet_bom FOR SELECT USING (true);
@@ -278,5 +289,68 @@ GRANT ALL ON ALL ROUTINES IN SCHEMA public TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 
+-- =====================================================================
+-- 12. STORAGE BUCKET FOR LAYOUT IMAGES
+-- =====================================================================
+INSERT INTO storage.buckets (id, name, public) 
+VALUES ('layout-images', 'layout-images', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
 
+-- Storage object policies for layout-images
+CREATE POLICY "Public Read Access" 
+ON storage.objects FOR SELECT 
+TO public 
+USING (bucket_id = 'layout-images');
 
+CREATE POLICY "Public Insert Access" 
+ON storage.objects FOR INSERT 
+TO public 
+WITH CHECK (bucket_id = 'layout-images');
+
+CREATE POLICY "Public Update Access" 
+ON storage.objects FOR UPDATE 
+TO public 
+USING (bucket_id = 'layout-images');
+
+-- =====================================================================
+-- 13. End Bits (Offcuts) Store & Parts Tracking Table
+-- Tracks end bits generated upon MO creation and parts manufactured from them
+-- =====================================================================
+ALTER TABLE public.material_orders ADD COLUMN IF NOT EXISTS endbits JSONB DEFAULT '[]'::jsonb;
+
+CREATE TABLE IF NOT EXISTS public.endbit_records (
+    id BIGSERIAL PRIMARY KEY,
+    endbit_id TEXT UNIQUE NOT NULL,
+    mo_number TEXT NOT NULL,
+    parent_part_no TEXT NOT NULL,
+    base_part TEXT DEFAULT '',
+    rm_erp TEXT DEFAULT '',
+    grade TEXT DEFAULT '',
+    name TEXT DEFAULT 'End bit',
+    dim TEXT DEFAULT '',
+    thickness NUMERIC,
+    length NUMERIC,
+    width NUMERIC,
+    qty_per_sheet NUMERIC DEFAULT 1,
+    initial_qty NUMERIC DEFAULT 1,
+    available_qty NUMERIC DEFAULT 1,
+    used_qty NUMERIC DEFAULT 0,
+    weight_kg NUMERIC DEFAULT 0,
+    status TEXT DEFAULT 'AVAILABLE', -- 'AVAILABLE', 'PARTIALLY_USED', 'CONSUMED'
+    parts_created JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_endbit_records_eb_id ON public.endbit_records(endbit_id);
+CREATE INDEX IF NOT EXISTS idx_endbit_records_mo_num ON public.endbit_records(mo_number);
+CREATE INDEX IF NOT EXISTS idx_endbit_records_parent ON public.endbit_records(parent_part_no);
+CREATE INDEX IF NOT EXISTS idx_endbit_records_status ON public.endbit_records(status);
+
+ALTER TABLE public.endbit_records ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Allow public read on endbit_records" ON public.endbit_records;
+CREATE POLICY "Allow public read on endbit_records" ON public.endbit_records FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Allow write access on endbit_records" ON public.endbit_records;
+CREATE POLICY "Allow write access on endbit_records" ON public.endbit_records FOR ALL USING (true) WITH CHECK (true);
+
+COMMENT ON TABLE public.endbit_records IS 'Inventory of end bits/offcuts generated from MO sheet cutting, enabling parts manufacturing and tracking';

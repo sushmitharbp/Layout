@@ -704,6 +704,14 @@ body {
     margin-bottom: 2px;
 }
 
+.chat-md-h5 {
+    font-size: 0.92rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-top: 4px;
+    margin-bottom: 2px;
+}
+
 .chat-md-quote {
     border-left: 3px solid var(--accent-blue);
     background: #f8fafc;

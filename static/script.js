@@ -732,6 +732,8 @@ function handleActionClick(action, value) {
         handleSendMessage(`Fetch layout for ${value}`);
     } else if (action === "select_part" || action === "search") {
         handleSendMessage(value);
+    } else {
+        handleSendMessage(value || action);
     }
 }
 
@@ -882,10 +884,14 @@ function formatMarkdown(text) {
                 resultLines.push(tableHtml);
                 tableHtml = "";
             }
-            if (line.startsWith("### ")) {
+            if (line.startsWith("#### ")) {
+                resultLines.push(`<h5 class="chat-md-h5">${formatInlineMarkdown(line.slice(5))}</h5>`);
+            } else if (line.startsWith("### ")) {
                 resultLines.push(`<h4 class="chat-md-h4">${formatInlineMarkdown(line.slice(4))}</h4>`);
             } else if (line.startsWith("## ")) {
                 resultLines.push(`<h3 class="chat-md-h3">${formatInlineMarkdown(line.slice(3))}</h3>`);
+            } else if (line.startsWith("# ")) {
+                resultLines.push(`<h3 class="chat-md-h3">${formatInlineMarkdown(line.slice(2))}</h3>`);
             } else if (line.startsWith("> ")) {
                 resultLines.push(`<blockquote class="chat-md-quote">${formatInlineMarkdown(line.slice(2))}</blockquote>`);
             } else if (line.startsWith("- ") || line.startsWith("* ")) {
@@ -902,9 +908,27 @@ function formatMarkdown(text) {
     return resultLines.join("");
 }
 
+function cleanLatexAndSymbols(str) {
+    if (!str) return "";
+    return str
+        .replace(/\\lceil\s*([^\\$]*?)\s*\\rceil/g, 'ceil($1)')
+        .replace(/\\lfloor\s*([^\\$]*?)\s*\\rfloor/g, 'floor($1)')
+        .replace(/\\text\{([^}]+)\}/g, '$1')
+        .replace(/\\left/g, '')
+        .replace(/\\right/g, '')
+        .replace(/\\times/g, '×')
+        .replace(/\\ge/g, '≥')
+        .replace(/\\le/g, '≤')
+        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)')
+        .replace(/\$\$([^$]+)\$\$/g, '$1')
+        .replace(/\$([^$]+)\$/g, '$1')
+        .replace(/^[0-9]\uFE0F?\u20E3\s*/g, ''); // strip keycap numbers like 1️⃣ if present
+}
+
 function formatInlineMarkdown(str) {
     if (!str) return "";
-    return escapeHtml(str)
+    let clean = cleanLatexAndSymbols(str);
+    return escapeHtml(clean)
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.*?)\*/g, '<em>$1</em>')
         .replace(/`(.*?)`/g, '<code>$1</code>');

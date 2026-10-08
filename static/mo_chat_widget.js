@@ -56,11 +56,12 @@ function initChatWidget() {
                 <div class="widget-msg-avatar"><i class="fa-solid fa-microchip"></i></div>
                 <div class="widget-msg-bubble">
                     <p>Hello! 👋 I am your <strong>SheetLayout AI Assistant</strong>.</p>
-                    <p style="margin-top: 4px;">Enter any <strong>Part Number</strong> to lookup RM ERP codes, blanks, yields, and CAD drawings.</p>
+                    <p style="margin-top: 4px;">Ask me about <strong>Monthly Yield</strong>, <strong>Scrap Generated</strong>, <strong>Cutting & Production Plans</strong>, or any Part Number.</p>
                     <div class="widget-chips">
+                        <button type="button" class="widget-chip" onclick="widgetSendText('monthly yield')">📊 Monthly Yield</button>
+                        <button type="button" class="widget-chip" onclick="widgetSendText('this month scrap generated')">✂️ Scrap Generated</button>
+                        <button type="button" class="widget-chip" onclick="widgetSendText('cutting plan for MBA01010')">📋 Plan: MBA01010</button>
                         <button type="button" class="widget-chip" onclick="widgetSendText('MBA01008 - Item 1')">MBA01008 - Item 1</button>
-                        <button type="button" class="widget-chip" onclick="widgetSendText('X5L00214 - Item 1')">X5L00214 - Item 1</button>
-                        <button type="button" class="widget-chip" onclick="widgetSendText('MBA01010 - Item')">MBA01010 - Item</button>
                     </div>
                 </div>
             </div>
@@ -297,10 +298,73 @@ function renderWidgetResponse(data) {
 
 function formatWidgetReply(text) {
     if (!text) return "";
-    return text
+
+    const lines = text.split("\n");
+    let inTable = false;
+    let tableHtml = "";
+    let processed = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i].trim();
+        if (line.startsWith("|") && line.endsWith("|")) {
+            const rawCells = line.split("|").slice(1, -1).map(c => c.trim());
+            // Check if delimiter row
+            if (rawCells.every(c => /^:?-+:?$/.test(c))) {
+                continue;
+            }
+            if (!inTable) {
+                inTable = true;
+                tableHtml = `<div class="widget-table-scroll"><table class="widget-table"><thead><tr>${rawCells.map(c => `<th>${formatInlineMd(c)}</th>`).join("")}</tr></thead><tbody>`;
+            } else {
+                tableHtml += `<tr>${rawCells.map(c => `<td>${formatInlineMd(c)}</td>`).join("")}</tr>`;
+            }
+        } else {
+            if (inTable) {
+                tableHtml += `</tbody></table></div>`;
+                processed.push(tableHtml);
+                inTable = false;
+                tableHtml = "";
+            }
+            processed.push(lines[i]);
+        }
+    }
+    if (inTable) {
+        tableHtml += `</tbody></table></div>`;
+        processed.push(tableHtml);
+    }
+
+    let html = processed.join("\n");
+    html = html.replace(/^### (.*$)/gim, '<h4 style="margin: 8px 0 4px; color: #0284c7; font-size: 0.92rem;">$1</h4>');
+    html = html.replace(/^#### (.*$)/gim, '<h5 style="margin: 6px 0 3px; color: #334155; font-size: 0.85rem;">$1</h5>');
+    html = html.replace(/^> (.*$)/gim, '<blockquote style="border-left: 3px solid #0284c7; background: #f0f9ff; margin: 6px 0; padding: 5px 10px; font-size: 0.8rem; color: #0369a1; border-radius: 0 4px 4px 0;">$1</blockquote>');
+    html = formatInlineMd(html);
+    html = html.replace(/\n/g, '<br>');
+    return html;
+}
+
+function cleanWidgetLatex(str) {
+    if (!str) return "";
+    return str
+        .replace(/\\lceil\s*([^\\$]*?)\s*\\rceil/g, 'ceil($1)')
+        .replace(/\\lfloor\s*([^\\$]*?)\s*\\rfloor/g, 'floor($1)')
+        .replace(/\\text\{([^}]+)\}/g, '$1')
+        .replace(/\\left/g, '')
+        .replace(/\\right/g, '')
+        .replace(/\\times/g, '×')
+        .replace(/\\ge/g, '≥')
+        .replace(/\\le/g, '≤')
+        .replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)')
+        .replace(/\$\$([^$]+)\$\$/g, '$1')
+        .replace(/\$([^$]+)\$/g, '$1')
+        .replace(/^[0-9]\uFE0F?\u20E3\s*/g, '');
+}
+
+function formatInlineMd(str) {
+    if (!str) return "";
+    let clean = cleanWidgetLatex(str);
+    return clean
         .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-        .replace(/`(.*?)`/g, '<code>$1</code>')
-        .replace(/\n/g, '<br>');
+        .replace(/`(.*?)`/g, '<code style="background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 0.82em;">$1</code>');
 }
 
 function escapeWidgetHtml(str) {

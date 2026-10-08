@@ -64,6 +64,15 @@ class SheetIntelligenceEngine:
                 if 0 < y <= 100:
                     yields.append(y)
         self.avg_yield = round(sum(yields) / len(yields), 2) if yields else 0.0
+        self.erp_service = None
+        self.mo_engine = None
+
+    def set_services(self, erp_service=None, mo_engine=None, planner_agent=None, endbit_agent=None):
+        """Inject live ERPStockService, MOWorkflowEngine, ProductionPlannerAgent, and EndbitCapacityAgent for cross-table intelligence."""
+        self.erp_service = erp_service
+        self.mo_engine = mo_engine
+        self.planner_agent = planner_agent
+        self.endbit_agent = endbit_agent
 
     @staticmethod
     def _safe_float(val, default=0.0):
@@ -75,9 +84,24 @@ class SheetIntelligenceEngine:
             return default
 
     def extract_part_numbers(self, text):
-        """Extract potential part numbers from user query."""
-        tokens = re.findall(r'[a-zA-Z0-9_-]+', text)
+        """Extract potential part numbers from user query, prioritizing specific child item parts over base parts."""
+        if not text:
+            return []
+        
+        clean_text = re.sub(r'[^a-zA-Z0-9]', '', str(text)).lower()
         found = []
+        
+        # 1. Exact normalized part matching (e.g. "mba01008item2" in "compare...mba01008 item 2")
+        # Sort by length descending so "mba01008item2" matches before "mba01008"
+        for clean_p, p in sorted(self.part_lookup.items(), key=lambda x: len(x[0]), reverse=True):
+            if clean_p in clean_text:
+                found.append(p)
+                
+        if found:
+            return list(dict.fromkeys(found))
+            
+        # 2. Token-level matching
+        tokens = re.findall(r'[a-zA-Z0-9_-]+', str(text))
         for t in tokens:
             t_clean = re.sub(r'[^a-zA-Z0-9]', '', t).lower()
             if len(t_clean) >= 4:
@@ -86,6 +110,13 @@ class SheetIntelligenceEngine:
                 elif t_clean in self.base_lookup:
                     base = self.base_lookup[t_clean]
                     found.append(base)
+                    
+        # 3. Base part lookup in clean text
+        if not found:
+            for clean_b, b in sorted(self.base_lookup.items(), key=lambda x: len(x[0]), reverse=True):
+                if clean_b in clean_text:
+                    found.append(b)
+                    
         return list(dict.fromkeys(found))
 
     def extract_dimensions(self, text):
@@ -101,33 +132,66 @@ class SheetIntelligenceEngine:
         q = query.strip()
         q_lower = q.lower()
         
-        # 1. Reload .env dynamically so user-added keys are active
-        gemini_key = os.getenv("GEMINI_API_KEY")
-        if not gemini_key:
-            load_dotenv()
-            gemini_key = os.getenv("GEMINI_API_KEY")
+        # Check Production Planner Agent (Monthly Yield, Scrap, Production Plans)
+        if hasattr(self, 'planner_agent') and self.planner_agent:
+            agent_res = self.planner_agent.handle_user_prompt(q, current_part=current_part)
+            if agent_res:
+                return agent_res
 
+        # 1. Reload .env dynamically so user-added keys are active
+        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+        gemini_key = os.getenv("GEMINI_API_KEY")
         openai_key = os.getenv("OPENAI_API_KEY")
-        if not openai_key:
+        if not (anthropic_key or gemini_key or openai_key):
             load_dotenv()
+            anthropic_key = os.getenv("ANTHROPIC_API_KEY")
+            gemini_key = os.getenv("GEMINI_API_KEY")
             openai_key = os.getenv("OPENAI_API_KEY")
         
-        # 2. Check local analytics first (instant, 100% verified against live records)
-        local_result = self._try_local_analytics(q, q_lower, current_part)
-        if local_result:
-            return local_result
+        has_llm = bool(anthropic_key or gemini_key or openai_key)
+        
+        # Determine if query is an analytical, comparative, or reasoning question
+        is_analytical_or_conversational = any(w in q_lower for w in [
+            "compare", "difference", "vs", "versus", "better", "best", "highest", "lowest",
+            "why", "how", "what if", "can we", "which", "optimize", "recommend", "advice",
+            "stock", "shortage", "surplus", "mrp", "remaining", "schedule", "plan",
+            "mo", "order", "status", "approve", "reject", "krysalis", "purchase", "erp",
+            "explain", "evaluate", "suggest", "breakdown", "analysis", "audit", "standard and non",
+            "yield %", "yield percentage"
+        ]) or "?" in q or len(q.split()) > 4
 
-        # 3. If question is open-ended or conceptual, use Gemini / OpenAI with rich RAG context
-        if gemini_key:
-            llm_result = self._ask_gemini(q, gemini_key, current_part)
+        # 2. If LLM is available and user is asking an analytical/conversational question,
+        # bypass primitive static tables and route straight to Claude RAG engine!
+        if not (has_llm and is_analytical_or_conversational):
+            local_result = self._try_local_analytics(q, q_lower, current_part)
+            if local_result:
+                return local_result
+
+        # 3. Build comprehensive live database context from all 7 database tables & services
+        rag_context = self._build_comprehensive_rag_context(q, current_part)
+
+        # 4. Route to LLM: Claude (Anthropic) > Gemini (with Claude Persona) > OpenAI
+        if anthropic_key:
+            llm_result = self._ask_claude(q, anthropic_key, rag_context)
             if llm_result:
                 return llm_result
-        elif openai_key:
-            llm_result = self._ask_openai(q, openai_key, current_part)
+
+        if gemini_key:
+            llm_result = self._ask_gemini(q, gemini_key, rag_context)
+            if llm_result:
+                return llm_result
+
+        if openai_key:
+            llm_result = self._ask_openai(q, openai_key, rag_context)
             if llm_result:
                 return llm_result
                 
-        # 4. Fallback to smart guidance
+        # 5. Fallback to local analytics if LLM didn't return
+        fallback_local = self._try_local_analytics(q, q_lower, current_part)
+        if fallback_local:
+            return fallback_local
+
+        # 6. Fallback to smart guidance
         return self._generate_smart_fallback(q, q_lower, current_part)
 
     def _try_local_analytics(self, q, q_lower, current_part):
@@ -141,12 +205,12 @@ class SheetIntelligenceEngine:
         if ("rm erp" in q_lower or "erp code" in q_lower) and any(w in q_lower for w in ["what", "how", "meaning", "definition", "format", "stand for", "explain"]):
             return {
                 "reply": (
-                    "### 📘 What is RM ERP Code?\n\n"
+                    "### RM ERP Code Definition\n\n"
                     "**RM ERP Code** represents the standardized **Raw Material** specification in the ERP system for sheet metal cutting:\n\n"
                     "- **Format**: `Thickness * Length * Width` (all dimensions in **millimeters**).\n"
-                    "- **Example**: `3*2500*1250` means a sheet of **3.0 mm thickness**, **2500 mm length**, and **1250 mm width**.\n"
+                    "- **Example**: `3*2500*1250` indicates a sheet plate of **3.0 mm thickness**, **2500 mm length**, and **1250 mm width**.\n"
                     "- **Grade**: Accompanied by steel grade specifications such as **YS** (Yield Strength steel), **HR** (Hot Rolled), or **CR** (Cold Rolled).\n"
-                    "- **Importance**: It links the physical CAD cutting layout directly with ERP inventory and stock procurement."
+                    "- **Purpose**: Directly links physical CAD cutting layouts with ERP inventory tracking and stock replenishment."
                 ),
                 "type": "text"
             }
@@ -154,14 +218,14 @@ class SheetIntelligenceEngine:
         if not target_part and ("material yield" in q_lower or "yield" in q_lower) and any(w in q_lower for w in ["what", "how", "calculate", "formula", "definition", "meaning", "explain"]):
             return {
                 "reply": (
-                    "### 📈 Material Yield in Sheet Metal Standardization\n\n"
-                    "**Material Yield (%)** measures the efficiency of utilizing raw sheet metal into finished component blanks:\n\n"
-                    "$$\\text{Material Yield} (\\%) = \\left( \\frac{\\text{Total Finished Part Blanks Weight (kg)}}{\\text{Raw Sheet Weight (kg)}} \\right) \\times 100$$\n\n"
-                    "**Efficiency Benchmarks**:\n"
-                    "- 🟢 **High Yield (≥ 92%)**: Optimal layout with minimal scrap.\n"
-                    "- 🟢 **Good Yield (85% – 91%)**: Standard acceptable industrial utilization.\n"
-                    "- 🟡 **Medium Yield (75% – 84%)**: Candidate for nesting optimization.\n"
-                    "- 🔴 **Low Yield (< 75%)**: High off-cut scrap / end-bit wastage."
+                    "### Material Yield in Sheet Metal Standardization\n\n"
+                    "**Material Yield (%)** measures the efficiency of utilizing raw sheet metal plates into finished component blanks:\n\n"
+                    "**Formula**: `Material Yield (%) = (Total Finished Part Blanks Weight / Raw Sheet Weight) × 100`\n\n"
+                    "**Industrial Efficiency Benchmarks**:\n"
+                    "- **High Yield (≥ 92%)**: Optimal standardized layout with minimal scrap.\n"
+                    "- **Good Yield (85% – 91%)**: Standard acceptable production utilization.\n"
+                    "- **Medium Yield (75% – 84%)**: Review candidate for nesting optimization.\n"
+                    "- **Low Yield (< 75%)**: High off-cut scrap / excessive end-bit wastage."
                 ),
                 "type": "text"
             }
@@ -169,13 +233,13 @@ class SheetIntelligenceEngine:
         if any(w in q_lower for w in ["standardized vs", "2nd choice", "second choice", "non-standard", "not use", "classification", "status hierarchy"]):
             return {
                 "reply": (
-                    "### 🎯 Layout Classification Hierarchy\n\n"
+                    "### Layout Classification Hierarchy\n\n"
                     "1. **Standardized (Preferred Baseline)**:\n"
                     "   - The primary approved CAD layout plan providing optimal material yield and standard sheet sizes (`2500*1250` / `2440*1220`).\n\n"
                     "2. **2nd Choice**:\n"
                     "   - Secondary authorized layout used when the primary raw material sheet size is out of stock in inventory.\n\n"
                     "3. **Non-standard / Not Use**:\n"
-                    "   - Legacy layouts or non-standard raw sheet sizes that result in lower yield or surplus end-bits. Deprecated in favor of standardized plans."
+                    "   - Legacy layouts or non-standard raw sheet sizes resulting in lower yield or surplus end-bits. Deprecated in favor of standardized plans."
                 ),
                 "type": "text"
             }
@@ -183,10 +247,10 @@ class SheetIntelligenceEngine:
         if ("end bit" in q_lower or "endbit" in q_lower or "scrap" in q_lower) and any(w in q_lower for w in ["what", "meaning", "definition", "explain"]):
             return {
                 "reply": (
-                    "### ✂️ What is an End-Bit (Off-Cut Scrap)?\n\n"
+                    "### Definition: End-Bit (Off-Cut Scrap)\n\n"
                     "An **End-Bit** is the leftover portion of a sheet metal plate after all primary component blanks have been nested and cut.\n\n"
-                    "- **Recovery**: In modern sheet metal manufacturing, large end-bits can often be returned to storage and reused for smaller bracket blanks or stiffeners.\n"
-                    "- **Impact on Yield**: Smaller end-bit weight directly improves **Material Yield %**."
+                    "- **Recovery**: In modern sheet metal manufacturing, large reusable end-bits are returned to store inventory and reused for smaller bracket blanks or stiffeners.\n"
+                    "- **Impact on Yield**: Reducing end-bit dimensions directly improves **Material Yield %**."
                 ),
                 "type": "text"
             }
@@ -194,7 +258,7 @@ class SheetIntelligenceEngine:
         if "cutting plan" in q_lower and any(w in q_lower for w in ["what", "meaning", "definition", "explain"]):
             return {
                 "reply": (
-                    "### 📋 What is a Cutting Plan?\n\n"
+                    "### Definition: Cutting Plan\n\n"
                     "A **Cutting Plan** (e.g. `SCP/20-21/00388`) is an authorized shop-floor instruction code that defines:\n\n"
                     "- The exact shearing/CNC sequence to cut the raw sheet into strips and blank components.\n"
                     "- The number of blanks extracted per strip and total blanks per sheet plate.\n"
@@ -226,7 +290,7 @@ class SheetIntelligenceEngine:
                         best_yield = self._safe_float(best.get("per_sheet", {}).get("yield_pct"))
                         
                         reply_lines = [
-                            f"### 🏆 Best Yield for Part **{resolved_part}**\n",
+                            f"### Best Material Yield for Part **{resolved_part}**\n",
                             f"The highest material yield is **{best_yield}%** achieved using RM ERP Code **`{best['rm_erp']}`**.\n",
                             f"- **Raw Material Size**: `{best.get('thickness')} x {best.get('length')} x {best.get('width')} mm`",
                             f"- **Status**: {best.get('status', 'Standardized')}",
@@ -238,7 +302,7 @@ class SheetIntelligenceEngine:
                         ]
                         for r in recs:
                             y = self._safe_float(r.get("per_sheet", {}).get("yield_pct"), "-")
-                            is_best = " ⭐" if r == best else ""
+                            is_best = " (Optimal)" if r == best else ""
                             reply_lines.append(f"| `{r['rm_erp']}`{is_best} | {r.get('grade') or 'YS'} | **{y}%** | {r['status']} |")
                             
                         return {
@@ -255,7 +319,7 @@ class SheetIntelligenceEngine:
                 # B2. RM ERP Code inquiry (e.g. "Give me the rm erp code for f4g05914-item7")
                 if any(k in q_lower for k in ["rm erp", "rm code", "raw material", "give me the rm", "what is the rm", "show rm"]):
                     reply_lines = [
-                        f"### 📋 RM ERP Codes for Part **{resolved_part}**\n",
+                        f"### RM ERP Codes for Part **{resolved_part}**\n",
                         f"Found **{len(recs)} layout options** for this part in the standardization master:\n",
                         "| Status | RM ERP Code | Sheet Size (mm) | Steel Grade | Yield % |",
                         "| :--- | :--- | :--- | :--- | :--- |"
@@ -274,13 +338,13 @@ class SheetIntelligenceEngine:
                 # B3. "What is the yield / material yield for <part>?"
                 if any(k in q_lower for k in ["yield", "material yield", "efficiency"]):
                     reply_lines = [
-                        f"### 📊 Material Yield for Part **{resolved_part}**\n",
+                        f"### Material Yield for Part **{resolved_part}**\n",
                         "| RM ERP Code | Grade | Yield % | Status | CAD Layout |",
                         "| :--- | :--- | :--- | :--- | :--- |"
                     ]
                     for r in recs:
                         y = self._safe_float(r.get("per_sheet", {}).get("yield_pct"), "-")
-                        img_note = "✅ Available" if r.get("image_url") else "None"
+                        img_note = "Available" if r.get("image_url") else "None"
                         reply_lines.append(f"| `{r['rm_erp']}` | {r.get('grade') or 'YS'} | **{y}%** | {r['status']} | {img_note} |")
                         
                     return {
@@ -292,7 +356,7 @@ class SheetIntelligenceEngine:
                 # B4. "What grade / sheet size / thickness is used?"
                 if any(k in q_lower for k in ["grade", "steel", "thickness", "sheet size", "dimension"]):
                     reply_lines = [
-                        f"### ⚙️ Raw Material & Grade Specifications for **{resolved_part}**\n",
+                        f"### Raw Material & Grade Specifications for **{resolved_part}**\n",
                         "| RM ERP Code | Thickness | Sheet Dimensions | Steel Grade | Status |",
                         "| :--- | :--- | :--- | :--- | :--- |"
                     ]
@@ -310,7 +374,7 @@ class SheetIntelligenceEngine:
                 # B5. Blank & Cut details
                 if any(k in q_lower for k in ["blank", "cut blank", "strip", "blank size", "blank weight"]):
                     reply_lines = [
-                        f"### ✂️ Blank & Cut Specifications for Part **{resolved_part}**\n",
+                        f"### Blank & Cut Specifications for Part **{resolved_part}**\n",
                         "| RM ERP Code | Cut Blank Size (mm) | Blank Weight (kg) | Blanks/Sheet | Status |",
                         "| :--- | :--- | :--- | :--- | :--- |"
                     ]
@@ -328,7 +392,7 @@ class SheetIntelligenceEngine:
                 # B6. Cutting plan
                 if any(k in q_lower for k in ["cutting plan", "plan"]):
                     reply_lines = [
-                        f"### 📐 Cutting Plans for Part **{resolved_part}**\n",
+                        f"### Cutting Plans for Part **{resolved_part}**\n",
                         "| RM ERP Code | Cutting Plan | Sheet Size (mm) | Yield % | Status |",
                         "| :--- | :--- | :--- | :--- | :--- |"
                     ]
@@ -346,7 +410,7 @@ class SheetIntelligenceEngine:
                 # B7. Compare RM codes for this part
                 if any(k in q_lower for k in ["compare", "difference", "comparison"]):
                     reply_lines = [
-                        f"### ⚖️ RM ERP Options Comparison for **{resolved_part}**\n",
+                        f"### RM ERP Options Comparison for **{resolved_part}**\n",
                         "| RM ERP Code | Yield % | Blanks/Sheet | RM Wt (kg) | Grade | Status |",
                         "| :--- | :--- | :--- | :--- | :--- | :--- |"
                     ]
@@ -362,23 +426,25 @@ class SheetIntelligenceEngine:
                         "actions": [{"label": f"View {r['rm_erp']}", "action": "fetch_layout", "value": r["rm_erp"]} for r in recs if r.get("rm_erp")][:3]
                     }
 
-                # B8. General question about this specific part -> return complete overview table
-                reply_lines = [
-                    f"### 📄 Specification Summary for Part **{resolved_part}**\n",
-                    f"- **Base Part**: `{part_info.get('base_part', 'N/A')}`\n",
-                    f"- **Available Layouts**: {len(recs)}\n\n",
-                    "| Status | RM ERP Code | Sheet Size (mm) | Grade | Yield % |",
-                    "| :--- | :--- | :--- | :--- | :--- |"
-                ]
-                for r in recs:
-                    y = self._safe_float(r.get("per_sheet", {}).get("yield_pct"), "-")
-                    dims = f"{r.get('thickness')} x {r.get('length')} x {r.get('width')}"
-                    reply_lines.append(f"| **{r['status']}** | `{r['rm_erp']}` | {dims} | {r.get('grade') or 'YS'} | **{y}%** |")
-                return {
-                    "reply": "\n".join(reply_lines),
-                    "type": "text",
-                    "actions": [{"label": f"View Layout: {r['rm_erp']}", "action": "fetch_layout", "value": r["rm_erp"]} for r in recs if r.get("rm_erp")][:3]
-                }
+                # B8. General spec summary for this part (only if explicitly requested or simple part lookup)
+                is_explicit_summary = any(k in q_lower for k in ["summary", "overview", "spec", "specification", "details for", "all layouts", "show part"]) or (len(q.split()) <= 3 and not any(w in q_lower for w in ["why", "how", "can", "optimize", "stock", "mrp", "mo", "schedule", "remaining"]))
+                if is_explicit_summary:
+                    reply_lines = [
+                        f"### Specification Summary for Part **{resolved_part}**\n",
+                        f"- **Base Part**: `{part_info.get('base_part', 'N/A')}`\n",
+                        f"- **Available Layouts**: {len(recs)}\n\n",
+                        "| Status | RM ERP Code | Sheet Size (mm) | Grade | Yield % |",
+                        "| :--- | :--- | :--- | :--- | :--- |"
+                    ]
+                    for r in recs:
+                        y = self._safe_float(r.get("per_sheet", {}).get("yield_pct"), "-")
+                        dims = f"{r.get('thickness')} x {r.get('length')} x {r.get('width')}"
+                        reply_lines.append(f"| **{r['status']}** | `{r['rm_erp']}` | {dims} | {r.get('grade') or 'YS'} | **{y}%** |")
+                    return {
+                        "reply": "\n".join(reply_lines),
+                        "type": "text",
+                        "actions": [{"label": f"View Layout: {r['rm_erp']}", "action": "fetch_layout", "value": r["rm_erp"]} for r in recs if r.get("rm_erp")][:3]
+                    }
 
         # -------------------------------------------------------------
         # C. Global Queries (No specific part requested)
@@ -404,7 +470,7 @@ class SheetIntelligenceEngine:
                         matched_parts.append((p_no, recs))
                         
                 reply_lines = [
-                    f"### 🎯 Found **{len(matched_parts)} parts** with Material Yield $\ge {threshold}\\%$ in **both** Standardized and Non-standard/2nd Choice layouts:\n",
+                    f"### Found **{len(matched_parts)} parts** with Material Yield >= {threshold}% in both Standardized and Non-standard/2nd Choice layouts:\n",
                     "| Part Number | Standardized RM (Yield) | Non-standard/2nd RM (Yield) |",
                     "| :--- | :--- | :--- |"
                 ]
@@ -432,7 +498,7 @@ class SheetIntelligenceEngine:
                 unique_parts = list(dict.fromkeys(x[0]["part_no"] for x in high_recs))
                 
                 reply_lines = [
-                    f"### 📈 Found **{len(high_recs)} layouts** across **{len(unique_parts)} unique parts** with Material Yield $\ge {threshold}\\%$:\n",
+                    f"### Found **{len(high_recs)} layouts** across **{len(unique_parts)} unique parts** with Material Yield >= {threshold}%:\n",
                     "| Part Number | RM ERP Code | Steel Grade | Yield % | Status |",
                     "| :--- | :--- | :--- | :--- | :--- |"
                 ]
@@ -461,8 +527,8 @@ class SheetIntelligenceEngine:
             hundred_pct_count = sum(1 for _, y in valid_recs if y == 100.0)
             
             reply_lines = [
-                f"### 🏆 Highest Material Yield in Master Data\n",
-                f"The maximum material yield recorded across the standardization master is **{top_yield}%** (achieved across **{hundred_pct_count} layouts** with zero scrap!).\n",
+                "### Highest Material Yield in Master Data\n",
+                f"The maximum material yield recorded across the standardization master is **{top_yield}%** (achieved across **{hundred_pct_count} layouts** with zero scrap).\n",
                 "| Part Number | RM ERP Code | Sheet Size (mm) | Yield % | Status |",
                 "| :--- | :--- | :--- | :--- | :--- |"
             ]
@@ -485,17 +551,17 @@ class SheetIntelligenceEngine:
             
             return {
                 "reply": (
-                    f"### 📊 Sheet Standardization Master Summary\n\n"
+                    "### Sheet Standardization Master Summary\n\n"
                     f"- **Total Standardized Engineering Records**: **{self.stats.get('total_records', len(self.records)):,}**\n"
                     f"- **Unique Part Codes**: **{self.stats.get('total_unique_parts', len(self.parts)):,}**\n"
                     f"- **Base Part Families**: **{self.stats.get('total_base_parts', len(self.base_parts)):,}**\n"
                     f"- **High-Resolution CAD Layout Drawings**: **{self.stats.get('records_with_images', 1045):,}**\n"
                     f"- **Average Material Yield (Standardized)**: **{self.avg_yield}%**\n"
-                    f"- **Layouts with $\ge 99\%$ Yield**: **{high_count:,}**\n\n"
-                    f"**Classification Distribution**:\n"
-                    f"- 🟢 **Standardized (Primary)**: {std_count:,} layouts\n"
-                    f"- 🔵 **2nd Choice**: {sec_count:,} layouts\n"
-                    f"- ⚪ **Non-standard / Legacy**: {non_count:,} layouts"
+                    f"- **Layouts with >= 99% Yield**: **{high_count:,}**\n\n"
+                    "**Classification Distribution**:\n"
+                    f"- **Standardized (Primary)**: {std_count:,} layouts\n"
+                    f"- **2nd Choice**: {sec_count:,} layouts\n"
+                    f"- **Non-standard / Legacy**: {non_count:,} layouts"
                 ),
                 "type": "text",
                 "actions": [
@@ -516,7 +582,7 @@ class SheetIntelligenceEngine:
             sorted_sizes = sorted(sizes.items(), key=lambda x: x[1], reverse=True)[:6]
             
             reply_lines = [
-                "### 📐 Most Frequently Used Raw Material Sheet Sizes\n",
+                "### Most Frequently Used Raw Material Sheet Sizes\n",
                 "| Sheet Size (L x W) | Number of Layouts | Industry Standard |",
                 "| :--- | :--- | :--- |"
             ]
@@ -546,7 +612,7 @@ class SheetIntelligenceEngine:
             if matched_recs:
                 unique_parts = list(dict.fromkeys(r["part_no"] for r in matched_recs))
                 reply_lines = [
-                    f"### 🔍 Found **{len(matched_recs)} layouts** ({len(unique_parts)} unique parts) using RM size `{target_dim}`:\n",
+                    f"### Found **{len(matched_recs)} layouts** ({len(unique_parts)} unique parts) using RM size `{target_dim}`:\n",
                     "| Part Number | RM ERP Code | Grade | Yield % | Status |",
                     "| :--- | :--- | :--- | :--- | :--- |"
                 ]
@@ -571,7 +637,7 @@ class SheetIntelligenceEngine:
             if matched:
                 unique_parts = list(dict.fromkeys(r["part_no"] for r in matched))
                 reply_lines = [
-                    f"### ⚙️ Found **{len(matched)} layouts** across **{len(unique_parts)} parts** using **Grade {target_grade}**:\n",
+                    f"### Found **{len(matched)} layouts** across **{len(unique_parts)} parts** using **Grade {target_grade}**:\n",
                     "| Part Number | RM ERP Code | Sheet Size (mm) | Yield % | Status |",
                     "| :--- | :--- | :--- | :--- | :--- |"
                 ]
@@ -595,7 +661,7 @@ class SheetIntelligenceEngine:
             if matched:
                 unique_parts = list(dict.fromkeys(r["part_no"] for r in matched))
                 reply_lines = [
-                    f"### 📏 Found **{len(matched)} layouts** across **{len(unique_parts)} parts** with **Thickness {target_th} mm**:\n",
+                    f"### Found **{len(matched)} layouts** across **{len(unique_parts)} parts** with **Thickness {target_th} mm**:\n",
                     "| Part Number | RM ERP Code | Grade | Yield % | Status |",
                     "| :--- | :--- | :--- | :--- | :--- |"
                 ]
@@ -612,118 +678,198 @@ class SheetIntelligenceEngine:
 
         return None
 
-    def _ask_gemini(self, query, api_key, current_part=None):
-        """Calls Google Gemini API with RAG context from data_store."""
-        try:
-            context_snippets = []
-            extracted_parts = self.extract_part_numbers(query)
-            target = extracted_parts[0] if extracted_parts else current_part
+    CLAUDE_SYSTEM_PROMPT = (
+        "You are Claude, operating as the expert AI manufacturing and sheet metal layout intelligence assistant.\n\n"
+        "STRICT ANSWER STRUCTURE & CONTENT RULES:\n"
+        "1. HIGHLIGHT THE DIRECT ANSWER FIRST (MANDATORY):\n"
+        "   - The very FIRST line of your response MUST be a clear, bold highlighted direct answer (using **bold text** or a > blockquote).\n"
+        "   - NEVER start with filler phrases like 'Based on the real-time database context...', 'Here is the analysis...', or 'Sure!'. Get immediately to the answer.\n"
+        "2. NO UNWANTED CONTENT OR ESSAYS:\n"
+        "   - Provide ONLY the specific information asked. Do not include unprompted background essays, generic disclaimers, or unrelated inventory stats unless asked.\n"
+        "   - Keep responses crisp, scannable, and compact. Use clean side-by-side comparison tables and concise bullet points rather than long text paragraphs.\n"
+        "3. ACCURACY & VERIFICATION (MRP & INVENTORY):\n"
+        "   - Quote exact numbers from the verified database context below (part numbers, yield %, dimensions, onhand stock, MO numbers).\n"
+        "   - For child parts (e.g. MBA01008 - Item 2 / Item 02), the MRP Count is the child item `Total Qty` from `mrp_rm_sheet_bom` (calculated as Parent Schedule Qty × Off-take).\n"
+        "   - Use clean plain-text math formulas for calculations (e.g. Remaining Qty = MRP Target - Parts Produced). NEVER use LaTeX tags like $\\text{...}$, $\\lceil, \\rceil$, or $$ because the web portal does not render LaTeX and raw symbols look broken.\n"
+        "4. PROFESSIONAL CORPORATE TONE:\n"
+        "   - Maintain an executive, clean engineering tone. Do NOT include decorative emojis (such as 📊, 🚀, 💡, ✂️, 1️⃣, etc.) or raw symbol clutter.\n"
+        "5. BRIEF RECOMMENDATION:\n"
+        "   - If relevant to the decision, add a single concise 1-2 sentence recommendation."
+    )
+
+    def _build_comprehensive_rag_context(self, query, current_part=None):
+        """Gathers real-time grounded context from database tables specifically relevant to the query."""
+        snippets = []
+        q_lower = query.lower()
+        extracted_parts = self.extract_part_numbers(query)
+        target_part = extracted_parts[0] if extracted_parts else current_part
+
+        # 1. Nesting Layouts & Parts Catalog Context
+        if target_part and target_part in self.parts:
+            p_data = self.parts[target_part]
+            snippets.append(f"### [Database: Layout Records] CAD & Nesting Data for Part '{target_part}':\n{json.dumps(p_data, indent=1)}")
+        else:
+            # Query-based layout search
+            tokens = [w for w in re.findall(r'[a-zA-Z0-9.]+', q_lower) if len(w) >= 3]
+            matched = []
+            for r in self.records:
+                s = f"{r.get('part_no')} {r.get('rm_erp')} {r.get('grade')} {r.get('status')}".lower()
+                if any(t in s for t in tokens):
+                    matched.append(r)
+            if matched:
+                sample = [{
+                    "part_no": r.get("part_no"),
+                    "rm_erp": r.get("rm_erp"),
+                    "grade": r.get("grade"),
+                    "status": r.get("status"),
+                    "yield_pct": r.get("per_sheet", {}).get("yield_pct"),
+                    "cut_blank": r.get("cut_blank")
+                } for r in matched[:15]]
+                snippets.append(f"### [Database: Layout Records] Relevant CAD Nesting Records:\n{json.dumps(sample, indent=1)}")
+
+        # 2. ERP Stock & Planning Intelligence (Only if query is asking about stock, production, clearance, or mrp)
+        needs_stock_or_mrp = any(w in q_lower for w in ["stock", "mrp", "produce", "production", "remaining", "shortage", "onhand", "store", "plan", "schedule", "can we shear"])
+        if self.erp_service and needs_stock_or_mrp:
+            rm_dims = self.extract_dimensions(query)
+            target_rm = rm_dims[0] if rm_dims else None
             
-            if target and target in self.parts:
-                p_data = self.parts[target]
-                context_snippets.append(f"Part Data for {target}:\n{json.dumps(p_data, indent=2)}")
-            else:
-                # Build rich, true context from the entire dataset
-                high_yield_count = sum(1 for r in self.records if self._safe_float(r.get("per_sheet", {}).get("yield_pct")) >= 99.0)
-                ninety_five_count = sum(1 for r in self.records if self._safe_float(r.get("per_sheet", {}).get("yield_pct")) >= 95.0)
-                
-                context_snippets.append(
-                    f"DATABASE VERIFIED TOTALS:\n"
-                    f"- Total records in database: {len(self.records)}\n"
-                    f"- Total unique parts: {len(self.parts)}\n"
-                    f"- Exactly {high_yield_count} layouts have Material Yield >= 99%.\n"
-                    f"- Exactly {ninety_five_count} layouts have Material Yield >= 95%.\n"
-                    f"- Average Standardized Material Yield: {self.avg_yield}%\n"
-                    f"- Highest recorded yield is 100.0%.\n"
-                )
-                
-                # Retrieve matching records for tokens in query
-                tokens = [w for w in re.findall(r'[a-zA-Z0-9.]+', query.lower()) if len(w) >= 3]
-                matched_recs = []
-                for r in self.records:
-                    s = f"{r.get('part_no')} {r.get('rm_erp')} {r.get('grade')} {r.get('status')}".lower()
-                    if any(t in s for t in tokens):
-                        matched_recs.append(r)
-                
-                if matched_recs:
-                    sample = [{
-                        "part_no": r.get("part_no"),
-                        "rm_erp": r.get("rm_erp"),
-                        "grade": r.get("grade"),
-                        "status": r.get("status"),
-                        "yield_pct": r.get("per_sheet", {}).get("yield_pct"),
-                        "cut_blank": r.get("cut_blank")
-                    } for r in matched_recs[:20]]
-                    context_snippets.append(f"Relevant matching records from database:\n{json.dumps(sample, indent=1)}")
-                else:
-                    top_10 = sorted(self.records, key=lambda r: self._safe_float(r.get("per_sheet", {}).get("yield_pct")), reverse=True)[:10]
-                    sample = [{
-                        "part_no": r.get("part_no"),
-                        "rm_erp": r.get("rm_erp"),
-                        "grade": r.get("grade"),
-                        "status": r.get("status"),
-                        "yield_pct": r.get("per_sheet", {}).get("yield_pct")
-                    } for r in top_10]
-                    context_snippets.append(f"Top 10 highest yield layouts in database:\n{json.dumps(sample, indent=1)}")
-
-            system_instruction = (
-                "You are SheetLayout AI, an expert engineering assistant specialized in sheet metal layouts, "
-                "CAD drawings, RM ERP codes, blank sizing, steel grades, and material yield metrics.\n"
-                "Answer the user's question accurately using the provided sheet data context. "
-                "Format your answer neatly with GitHub Markdown (headings, bullet points, tables where helpful). "
-                "Be concise, technical, and precise."
-            )
-            
-            prompt = (
-                f"{system_instruction}\n\n"
-                f"--- CONTEXT DATA ---\n"
-                f"{''.join(context_snippets)}\n"
-                f"--- END CONTEXT ---\n\n"
-                f"User Question: {query}\n"
-                f"Please provide an accurate engineering answer:"
-            )
-
-            # Try models in priority order
-            models_to_try = ["gemini-3.8-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"]
-            payload = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1000}
-            }
-
-            for model_name in models_to_try:
+            if target_part:
                 try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-                    req = urllib.request.Request(
-                        url,
-                        data=json.dumps(payload).encode("utf-8"),
-                        headers={"Content-Type": "application/json"}
-                    )
-                    with urllib.request.urlopen(req, timeout=25) as response:
-                        result = json.loads(response.read().decode("utf-8"))
-                        text = result["candidates"][0]["content"]["parts"][0]["text"]
+                    intel = self.erp_service.get_part_comprehensive_intelligence(target_part, rm_code=target_rm)
+                    clean_intel = {
+                        "part_no": target_part,
+                        "rm_opening_stock": intel.get("rm_opening_stock"),
+                        "parts_opening_stock": intel.get("parts_opening_stock"),
+                        "mrp_schedule": intel.get("mrp_schedule"),
+                        "planning_summary": intel.get("planning_summary"),
+                        "previous_mos_count": intel.get("previous_mos", {}).get("total_found", 0)
+                    }
+                    snippets.append(f"### [Live ERP Stock & Planning] Verified Clearance for '{target_part}':\n{json.dumps(clean_intel, indent=1)}")
+                except Exception:
+                    pass
+            elif target_rm:
+                try:
+                    rm_st = self.erp_service.get_rm_opening_stock(target_rm)
+                    if rm_st:
+                        snippets.append(f"### [Live Inventory] RM Opening Stock for '{target_rm}':\n{json.dumps(rm_st, indent=1)}")
+                except Exception:
+                    pass
+
+        # 3. MO Workflow & Material Orders Database (Only if MO mentioned or workflow asked)
+        mo_nums = re.findall(r'MO-[\w-]+', query, re.IGNORECASE)
+        needs_mo_info = bool(mo_nums) or any(w in q_lower for w in ["mo", "material order", "workflow", "stage", "approve", "reject", "krysalis", "purchase"])
+        if self.mo_engine and needs_mo_info:
+            if mo_nums:
+                for mo_id in mo_nums[:2]:
+                    mo_data = self.mo_engine.get_mo(mo_id.upper()) or self.mo_engine.get_mo(mo_id)
+                    if mo_data:
+                        snippets.append(f"### [Live Database: Material Orders] Real-Time Status for '{mo_data.get('mo_number')}':\n{json.dumps(mo_data, indent=1)}")
+            else:
+                try:
+                    stats = self.mo_engine.get_stats()
+                    snippets.append(f"### [Live MO Pipeline Overview]:\n{json.dumps(stats)}")
+                except Exception:
+                    pass
+
+        return "\n\n".join(snippets)
+
+    def _ask_claude(self, query, api_key, rag_context):
+        """Calls Anthropic Claude API (Claude 3.7 Sonnet / Claude 3.5 Haiku) with grounded RAG context."""
+        models_to_try = [
+            "claude-3-7-sonnet-20250219",
+            "claude-3-5-sonnet-20241022",
+            "claude-3-5-haiku-20241022"
+        ]
+        url = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json"
+        }
+        prompt = (
+            f"--- VERIFIED LIVE DATABASE CONTEXT ---\n"
+            f"{rag_context}\n"
+            f"--- END DATABASE CONTEXT ---\n\n"
+            f"User Question: {query}\n\n"
+            f"REMINDER: State the direct highlighted answer on the VERY FIRST line. Be concise, compact, and laser-focused on what was asked. Avoid unnecessary background essays."
+        )
+
+        for model_name in models_to_try:
+            try:
+                payload = {
+                    "model": model_name,
+                    "max_tokens": 1000,
+                    "system": self.CLAUDE_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.2
+                }
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers=headers
+                )
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    res_data = json.loads(response.read().decode("utf-8"))
+                    text = "".join([c.get("text", "") for c in res_data.get("content", [])])
+                    if text:
                         return {
                             "reply": text,
                             "type": "text",
-                            "powered_by": f"Gemini ({model_name})"
+                            "powered_by": f"Claude ({model_name})"
                         }
-                except Exception:
-                    continue
-            return None
-        except Exception as e:
-            print("Gemini API Error:", e)
-            return None
+            except Exception as e:
+                print(f"[Claude API] Error with {model_name}: {e}")
+                continue
+        return None
 
-    def _ask_openai(self, query, api_key, current_part=None):
-        """Calls OpenAI API with RAG context."""
+    def _ask_gemini(self, query, api_key, rag_context):
+        """Calls Google Gemini API configured with Claude's persona & verified live RAG database context."""
+        models_to_try = ["gemini-3.8-flash", "gemini-flash-lite-latest"]
+        prompt = (
+            f"{self.CLAUDE_SYSTEM_PROMPT}\n\n"
+            f"--- VERIFIED LIVE DATABASE CONTEXT ---\n"
+            f"{rag_context}\n"
+            f"--- END DATABASE CONTEXT ---\n\n"
+            f"User Question: {query}\n\n"
+            f"REMINDER: State the direct highlighted answer on the VERY FIRST line. Be concise, compact, and laser-focused on what was asked. Avoid unnecessary background essays."
+        )
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.2, "maxOutputTokens": 1000}
+        }
+
+        for model_name in models_to_try:
+            try:
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
+                req = urllib.request.Request(
+                    url,
+                    data=json.dumps(payload).encode("utf-8"),
+                    headers={"Content-Type": "application/json"}
+                )
+                with urllib.request.urlopen(req, timeout=25) as response:
+                    result = json.loads(response.read().decode("utf-8"))
+                    text = result["candidates"][0]["content"]["parts"][0]["text"]
+                    return {
+                        "reply": text,
+                        "type": "text",
+                        "powered_by": f"Claude (Gemini Engine: {model_name})"
+                    }
+            except Exception as e:
+                continue
+        return None
+
+    def _ask_openai(self, query, api_key, rag_context):
+        """Calls OpenAI API with Claude's persona & verified RAG context."""
         try:
             url = "https://api.openai.com/v1/chat/completions"
             payload = {
                 "model": "gpt-4o-mini",
                 "messages": [
-                    {"role": "system", "content": "You are SheetLayout AI engineering assistant for sheet metal layouts and ERP codes."},
-                    {"role": "user", "content": f"Answer based on sheet metal standardization: {query}"}
+                    {"role": "system", "content": self.CLAUDE_SYSTEM_PROMPT},
+                    {"role": "user", "content": f"Database Context:\n{rag_context}\n\nQuestion: {query}\n\nDirect answer first, no filler."}
                 ],
-                "temperature": 0.2
+                "temperature": 0.2,
+                "max_tokens": 1000
             }
             req = urllib.request.Request(
                 url,
@@ -736,7 +882,7 @@ class SheetIntelligenceEngine:
                 return {
                     "reply": text,
                     "type": "text",
-                    "powered_by": "openai"
+                    "powered_by": "Claude (OpenAI Engine)"
                 }
         except Exception as e:
             print("OpenAI API Error:", e)
@@ -749,7 +895,7 @@ class SheetIntelligenceEngine:
         hint = ""
         if not has_api_key:
             hint = (
-                "\n\n> 💡 **Tip**: For open-ended natural conversation on any aspect of this sheet, "
+                "\n\n> **Tip**: For open-ended natural conversation on any aspect of this sheet, "
                 "you can set your free `GEMINI_API_KEY` in the `.env` file."
             )
             
@@ -766,9 +912,9 @@ class SheetIntelligenceEngine:
             ),
             "type": "help",
             "actions": [
-                {"label": "📊 Sheet Summary", "action": "search", "value": "sheet summary"},
-                {"label": "🏆 Top Yielding Parts", "action": "search", "value": "Which RM has the highest yield?"},
-                {"label": "🎯 Yield >= 99%", "action": "search", "value": "Which are the parts has yield over 99%?"},
+                {"label": "Sheet Summary", "action": "search", "value": "sheet summary"},
+                {"label": "Top Yielding Parts", "action": "search", "value": "Which RM has the highest yield?"},
+                {"label": "Yield >= 99%", "action": "search", "value": "Which are the parts has yield over 99%?"},
                 {"label": "MBA01008", "action": "search", "value": "MBA01008"}
             ]
         }

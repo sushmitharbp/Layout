@@ -5,15 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MO Workflow & Approval Portal — SheetLayout AI</title>
     <meta name="description" content="Material Order (MO) Approval Workflow system with separate logins for Shearing, Krysalis Consultants, Purchase, and ERP teams.">
-    <!-- Google Fonts -->
+    <!-- Non-blocking Google Fonts with instant native fallback -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@500;600;700;800&display=swap" media="print" onload="this.media='all'">
+
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/mo_style.css?v=3">
+    <link rel="stylesheet" href="/static/mo_style.css?v=101">
     <link rel="stylesheet" href="/static/mo_chat_widget.css?v=1">
+
 </head>
 <body>
     <div class="mo-app-layout">
@@ -24,54 +26,90 @@
                     <div class="mo-brand-icon">
                         <i class="fa-solid fa-industry"></i>
                     </div>
-                    <div>
-                        <h1 class="mo-brand-title">SheetLayout <span>AI</span></h1>
-                        <span class="mo-portal-badge">MO Approval Workflow</span>
-                    </div>
+                    <h1 class="mo-brand-title">SheetLayout <span>AI</span></h1>
                 </div>
+                <div class="mo-nav-divider"></div>
+                <!-- Horizontal Tab Navigation -->
+                <nav class="mo-nav-tabs" id="mainNavTabs">
+                    <button class="mo-nav-tab active" id="navTabWorkflow" onclick="showMoWorkflowView()">
+                        <i class="fa-solid fa-clipboard-list"></i>
+                        <span>MO Workflow</span>
+                        <span class="nav-tab-count" id="sideNavMoCount">0</span>
+                    </button>
+                    <button class="mo-nav-tab" id="navTabEndbits" onclick="showEndbitsStoreView()">
+                        <i class="fa-solid fa-scissors"></i>
+                        <span>End Bits</span>
+                        <span class="nav-tab-count green" id="sideNavEndbitsCount">0</span>
+                    </button>
+                    <button class="mo-nav-tab" id="navTabDbTables" onclick="toggleDbTablesPanel()">
+                        <i class="fa-solid fa-database"></i>
+                        <span>DB Tables</span>
+                        <span class="nav-tab-count" id="navDbCountBadge">7</span>
+                    </button>
+                </nav>
             </div>
 
-            <!-- Role / Department Switcher & User Actions -->
+            <!-- Authenticated Department & User Actions -->
             <div class="mo-nav-right">
-                <div class="role-selector-wrapper">
-                    <label for="roleSelect" class="role-select-label"><i class="fa-solid fa-user-shield"></i> Department:</label>
-                    <div class="role-select-box">
-                        <select id="roleSelect" onchange="changeRole(this.value)">
-                            <option value="shearing">🔨 Shearing (Production) Team</option>
-                            <option value="krysalis">🔍 Consultants (Krysalis) Team</option>
-                            <option value="purchase">🛒 Purchase Team</option>
-                            <option value="erp">💻 ERP Team</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="active-role-pill" id="activeRolePill">
+                <div class="active-role-pill {{ current_role }}" id="activeRolePill">
                     <span class="role-dot"></span>
-                    <span id="activeRoleName">Shearing Team</span>
+                    <strong id="activeRoleName">{{ user_info.name }}</strong>
                 </div>
-                <a href="/logout" class="mo-logout-btn" title="Sign Out of Department">
+                <a href="/logout" class="mo-logout-btn" title="Switch Login">
                     <i class="fa-solid fa-right-from-bracket"></i>
-                    <span>Logout</span>
                 </a>
             </div>
+            <script id="authUserData" type="application/json">{{ user_info | tojson }}</script>
+            <script>
+                window.AUTH_ROLE = "{{ current_role }}";
+                try {
+                    window.AUTH_USER = JSON.parse(document.getElementById("authUserData").textContent);
+                } catch (e) {
+                    window.AUTH_USER = {};
+                }
+            </script>
         </header>
 
-        <!-- Main Workspace -->
-        <main class="mo-main-content">
-            <!-- Dynamic Department Workspace Welcome Banner -->
-            <div class="dept-workspace-banner" id="deptWorkspaceBanner">
-                <div class="banner-left">
-                    <div class="banner-icon" id="bannerDeptIcon"><i class="fa-solid fa-industry"></i></div>
-                    <div>
-                        <h2 id="bannerDeptTitle">Shearing Production Workspace</h2>
-                        <p id="bannerDeptDesc">Create Material Orders, select cutting layouts, verify stock constraints, and route for approvals.</p>
-                    </div>
+        <!-- DB Tables Dropdown Panel (replaces sidebar) -->
+        <div class="db-tables-panel" id="dbTablesPanel" style="display: none;">
+            <div class="db-panel-header">
+                <div class="db-panel-title"><i class="fa-solid fa-database"></i> Database Tables</div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span class="db-live-pill"><span class="pulse-dot"></span> Live</span>
+                    <button class="btn-refresh-tables" onclick="refreshDbTables()" title="Refresh"><i class="fa-solid fa-arrows-rotate" id="refreshTablesIcon"></i></button>
+                    <button class="db-panel-close" onclick="toggleDbTablesPanel()"><i class="fa-solid fa-xmark"></i></button>
                 </div>
-                <div class="banner-right">
+            </div>
+            <div class="db-panel-list" id="sidebarTablesList">
+                <div style="padding: 12px; font-size: 0.82rem; color: var(--text-muted); text-align: center;">
+                    <i class="fa-solid fa-circle-notch fa-spin"></i> Loading...
+                </div>
+            </div>
+        </div>
+
+        <!-- Body Layout (Full Width — No Sidebar) -->
+        <div class="mo-portal-body">
+            <!-- Workspace Area -->
+            <div class="mo-workspace-area">
+                <!-- 1. MO Workflow View (Default) -->
+                <main class="mo-main-content" id="moWorkflowView">
+            <!-- Compact Workspace Action Bar -->
+            <div class="workspace-action-bar" id="deptWorkspaceBanner">
+                <div class="action-bar-left">
+                    <div class="action-bar-icon" id="bannerDeptIcon"><i class="fa-solid fa-industry"></i></div>
+                    <h2 id="bannerDeptTitle">Shearing Production</h2>
+                    <span class="action-bar-desc" id="bannerDeptDesc"></span>
+                </div>
+                <div class="action-bar-right">
+                    <button class="btn btn-ghost" id="bannerCreateEbMoBtn" onclick="showCreateEndbitMoView()">
+                        <i class="fa-solid fa-scissors"></i> End Bit MO
+                    </button>
                     <button class="btn btn-primary" id="bannerActionBtn" onclick="openCreateModal()">
-                        <i class="fa-solid fa-plus"></i> Create New MO
+                        <i class="fa-solid fa-plus"></i> New MO
                     </button>
                 </div>
             </div>
+
             <!-- KPI Statistics Cards -->
             <section class="mo-stats-grid">
                 <div class="mo-stat-card" onclick="filterByTab('all')">
@@ -113,24 +151,92 @@
 
             <!-- Action & Filter Bar -->
             <section class="mo-toolbar">
-                <div class="mo-tabs">
-                    <button class="mo-tab-btn active" data-tab="all" onclick="filterByTab('all')">All Orders</button>
-                    <button class="mo-tab-btn" data-tab="my_action" onclick="filterByTab('my_action')">
-                        <i class="fa-solid fa-bell"></i> Action Required (<span id="myActionCount">0</span>)
-                    </button>
-                    <button class="mo-tab-btn" data-tab="pending" onclick="filterByTab('pending')">Pending Approval</button>
-                    <button class="mo-tab-btn" data-tab="released" onclick="filterByTab('released')">Released</button>
-                    <button class="mo-tab-btn" data-tab="rejected" onclick="filterByTab('rejected')">Rejected</button>
+                <div class="mo-toolbar-main-row">
+                    <div class="mo-tabs">
+                        <button class="mo-tab-btn active" data-tab="all" onclick="filterByTab('all')">All Orders</button>
+                        <button class="mo-tab-btn" data-tab="my_action" onclick="filterByTab('my_action')">
+                            <i class="fa-solid fa-bell"></i> Action Required (<span id="myActionCount">0</span>)
+                        </button>
+                        <button class="mo-tab-btn" data-tab="pending" onclick="filterByTab('pending')">Pending Approval</button>
+                        <button class="mo-tab-btn" data-tab="released" onclick="filterByTab('released')">Released</button>
+                        <button class="mo-tab-btn" data-tab="rejected" onclick="filterByTab('rejected')">Rejected</button>
+                    </div>
+
+                    <div class="mo-toolbar-actions">
+                        <button class="btn btn-secondary btn-download-report" id="downloadReportBtn" onclick="downloadMoReport()" title="Export current filtered Material Orders report to PDF">
+                            <i class="fa-solid fa-file-pdf"></i> Download PDF Report
+                        </button>
+                        <button class="btn btn-primary" id="openCreateMoBtn" onclick="openCreateModal()">
+                            <i class="fa-solid fa-plus"></i> Create New MO
+                        </button>
+                    </div>
                 </div>
 
-                <div class="mo-toolbar-actions">
+                <!-- Secondary Filter Row: Search & Date Range Filter -->
+                <div class="mo-toolbar-filter-row">
                     <div class="mo-search-box">
                         <i class="fa-solid fa-magnifying-glass"></i>
-                        <input type="text" id="moSearchInput" placeholder="Search by MO#, Part, or RM..." oninput="handleSearch(this.value)">
+                        <input type="text" id="moSearchInput" placeholder="Search by MO#, Part, RM, Base Part..." oninput="handleSearch(this.value)">
                     </div>
-                    <button class="btn btn-primary" id="openCreateMoBtn" onclick="openCreateModal()">
-                        <i class="fa-solid fa-plus"></i> Create New MO
-                    </button>
+
+                    <div class="mo-dropdown-filters-wrap">
+                        <!-- Status Filter -->
+                        <div class="filter-dropdown-group">
+                            <label for="filterStatusSelect" class="filter-dropdown-label">
+                                <i class="fa-solid fa-circle-dot"></i> Status:
+                            </label>
+                            <div class="custom-select-wrapper">
+                                <select id="filterStatusSelect" class="mo-filter-select" onchange="onDropdownFilterChange()">
+                                    <option value="all">All Statuses</option>
+                                    <option value="PENDING_ALL">Pending Approval (Any)</option>
+                                    <option value="PENDING_KRYSALIS">Pending Krysalis</option>
+                                    <option value="PENDING_PURCHASE">Pending Purchase</option>
+                                    <option value="PENDING_ERP">Pending ERP</option>
+                                    <option value="RELEASED_TO_ERP">Released to ERP</option>
+                                    <option value="REJECTED">Rejected</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down select-chevron"></i>
+                            </div>
+                        </div>
+
+                        <!-- Layout Type Filter -->
+                        <div class="filter-dropdown-group">
+                            <label for="filterLayoutTypeSelect" class="filter-dropdown-label">
+                                <i class="fa-solid fa-shapes"></i> Layout Type:
+                            </label>
+                            <div class="custom-select-wrapper">
+                                <select id="filterLayoutTypeSelect" class="mo-filter-select" onchange="onDropdownFilterChange()">
+                                    <option value="all">All Layout Types</option>
+                                    <option value="standard">Standardized</option>
+                                    <option value="non_standard">Non-Standard</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down select-chevron"></i>
+                            </div>
+                        </div>
+
+                        <!-- Current Stage Filter -->
+                        <div class="filter-dropdown-group">
+                            <label for="filterStageSelect" class="filter-dropdown-label">
+                                <i class="fa-solid fa-diagram-project"></i> Current Stage:
+                            </label>
+                            <div class="custom-select-wrapper">
+                                <select id="filterStageSelect" class="mo-filter-select" onchange="onDropdownFilterChange()">
+                                    <option value="all">All Stages</option>
+                                    <option value="SHEARING">Shearing (Production)</option>
+                                    <option value="KRYSALIS">Krysalis Consultants</option>
+                                    <option value="PURCHASE">Purchase Team</option>
+                                    <option value="ERP">ERP Gateway</option>
+                                    <option value="COMPLETED">Completed</option>
+                                </select>
+                                <i class="fa-solid fa-chevron-down select-chevron"></i>
+                            </div>
+                        </div>
+
+                        <!-- Reset Filters Button -->
+                        <button class="btn-reset-filters" id="resetFiltersBtn" onclick="resetAllDropdownFilters()" title="Reset all filters to default" style="display: none;">
+                            <i class="fa-solid fa-rotate-left"></i> Reset
+                        </button>
+                    </div>
                 </div>
             </section>
 
@@ -140,11 +246,12 @@
                     <table class="mo-table">
                         <thead>
                             <tr>
-                                <th>MO Number</th>
-                                <th>Part & Base Part</th>
-                                <th>RM ERP & Grade</th>
+                                <th>MO Number &amp; Date</th>
+                                <th>Part &amp; Base Part</th>
+                                <th>RM ERP &amp; Grade</th>
+                                <th>Yield %</th>
                                 <th>Layout Type</th>
-                                <th>Workflow Route & Progress</th>
+                                <th>Workflow Route &amp; Progress</th>
                                 <th>Current Stage</th>
                                 <th>Status</th>
                                 <th style="text-align: right;">Action</th>
@@ -152,7 +259,7 @@
                         </thead>
                         <tbody id="moTableBody">
                             <tr>
-                                <td colspan="8" class="loading-cell">
+                                <td colspan="9" class="loading-cell">
                                     <i class="fa-solid fa-circle-notch fa-spin"></i> Loading Material Orders...
                                 </td>
                             </tr>
@@ -161,7 +268,280 @@
                 </div>
             </section>
         </main>
-    </div>
+
+        <!-- 2. Live Database Table Explorer View -->
+        <main class="mo-main-content db-explorer-view" id="dbExplorerView" style="display: none;">
+            <div class="view-header-bar">
+                <div class="view-header-left">
+                    <div class="db-table-icon" id="dbTableIcon"><i class="fa-solid fa-table"></i></div>
+                    <h2 id="dbTableTitle">Table Name</h2>
+                    <span class="header-count-pill" id="dbTableCategory">Inventory</span>
+                    <span class="header-count-pill muted" id="dbTableRowsPill">0 Rows</span>
+                </div>
+                <div class="view-header-right">
+                    <div class="db-search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="dbSearchInput" placeholder="Search..." oninput="handleDbSearch(this.value)">
+                    </div>
+                    <button class="btn btn-icon" onclick="reloadCurrentDbTable()" title="Refresh">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="exportCurrentDbTablePdf()" title="Download PDF Report">
+                        <i class="fa-solid fa-file-pdf"></i> Download PDF
+                    </button>
+                    <button class="btn btn-ghost btn-sm" onclick="exportCurrentDbTableCsv()" title="Export CSV">
+                        <i class="fa-solid fa-file-csv"></i> CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- Database Table Container with Left-to-Right Horizontal Scroller -->
+            <div class="mo-table-container">
+                <div class="mo-table-responsive db-table-scroll-container" id="dbTableScrollWrapper">
+                    <table class="mo-table db-data-table" id="dbDataTable">
+                        <thead id="dbTableHead"></thead>
+                        <tbody id="dbTableBody">
+                            <tr><td colspan="10" class="loading-cell"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading table records...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Pagination Bar -->
+            <div class="db-pagination-bar">
+                <div class="pagination-info" id="dbPaginationInfo">Showing page 1 of 1</div>
+                <div class="pagination-actions">
+                    <button class="btn btn-secondary btn-sm" id="dbPrevBtn" onclick="changeDbPage(-1)" disabled>
+                        <i class="fa-solid fa-chevron-left"></i> Previous
+                    </button>
+                    <span class="current-page-pill" id="dbCurrentPagePill">Page 1</span>
+                    <button class="btn btn-secondary btn-sm" id="dbNextBtn" onclick="changeDbPage(1)" disabled>
+                        Next <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- 3. End Bits (Offcuts) Store View -->
+        <main class="mo-main-content endbits-store-view" id="endbitsStoreView" style="display: none;">
+            <div class="view-header-bar">
+                <div class="view-header-left">
+                    <h2><i class="fa-solid fa-scissors" style="color: #059669;"></i> End Bits Store</h2>
+                    <span class="header-count-pill" id="ebStoreTotalPill">0 Recorded</span>
+                </div>
+                <div class="view-header-right">
+                    <div class="db-search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="endbitSearchInput" placeholder="Search end bits..." oninput="handleEndbitSearch(this.value)">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" onclick="downloadEndbitsReport()" title="Download PDF Report">
+                        <i class="fa-solid fa-file-pdf"></i> Download PDF
+                    </button>
+                    <button class="btn btn-ghost btn-sm" id="ebStoreAddManualBtn" onclick="openAddManualEndbitModal()">
+                        <i class="fa-solid fa-plus"></i> Add Manual
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="ebStoreCreateMoBtn" onclick="showCreateEndbitMoView()">
+                        <i class="fa-solid fa-file-circle-plus"></i> Create MO
+                    </button>
+                    <button class="btn btn-icon btn-sm" onclick="loadEndbitsStoreData()" title="Refresh">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- End Bits KPI Stats Cards -->
+            <section class="mo-stats-grid" style="margin-bottom: 20px;">
+                <div class="mo-stat-card" onclick="filterEndbitsByStatus('ALL')">
+                    <div class="stat-icon total"><i class="fa-solid fa-scissors"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statEbTotal">0</span>
+                        <span class="stat-label">Total End Bits</span>
+                    </div>
+                </div>
+                <div class="mo-stat-card" onclick="filterEndbitsByStatus('AVAILABLE')">
+                    <div class="stat-icon erp"><i class="fa-solid fa-circle-check"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statEbAvailable" style="color: #059669;">0</span>
+                        <span class="stat-label">Available for Parts</span>
+                    </div>
+                </div>
+                <div class="mo-stat-card" onclick="filterEndbitsByStatus('CONSUMED')">
+                    <div class="stat-icon purchase"><i class="fa-solid fa-industry"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statEbPartsCreated">0</span>
+                        <span class="stat-label">Parts Produced</span>
+                    </div>
+                </div>
+                <div class="mo-stat-card">
+                    <div class="stat-icon krysalis"><i class="fa-solid fa-weight-hanging"></i></div>
+                    <div class="stat-info">
+                        <span class="stat-value" id="statEbWeight">0 <small style="font-size: 0.9rem;">kg</small></span>
+                        <span class="stat-label">Scrap Weight Tracked</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Status Filter Pills -->
+            <div class="mo-filters-bar" style="margin-bottom: 16px;">
+                <div class="filter-tabs">
+                    <button class="filter-tab active" id="ebTabAll" onclick="filterEndbitsByStatus('ALL')">All End Bits</button>
+                    <button class="filter-tab" id="ebTabAvail" onclick="filterEndbitsByStatus('AVAILABLE')">Available in Stock</button>
+                    <button class="filter-tab" id="ebTabPart" onclick="filterEndbitsByStatus('PARTIALLY_USED')">Partially Used</button>
+                    <button class="filter-tab" id="ebTabCons" onclick="filterEndbitsByStatus('CONSUMED')">Fully Consumed</button>
+                </div>
+            </div>
+
+            <!-- End Bits Data Table -->
+            <div class="mo-table-container">
+                <div class="mo-table-responsive db-table-scroll-container">
+                    <table class="mo-table db-data-table" id="endbitsDataTable">
+                        <thead>
+                            <tr>
+                                <th>End Bit ID</th>
+                                <th>Source MO #</th>
+                                <th>Parent Part</th>
+                                <th>Grade</th>
+                                <th>Dimensions (T×L×W)</th>
+                                <th>Available Sheets</th>
+                                <th>Est. Weight</th>
+                            </tr>
+                        </thead>
+                        <tbody id="endbitsTableBody">
+                            <tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading end bits store...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+
+        <!-- 4. Create Material Order for End Bits View (Manual Offcut Shearing) -->
+        <main class="mo-main-content create-endbit-mo-view" id="createEndbitMoView" style="display: none;">
+            <div class="view-header-bar">
+                <div class="view-header-left">
+                    <h2><i class="fa-solid fa-scissors" style="color: #0284c7;"></i> Create End Bit MO</h2>
+                </div>
+            </div>
+
+            <!-- Single Clean Form Card (Same simple structure as Normal MO modal) -->
+            <div style="max-width: 780px; margin: 16px auto 32px auto; width: 100%;">
+                <div class="mo-modal-dialog" style="max-height: none; overflow: visible; box-shadow: 0 4px 16px rgba(0,0,0,0.06); border: 1px solid var(--border-color); animation: none;">
+                    <div class="mo-modal-header" style="background: #ffffff; border-bottom: 1px solid var(--border-color); padding: 18px 24px;">
+                        <div>
+                            <h3><i class="fa-solid fa-scissors" style="color: #0284c7;"></i> Create End Bit Material Order</h3>
+                        </div>
+                    </div>
+
+                    <form id="createEndbitMoForm" onsubmit="submitCreateEndbitMo(event)">
+                        <div class="mo-modal-body" style="padding: 22px 24px; gap: 18px;">
+                            <!-- Hidden MO Number & Serialized parts -->
+                            <input type="hidden" id="ebMoNumber" name="mo_number">
+                            <input type="hidden" id="ebPartsPayload" name="parts" value="[]">
+
+                            <!-- 1. FIRST: SELECT THE END BIT -->
+                            <div class="eb-section-block">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label for="ebMoSelect" style="font-weight: 700; font-size: 0.88rem; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 6px;">
+                                        <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">1</span>
+                                        Select End Bit Offcut <span class="required">*</span>
+                                    </label>
+                                    <div id="ebAvailBadgeTop" style="display: none; align-items: center; gap: 6px; background: #f0fdf4; border: 1px solid #86efac; color: #15803d; padding: 4px 12px; border-radius: 16px; font-size: 0.82rem; font-weight: 600;">
+                                        <i class="fa-solid fa-boxes-stacked" style="color: #16a34a;"></i>
+                                        <span>Available:</span>
+                                        <strong id="ebAvailStockVal" style="font-size: 0.92rem; color: #166534;">0 Nos</strong>
+                                    </div>
+                                </div>
+                                <select id="ebMoSelect" name="endbit_id" required onchange="onEbMoSelectionChanged(this.value)" style="width: 100%; padding: 9px 12px; border: 1.5px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem;">
+                                    <option value="">-- Choose an End Bit Offcut --</option>
+                                    <option value="__manual__">➕ Manual / Shop Floor Offcut</option>
+                                </select>
+
+                                <!-- End Bit Technical Specifications Grid -->
+                                <div class="tech-spec-grid" id="ebTechSpecGrid" style="grid-template-columns: repeat(3, 1fr); margin-top: 10px;">
+                                    <div class="spec-field">
+                                        <span class="spec-label">Grade:</span>
+                                        <input type="text" id="ebGradeInput" name="grade" placeholder="e.g. YS, CR" value="YS">
+                                    </div>
+                                    <div class="spec-field">
+                                        <span class="spec-label">End Bit Size (T*L*W):</span>
+                                        <input type="text" id="ebOffcutSizeDisplay" placeholder="e.g. 7.0*2520.0*21.0" oninput="onEbOffcutSizeInput(this.value)">
+                                        <input type="hidden" id="ebThickness" name="thickness" value="4.8">
+                                        <input type="hidden" id="ebOffcutLength" name="offcut_length" value="">
+                                        <input type="hidden" id="ebOffcutWidth" name="offcut_width" value="">
+                                    </div>
+                                    <div class="spec-field">
+                                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                                            <span class="spec-label">End Bits Required <span class="required">*</span>:</span>
+                                            <small id="ebAvailStockHint" style="display: none; color: #059669; font-size: 0.75rem; font-weight: 600;"></small>
+                                        </div>
+                                        <input type="number" step="1" min="1" id="ebEndbitsUsed" name="endbits_used" value="1" required oninput="recalculateAllEbTotals()">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 2. THEN: ENTER PART NUMBER, PART SIZE, NO OF PARTS, YIELD (WITH ADD PART BUTTON) -->
+                            <div class="eb-section-block">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                    <label style="font-weight: 700; font-size: 0.88rem; color: #1e293b; display: flex; align-items: center; gap: 6px; margin: 0;">
+                                        <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">2</span>
+                                        Parts to Manufacture (Part Number, Size, Qty, Yield)
+                                    </label>
+                                    <div style="display: flex; gap: 8px;">
+                                        <button type="button" class="btn btn-sm" onclick="runEbCapacityAgentForAllRows()" style="font-size: 0.8rem; padding: 4px 10px; border-color: #0284c7; color: #0284c7; background: #f0f9ff; font-weight: 600;" title="Calculate maximum parts from selected end-bits without exceeding dimensions">
+                                            <i class="fa-solid fa-calculator"></i> Agent: Calculate Max Parts
+                                        </button>
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="addEbPartRow()" style="font-size: 0.8rem; padding: 4px 10px; border-color: #0284c7; color: #0284c7; background: #f0f9ff;">
+                                            <i class="fa-solid fa-plus"></i> Add Part
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Dynamic Parts Rows Container -->
+                                <div id="ebPartsContainer" style="display: flex; flex-direction: column; gap: 10px;">
+                                    <!-- Populated dynamically with part rows -->
+                                </div>
+
+                                <!-- Parts Summary Strip: Total Parts Output & Total Yield -->
+                                <div class="eb-parts-summary-strip" style="margin-top: 10px;">
+                                    <div>
+                                        <span style="font-size: 0.82rem; color: #166534; font-weight: 600;">Total Parts Output:</span>
+                                        <strong id="ebTotalOutputDisplay" style="color: #15803d; font-size: 1.1rem; margin-left: 6px;">1 Units</strong>
+                                        <input type="hidden" id="ebTargetQtyInput" name="target_qty" value="1">
+                                    </div>
+                                    <div>
+                                        <span style="font-size: 0.82rem; color: #166534; font-weight: 600;"><i class="fa-solid fa-chart-pie"></i> Total Yield:</span>
+                                        <strong id="ebTotalYieldDisplay" style="color: #15803d; font-size: 1.1rem; margin-left: 6px;">0%</strong>
+                                        <button type="button" class="btn btn-secondary btn-sm" onclick="openCutOptimizerForEndbit()" style="margin-left: 8px; font-size: 0.78rem; padding: 2px 8px; color: #0284c7; border-color: #0284c7; background: #f0f9ff; font-weight: 600;">
+                                            <i class="fa-solid fa-scissors"></i> 2D Cut Optimizer
+                                        </button>
+                                        <input type="hidden" id="ebYieldInput" name="yield_pct" value="">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 3. PRODUCTION REMARKS -->
+                            <div class="eb-section-block">
+                                <label for="ebRemarks" style="font-weight: 700; font-size: 0.88rem; color: #1e293b; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+                                    <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+                                    Production Remarks <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
+                                </label>
+                                <input type="text" id="ebRemarks" name="notes" placeholder="e.g. Sheared from offcut stock, urgent order" style="width: 100%;">
+                            </div>
+                        </div>
+
+                        <!-- 4. Form Actions -->
+                        <div class="mo-modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #fafafa;">
+                            <button type="button" class="btn btn-secondary" onclick="showMoWorkflowView()">Cancel</button>
+                            <button type="submit" class="btn btn-primary" id="submitEbMoBtn">
+                                <i class="fa-solid fa-plus"></i> Create End Bit MO
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </main>
+    </div> <!-- mo-workspace-area -->
+</div> <!-- mo-portal-body -->
+</div> <!-- mo-app-layout -->
 
     <!-- Modal: Create New MO (Shearing Team) -->
     <div class="mo-modal-backdrop" id="createMoModal" style="display: none;">
@@ -169,30 +549,16 @@
             <div class="mo-modal-header">
                 <div>
                     <h3><i class="fa-solid fa-file-circle-plus"></i> Create Material Order</h3>
-                    <p>Production Shearing team initiates MO with layout specifications and constraint check</p>
                 </div>
                 <button class="modal-close-btn" onclick="closeCreateModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
 
             <form id="createMoForm" onsubmit="submitCreateMo(event)" enctype="multipart/form-data">
                 <div class="mo-modal-body">
-                    <!-- Basic Information Row -->
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label for="moNumber">MO Number <span class="required">*</span></label>
-                            <input type="text" id="moNumber" name="mo_number" required placeholder="e.g. MO-2026-0842">
-                        </div>
-                        <div class="form-group flex-1">
-                            <label for="targetQty">Target Quantity (Units) <span class="required">*</span></label>
-                            <input type="number" id="targetQty" name="target_qty" value="100" min="1" required>
-                        </div>
-                        <div class="form-group flex-1">
-                            <label for="sheetsRequired">Sheets Required <span class="required">*</span></label>
-                            <input type="number" step="0.1" id="sheetsRequired" name="sheets_required" value="10" min="0.1" required>
-                        </div>
-                    </div>
+                    <!-- Hidden MO Number (auto-generated in background) -->
+                    <input type="hidden" id="moNumber" name="mo_number">
 
-                    <!-- Part Lookup with Live Database Search -->
+                    <!-- 1. Part Lookup with Live Database Search -->
                     <div class="form-group relative">
                         <label for="partNoInput">Part Number <span class="required">* (Searches Master Database)</span></label>
                         <div class="part-search-input-wrap">
@@ -202,16 +568,17 @@
                         </div>
                     </div>
 
-                    <!-- Auto-filled Technical Specifications -->
+                    <!-- 2. Auto-filled Technical Specifications Box -->
                     <div class="tech-spec-grid" id="techSpecGrid">
                         <div class="spec-field">
-                            <span class="spec-label">Base Part:</span>
+                            <span class="spec-label" id="basePartLabel">Base Part:</span>
                             <input type="text" id="basePartInput" name="base_part" readonly placeholder="Auto-populated">
                         </div>
                         <div class="spec-field">
-                            <span class="spec-label">RM ERP Code:</span>
-                            <select id="rmErpSelect" name="rm_erp" onchange="onRmErpChanged(this.value)">
-                                <option value="">Select Part First</option>
+                            <span class="spec-label">RM ERP Code <span class="required">* (Required)</span>:</span>
+                            <select id="rmErpSelect" name="rm_erp" required onchange="onRmErpChanged(this.value)">
+                                <option value="">-- Select RM ERP Code --</option>
+                                <option value="__custom__">⚙️ Custom RM / Layout Code...</option>
                             </select>
                         </div>
                         <div class="spec-field">
@@ -225,96 +592,153 @@
                             <input type="hidden" id="lengthInput" name="length">
                             <input type="hidden" id="widthInput" name="width">
                         </div>
-                    </div>
-
-                    <!-- Live ERP, Stock & MRP Intelligence Card -->
-                    <div class="erp-intelligence-card" id="erpIntelligenceCard" style="display: none;">
-                        <div class="erp-intel-header">
-                            <div class="intel-title">
-                                <i class="fa-solid fa-chart-pie"></i>
-                                <span>ERP &amp; Inventory Clearance Intelligence</span>
+                        <div class="spec-field" style="position: relative;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <span class="spec-label"><i class="fa-solid fa-chart-pie"></i> Yield %:</span>
+                                <button type="button" id="btnLaunchOptimizerMo" class="btn-launch-optimizer-mini" onclick="openCutOptimizerForModal()" title="Calculate yield & 2D cut pattern with OptiCutter engine" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 1px 7px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">
+                                    <i class="fa-solid fa-wand-magic-sparkles"></i> ⚡ 2D Cut Optimizer
+                                </button>
                             </div>
-                            <span class="intel-badge" id="stockStatusBadge">Checking Stock...</span>
-                        </div>
-                        
-                        <div class="erp-intel-grid">
-                            <!-- 1. RM Opening Stock (Main Store) -->
-                            <div class="intel-box rm-box">
-                                <div class="intel-box-title">
-                                    <i class="fa-solid fa-layer-group"></i>
-                                    <span>RM Opening Stock (Main Store)</span>
-                                </div>
-                                <div class="intel-box-value" id="intelRmStock">0 Sheets</div>
-                                <div class="intel-box-detail" id="intelRmDetail">Loading sheet stock...</div>
-                            </div>
-
-                            <!-- 2. Parts FG & WIP Stock (002 - FG & WIP) -->
-                            <div class="intel-box fg-box">
-                                <div class="intel-box-title">
-                                    <i class="fa-solid fa-boxes-stacked"></i>
-                                    <span>Parts Opening Stock (FG &amp; WIP)</span>
-                                </div>
-                                <div class="intel-box-value" id="intelFgStock">0 Nos</div>
-                                <div class="intel-box-detail" id="intelFgDetail">Finished goods &amp; child stock</div>
-                            </div>
-
-                            <!-- 3. MRP Monthly Schedule (Sales & BOM) -->
-                            <div class="intel-box mrp-box">
-                                <div class="intel-box-title">
-                                    <i class="fa-solid fa-calendar-days"></i>
-                                    <span>Monthly Schedule (MRP)</span>
-                                </div>
-                                <div class="intel-box-value" id="intelMrpTotal">- Nos</div>
-                                <div class="intel-box-detail" id="intelMrpDetail">Monthly planning schedule</div>
-                            </div>
-
-                            <!-- 4. Previous MOs in ERP -->
-                            <div class="intel-box mo-history-box" onclick="toggleMoHistoryTable()">
-                                <div class="intel-box-title">
-                                    <i class="fa-solid fa-clock-rotate-left"></i>
-                                    <span>Previous MOs Created</span>
-                                </div>
-                                <div class="intel-box-value" id="intelMoCount">0 MOs</div>
-                                <div class="intel-box-detail">Click to view previous order history <i class="fa-solid fa-chevron-down"></i></div>
-                            </div>
-                        </div>
-
-                        <!-- Collapsible Previous MOs Table -->
-                        <div class="mo-history-table-wrap" id="moHistoryTableWrap" style="display: none;">
-                            <div class="history-table-title"><i class="fa-solid fa-list-check"></i> Previous MO Records in ERP for Part:</div>
-                            <div class="table-scroll-mini">
-                                <table class="mini-table">
-                                    <thead>
-                                        <tr>
-                                            <th>MO Doc No</th>
-                                            <th>Date</th>
-                                            <th>Status</th>
-                                            <th>Sheets Cut</th>
-                                            <th>Cutting Plan</th>
-                                            <th>Parent Code</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="moHistoryTableBody">
-                                        <tr><td colspan="6">No previous MOs found.</td></tr>
-                                    </tbody>
-                                </table>
-                            </div>
+                            <input type="text" id="yieldPctInput" name="yield_pct" readonly placeholder="Auto-populated" style="font-weight: 700; color: #059669;">
                         </div>
                     </div>
 
-                    <!-- Layout Type Selection -->
+                    <!-- Custom RM ERP Code Selector Box (Appears when Custom is selected) -->
+                    <div class="custom-rm-box" id="customRmBox" style="display: none;">
+                        <div class="custom-rm-header">
+                            <label for="customRmSearchInput">
+                                <i class="fa-solid fa-boxes-stacked"></i> Select Raw Material Sheet (from RM Main Store Stock) <span class="required">*</span>
+                            </label>
+                            <span class="custom-rm-badge"><i class="fa-solid fa-lock"></i> Auto: Non-Standard Layout</span>
+                        </div>
+                        <div class="custom-rm-search-wrap">
+                            <i class="fa-solid fa-magnifying-glass custom-search-icon"></i>
+                            <input type="text" id="customRmSearchInput" placeholder="Search RM Main Store Sheet (e.g. HR-2-2500-1250, CR-1-2500-1250)..." autocomplete="off" oninput="onCustomRmSearchInput(this.value)">
+                            <div class="custom-rm-dropdown" id="customRmDropdown" style="display: none;"></div>
+                        </div>
+                        <small class="custom-rm-hint">
+                            <i class="fa-solid fa-circle-info"></i> Custom RM selection auto-fetches <strong>Grade</strong> (first 2 letters, e.g. HR) and <strong>Sheet Size</strong> (T*L*W). Please enter <strong>Base Part</strong> and <strong>Part Number</strong>. Routes under <strong>Non-Standard Layout</strong>.
+                        </small>
+                        <div style="margin-top: 10px; display: flex; align-items: center; justify-content: space-between; background: #fff; padding: 8px 12px; border-radius: 6px; border: 1px dashed #0284c7;">
+                            <div style="font-size: 0.8rem; color: #0369a1; font-weight: 600;">
+                                <i class="fa-solid fa-wand-magic-sparkles"></i> Custom Sheet: Calculate true yield % &amp; cut pattern with OptiCutter engine
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="openCutOptimizerForModal()" style="color: #0284c7; border-color: #0284c7; background: #f0f9ff; font-weight: 700; font-size: 0.78rem;">
+                                <i class="fa-solid fa-shapes"></i> ⚡ Launch 2D Cut Optimizer
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 3. Key Planning & Stock Indicators (RM Sheets On Hand, MRP Count, Remaining Quantity) -->
+                    <div id="moKpiContainer">
+                        <div class="mo-kpi-row" id="moKpiRow">
+                            <div class="mo-kpi-card kpi-rm-stock">
+                                <div class="mo-kpi-icon"><i class="fa-solid fa-layer-group"></i></div>
+                                <div class="mo-kpi-content">
+                                    <span class="mo-kpi-label">RM Sheets (On Hand)</span>
+                                    <div class="mo-kpi-value" id="kpiRmOnHand">- Sheets</div>
+                                    <small class="mo-kpi-subtext" id="kpiRmSubtext">Select RM &amp; part</small>
+                                </div>
+                            </div>
+
+                            <div class="mo-kpi-card kpi-mrp-qty">
+                                <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                                <div class="mo-kpi-content">
+                                    <span class="mo-kpi-label">MRP Monthly Target</span>
+                                    <div class="mo-kpi-value" id="kpiMrpTarget">- Nos</div>
+                                    <small class="mo-kpi-subtext" id="kpiMrpSubtext" title="Balance demand">Balance demand</small>
+                                </div>
+                            </div>
+
+                            <div class="mo-kpi-card kpi-mo-produced">
+                                <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
+                                <div class="mo-kpi-content">
+                                    <span class="mo-kpi-label">Parts Produced</span>
+                                    <div class="mo-kpi-value" id="kpiMoProduced">- Nos</div>
+                                    <small class="mo-kpi-subtext" id="kpiMoProducedSubtext" title="Already produced in month">0 MOs produced</small>
+                                </div>
+                            </div>
+
+                            <div class="mo-kpi-card kpi-remaining-qty">
+                                <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                                <div class="mo-kpi-content">
+                                    <span class="mo-kpi-label">Remaining Quantity</span>
+                                    <div class="mo-kpi-value" id="kpiRemainingQty">- Nos</div>
+                                    <small class="mo-kpi-subtext" id="kpiRemainingSubtext" title="MRP Bal - MO Produced">MRP Bal - MO Produced</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. Quantity Row: Sheets Required & Auto-Fetched Current Plan -->
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="sheetsRequired">Sheets Required <span class="required">*</span></label>
+                            <input type="number" step="1" min="1" id="sheetsRequired" name="sheets_required" value="1" required oninput="recalculateTargetQtyFromLayout()">
+                        </div>
+                        <div class="form-group flex-1">
+                            <label>Current Plan <span class="badge-auto"><i class="fa-solid fa-calculator"></i> Auto-Fetched</span></label>
+                            <div class="auto-qty-display-box" id="autoQtyDisplayBox">
+                                <span class="auto-qty-val" id="autoTargetQtyDisplay">- Units</span>
+                                <small class="auto-qty-hint" id="autoQtyHint">Select part &amp; layout</small>
+                            </div>
+                            <!-- Hidden input so target_qty is automatically submitted with form -->
+                            <input type="hidden" id="targetQty" name="target_qty" value="1">
+                        </div>
+                    </div>
+
+                    <!-- Layout Parts & Off-Take Breakdown Card -->
+                    <div class="layout-parts-banner" id="layoutPartsBanner" style="display: none;">
+                        <div class="layout-parts-header">
+                            <div class="layout-parts-title">
+                                <i class="fa-solid fa-shapes"></i>
+                                <span>Selected Layout Parts &amp; Off-Take</span>
+                            </div>
+                            <span class="layout-plan-badge" id="layoutPlanBadge">Plan</span>
+                        </div>
+                        <div class="layout-parts-body">
+                            <div class="layout-parts-list" id="layoutPartsList">
+                                <!-- Populated dynamically from layout record parts 1, 2, 3, 4 -->
+                            </div>
+                            <div class="layout-thumb-wrap" id="layoutThumbWrap" style="display: none;">
+                                <img id="layoutThumbImg" src="" alt="Layout Drawing Preview" onclick="window.open(this.src, '_blank')">
+                                <small><i class="fa-solid fa-arrow-up-right-from-square"></i> Layout Drawing</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- End Bits / Offcuts Generated Preview Banner -->
+                    <div class="layout-endbits-banner" id="layoutEndbitsBanner" style="display: none;">
+                        <div class="layout-endbits-header">
+                            <div class="layout-endbits-title">
+                                <i class="fa-solid fa-scissors"></i>
+                                <span>End Bits (Offcuts) Generated from Sheet</span>
+                            </div>
+                            <span class="endbits-count-badge" id="endbitsSummaryBadge">0 End Bits</span>
+                        </div>
+                        <div class="layout-endbits-body" id="layoutEndbitsList">
+                            <!-- Populated dynamically with endbits cards and quantities -->
+                        </div>
+                        <!-- Hidden input to submit serialized endbits with the MO -->
+                        <input type="hidden" id="moEndbitsJson" name="endbits" value="[]">
+                    </div>
+
+                    <!-- Layout Type Selection (Auto-Locked) -->
                     <div class="form-group layout-type-group">
-                        <label>Layout Standardization Status <span class="required">*</span></label>
-                        <div class="radio-cards-wrap">
+                        <label>
+                            Layout Standardization Status <span class="required">*</span>
+                            <span class="badge-auto" style="margin-left: 8px;"><i class="fa-solid fa-lock"></i> Auto-Determined (Locked)</span>
+                        </label>
+                        <div class="radio-cards-wrap" style="pointer-events: none; opacity: 0.95;">
                             <label class="radio-card standard active" id="radioCardStd">
-                                <input type="radio" name="is_standard_layout" value="true" checked onchange="toggleLayoutType(true)">
+                                <input type="radio" name="is_standard_layout" value="true" checked readonly tabindex="-1">
                                 <div class="radio-content">
                                     <div class="radio-title"><i class="fa-solid fa-circle-check"></i> Standardized Layout</div>
                                     <div class="radio-desc">Pre-approved technical layout from master sheet data.</div>
                                 </div>
                             </label>
                             <label class="radio-card non-standard" id="radioCardNonStd">
-                                <input type="radio" name="is_standard_layout" value="false" onchange="toggleLayoutType(false)">
+                                <input type="radio" name="is_standard_layout" value="false" readonly tabindex="-1">
                                 <div class="radio-content">
                                     <div class="radio-title"><i class="fa-solid fa-triangle-exclamation"></i> Non-Standard Layout</div>
                                     <div class="radio-desc">Requires mandatory layout document upload and Krysalis review.</div>
@@ -335,31 +759,37 @@
                         <input type="file" id="layoutDocFile" name="layout_doc" style="display: none;" onchange="onFileSelected(this)">
                     </div>
 
-                    <!-- Constraint Verification Panel -->
-                    <div class="constraints-panel">
-                        <div class="constraints-header">
+                    <!-- Constraint Verification Check (Ultra-Compact Header Only) -->
+                    <div class="constraint-compact-bar" id="constraintCompactBar">
+                        <div class="constraint-heading-wrap">
                             <h4><i class="fa-solid fa-scale-balanced"></i> Constraint Verification Check</h4>
-                            <span class="info-badge">MRP & Stock Clearance</span>
-                        </div>
-                        <div class="constraint-item">
-                            <label class="toggle-control">
-                                <input type="checkbox" id="constraintStock" name="constraint_stock" checked onchange="recalculateWorkflowRoute()">
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <div class="constraint-text">
-                                <strong>RM Stock Available in Inventory</strong>
-                                <small>Verify raw material sheet coils / blanks are in stock or allocated.</small>
+                            <div class="constraint-heading-status" id="constraintHeadingStatus">
+                                <span class="constraint-status-badge pass" id="constraintStatusBadge">
+                                    <i class="fa-solid fa-square-check"></i> All Constraints Satisfied
+                                </span>
                             </div>
                         </div>
-                        <div class="constraint-item">
-                            <label class="toggle-control">
-                                <input type="checkbox" id="constraintYield" name="constraint_yield" checked onchange="recalculateWorkflowRoute()">
-                                <span class="toggle-slider"></span>
-                            </label>
-                            <div class="constraint-text">
-                                <strong>Target Yield & Scrap Criteria Satisfied</strong>
-                                <small>Verify cutting plan yields satisfy standard thresholds (&gt; 90%).</small>
+                        <input type="hidden" id="constraintStock" name="constraint_stock" value="true">
+                        <input type="hidden" id="constraintMrp" name="constraint_mrp" value="true">
+                        <input type="hidden" id="constraintRemaining" name="constraint_remaining" value="true">
+                        <input type="hidden" id="constraintYield" name="constraint_yield" value="true">
+                        <input type="hidden" id="constraintsStatus" name="constraints_status" value="">
+                    </div>
+
+                    <!-- AI RM Advisor: Smart In-Stock Substitution Suggestions (Triggered when RM stock is short) -->
+                    <div id="rmAgentSuggestionBox" class="rm-agent-suggestion-box" style="display: none;">
+                        <div class="rm-agent-header">
+                            <div class="rm-agent-title">
+                                <span class="rm-agent-robot-icon"><i class="fa-solid fa-robot"></i></span>
+                                <div>
+                                    <strong><i class="fa-solid fa-wand-magic-sparkles" style="color: #0284c7;"></i> AI RM Advisor — In-Stock Substitution Recommendations</strong>
+                                    <p id="rmAgentVerdictText">Analyzing store inventory and verified CAD layouts for alternatives...</p>
+                                </div>
                             </div>
+                            <span class="rm-agent-badge" id="rmAgentCountBadge">0 Alternatives</span>
+                        </div>
+                        <div id="rmAgentCardsList" class="rm-agent-cards-list">
+                            <!-- Populated dynamically by agent -->
                         </div>
                     </div>
 
@@ -403,6 +833,9 @@
             <div class="mo-modal-body">
                 <!-- Stepper Pipeline -->
                 <div class="stepper-wrap" id="stepperWrap"></div>
+
+                <!-- Rejection Alert Banner (dynamically rendered when MO is REJECTED) -->
+                <div id="rejectionAlertContainer"></div>
 
                 <!-- MO Summary Grid -->
                 <div class="review-details-grid" id="reviewDetailsGrid"></div>
@@ -482,6 +915,20 @@
                     </div>
                 </div>
 
+                <!-- End Bits (Offcuts) Generated by this MO -->
+                <div class="review-endbits-section" id="reviewEndbitsSection" style="display: none; margin-bottom: 20px;">
+                    <div class="erp-intel-header">
+                        <div class="intel-title">
+                            <i class="fa-solid fa-scissors"></i>
+                            <span>End Bits (Offcuts) Recorded for this MO</span>
+                        </div>
+                        <span class="intel-badge" id="reviewEndbitsCountBadge" style="background: rgba(5, 150, 105, 0.12); color: #059669;">0 Recorded</span>
+                    </div>
+                    <div class="review-endbits-grid" id="reviewEndbitsGrid">
+                        <!-- Populated dynamically with endbit cards and produce-part button -->
+                    </div>
+                </div>
+
                 <!-- Uploaded Document Preview if available -->
                 <div class="review-doc-section" id="reviewDocSection" style="display: none;">
                     <h4><i class="fa-solid fa-file-lines"></i> Attached Layout Document</h4>
@@ -508,7 +955,10 @@
                         <button class="btn btn-danger" onclick="promptRejectMo()">
                             <i class="fa-solid fa-xmark"></i> Reject Order
                         </button>
-                        <button class="btn btn-success" onclick="confirmApproveMo()">
+                        <button class="btn btn-primary" id="btnExecuteDirect" onclick="executeCurrentMoDirectly()" style="display: none;" title="Deducts sheets from RM Main Store stock, adds units to FG/WIP stock, and posts cutting record to ERP MO reports">
+                            <i class="fa-solid fa-play"></i> Release to ERP &amp; Update Tables
+                        </button>
+                        <button class="btn btn-success" id="btnApproveAdvance" onclick="confirmApproveMo()">
                             <i class="fa-solid fa-check"></i> Approve &amp; Advance
                         </button>
                     </div>
@@ -521,8 +971,493 @@
         </div>
     </div>
 
+    <!-- Modal: Produce / Create Part from End Bit -->
+    <div class="mo-modal-backdrop" id="producePartModal" style="display: none;">
+        <div class="mo-modal-dialog" style="max-width: 640px;">
+            <div class="mo-modal-header">
+                <div>
+                    <h3><i class="fa-solid fa-scissors"></i> Create Part from End Bit</h3>
+                    <p>Manufacture child parts or components by utilizing available sheet offcuts</p>
+                </div>
+                <button class="modal-close-btn" onclick="closeProducePartModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="producePartForm" onsubmit="submitProducePart(event)">
+                <div class="mo-modal-body">
+                    <!-- Source End Bit Summary Card -->
+                    <div class="endbit-source-summary-card">
+                        <div class="eb-source-head">
+                            <span class="eb-badge-id" id="prodEbBadgeId">EB-MO-xxx</span>
+                            <span class="eb-badge-status" id="prodEbStatus">AVAILABLE</span>
+                        </div>
+                        <div class="eb-source-grid">
+                            <div class="eb-source-item">
+                                <span class="eb-item-label">Source MO #:</span>
+                                <strong id="prodEbMoNum">-</strong>
+                            </div>
+                            <div class="eb-source-item">
+                                <span class="eb-item-label">Parent Part:</span>
+                                <strong id="prodEbParentPart">-</strong>
+                            </div>
+                            <div class="eb-source-item">
+                                <span class="eb-item-label">Material Grade:</span>
+                                <strong id="prodEbGrade">-</strong>
+                            </div>
+                            <div class="eb-source-item">
+                                <span class="eb-item-label">End Bit Dimensions:</span>
+                                <strong id="prodEbDimensions" class="mono-text">-</strong>
+                            </div>
+                            <div class="eb-source-item highlight">
+                                <span class="eb-item-label">Available Stock:</span>
+                                <strong id="prodEbAvailableQty">- Nos</strong>
+                            </div>
+                            <div class="eb-source-item">
+                                <span class="eb-item-label">Offcut Est. Weight:</span>
+                                <span id="prodEbWeight">- kg</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden inputs -->
+                    <input type="hidden" id="produceEndbitId" name="endbit_id">
+                    <input type="hidden" id="prodSourceThickness" value="">
+                    <input type="hidden" id="prodSourceLength" value="">
+                    <input type="hidden" id="prodSourceWidth" value="">
+                    <input type="hidden" id="prodMaxAvailable" value="0">
+
+                    <!-- Part Number to Create with Search -->
+                    <div class="form-group relative" style="margin-top: 14px;">
+                        <label for="producePartNoInput">Select / Enter Part to Create <span class="required">*</span></label>
+                        <div class="part-search-input-wrap">
+                            <i class="fa-solid fa-shapes"></i>
+                            <input type="text" id="producePartNoInput" name="part_no" placeholder="Search part # from master database (e.g. MBA01008 - Item 2, Bracket)..." autocomplete="off" required oninput="searchPartsForProduceModal(this.value)">
+                            <div class="part-dropdown-results" id="producePartDropdown" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Dimensional Compatibility / Fit Verification Card -->
+                    <div class="fit-check-card" id="partFitCheckCard" style="display: none;">
+                        <div class="fit-check-header">
+                            <div class="fit-check-title">
+                                <i class="fa-solid fa-ruler-combined"></i>
+                                <span>Offcut Dimensional Fit Analysis</span>
+                            </div>
+                            <span class="fit-status-badge fit-pass" id="fitStatusBadge">Fits</span>
+                        </div>
+                        <div class="fit-check-details" id="fitCheckDetails">
+                            <!-- Populated dynamically with blank size comparison -->
+                        </div>
+                    </div>
+
+                    <!-- Quantity Calculations Row -->
+                    <div class="form-row" style="margin-top: 12px;">
+                        <div class="form-group flex-1">
+                            <label for="endbitsConsumedInput">End Bits to Consume <span class="required">*</span></label>
+                            <input type="number" id="endbitsConsumedInput" name="endbits_used" min="1" step="1" value="1" required oninput="recalcProducePartTotals()">
+                            <small class="text-muted" id="endbitAvailHint">Max: - Nos</small>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="blanksPerEndbitInput">Blanks cut per End Bit <span class="required">*</span></label>
+                            <input type="number" id="blanksPerEndbitInput" name="blanks_per_endbit" min="1" step="1" value="1" required oninput="recalcProducePartTotals()">
+                            <small class="text-muted">Parts yielded per piece</small>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-top: 6px;">
+                        <label>Total Parts Produced <span class="badge-auto"><i class="fa-solid fa-calculator"></i> Auto-Calculated</span></label>
+                        <div class="auto-qty-display-box" style="padding: 10px 14px;">
+                            <span class="auto-qty-val" id="totalProduceDisplay" style="color: #059669; font-size: 1.3rem;">1 Units</span>
+                            <small class="auto-qty-hint" id="totalProduceFormulaHint">1 end bit × 1 blank per end bit</small>
+                        </div>
+                        <input type="hidden" id="partsProducedHidden" name="parts_produced" value="1">
+                    </div>
+
+                    <!-- Work Center & Notes -->
+                    <div class="form-group" style="margin-top: 10px;">
+                        <label for="produceNotes">Production Remarks / Work Center</label>
+                        <input type="text" id="produceNotes" name="notes" placeholder="e.g. Sheared on Guillotine #2, urgent batch from recovery">
+                    </div>
+                </div>
+
+                <div class="mo-modal-footer">
+                    <button type="button" class="btn btn-secondary" onclick="closeProducePartModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success" id="submitProduceBtn">
+                        <i class="fa-solid fa-check"></i> Produce Parts &amp; Update Stock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Edit & Resubmit Rejected MO (Shearing Team) -->
+    <div class="mo-modal-backdrop" id="editResubmitModal" style="display: none;">
+        <div class="mo-modal-dialog" style="max-width: 760px;">
+            <div class="mo-modal-header" style="background: linear-gradient(135deg, #1e293b, #0f172a); color: #fff;">
+                <div>
+                    <h3 style="color: #fff;"><i class="fa-solid fa-pen-to-square" style="color: #f59e0b;"></i> Edit &amp; Resubmit Material Order</h3>
+                    <p style="color: #94a3b8;" id="resubmitMoSubtitle">Revise order parameters to resolve rejection and re-route into approval workflow</p>
+                </div>
+                <button class="modal-close-btn" onclick="closeEditResubmitModal()" style="color: #fff;"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <form id="editResubmitForm" onsubmit="submitResubmitMo(event)" enctype="multipart/form-data">
+                <div class="mo-modal-body" style="gap: 16px;">
+                    <!-- Hidden MO Number -->
+                    <input type="hidden" id="resubmitMoNumber" name="mo_number">
+
+                    <!-- Rejection Alert Callout -->
+                    <div class="rejection-alert-card" style="margin-bottom: 0;">
+                        <div class="rejection-alert-header">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span id="resubmitRejectedByText">Rejected by Approver</span>
+                        </div>
+                        <div class="rejection-alert-body" style="font-size: 0.88rem;">
+                            <strong>Rejection Note:</strong> <span id="resubmitRejectionReasonText">"Reason"</span>
+                        </div>
+                    </div>
+
+                    <!-- Technical Specs Grid -->
+                    <div class="tech-spec-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="spec-field">
+                            <span class="spec-label">Part Number:</span>
+                            <input type="text" id="resubmitPartNo" name="part_no" readonly style="background: #f8fafc; font-weight: 600;">
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Base Part:</span>
+                            <input type="text" id="resubmitBasePart" name="base_part" readonly style="background: #f8fafc;">
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Grade:</span>
+                            <input type="text" id="resubmitGrade" name="grade">
+                        </div>
+                    </div>
+
+                    <div class="tech-spec-grid" style="grid-template-columns: repeat(3, 1fr);">
+                        <div class="spec-field">
+                            <span class="spec-label">Target Output Qty <span class="required">*</span>:</span>
+                            <input type="number" id="resubmitTargetQty" name="target_qty" min="1" required>
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Sheets Required <span class="required">*</span>:</span>
+                            <input type="number" id="resubmitSheetsReq" name="sheets_required" min="1" step="any" required>
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Yield %:</span>
+                            <input type="text" id="resubmitYieldPct" name="yield_pct" placeholder="e.g. 88.5">
+                        </div>
+                    </div>
+
+                    <div class="tech-spec-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
+                        <div class="spec-field">
+                            <span class="spec-label">RM ERP Code <span class="required">*</span>:</span>
+                            <input type="text" id="resubmitRmErp" name="rm_erp" required>
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Thickness (mm):</span>
+                            <input type="number" id="resubmitThickness" name="thickness" step="any">
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Length (mm):</span>
+                            <input type="number" id="resubmitLength" name="length" step="any">
+                        </div>
+                        <div class="spec-field">
+                            <span class="spec-label">Width (mm):</span>
+                            <input type="number" id="resubmitWidth" name="width" step="any">
+                        </div>
+                    </div>
+
+                    <!-- Layout Description & Upload Revised CAD/PDF -->
+                    <div class="form-group">
+                        <label for="resubmitLayoutName">Cutting / Nesting Layout Description:</label>
+                        <input type="text" id="resubmitLayoutName" name="layout_name" placeholder="e.g. Standard 2-Row Nesting, Revised Offcut Layout">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="resubmitLayoutDoc">Upload Revised Layout Document / Drawing (Optional):</label>
+                        <input type="file" id="resubmitLayoutDoc" name="layout_doc" accept=".pdf,.png,.jpg,.jpeg,.dwg,.dxf" style="padding: 8px; border: 1.5px dashed #cbd5e1; border-radius: 8px; width: 100%;">
+                        <small class="text-muted" id="resubmitExistingDocNote"></small>
+                    </div>
+
+                    <!-- Revision Notes -->
+                    <div class="form-group">
+                        <label for="resubmitRevisionNotes">Revision Notes / Corrections Made <span class="required">*</span>:</label>
+                        <input type="text" id="resubmitRevisionNotes" name="revision_notes" required placeholder="Explain corrections made to resolve rejection (e.g. Adjusted sheet quantity, attached revised nesting drawing)...">
+                    </div>
+                </div>
+
+                <div class="mo-modal-footer" style="padding: 16px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #fafafa;">
+                    <button type="button" class="btn btn-secondary" onclick="closeEditResubmitModal()">Cancel</button>
+                    <button type="submit" class="btn btn-warning" id="btnSubmitResubmitMo" style="background: #f59e0b; border-color: #d97706; color: #fff; font-weight: 700;">
+                        <i class="fa-solid fa-paper-plane"></i> Resubmit for Approval
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Manual End Bit Modal -->
+    <div class="mo-modal-backdrop" id="addManualEndbitModal" style="display: none;">
+        <div class="mo-modal-dialog" style="max-width: 600px;">
+            <div class="mo-modal-header" style="background: #ffffff; border-bottom: 1px solid var(--border-color); padding: 18px 24px;">
+                <div>
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-scissors" style="color: #10b981;"></i> Add End Bit to Store Inventory
+                    </h3>
+                    <p>Record manual scrap offcuts and end-bits into store for future part shearing &amp; AI optimization</p>
+                </div>
+                <button type="button" class="btn-close-modal" onclick="closeAddManualEndbitModal()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="addManualEndbitForm" onsubmit="submitAddManualEndbit(event)">
+                <div class="mo-modal-body" style="padding: 20px 24px; gap: 14px;">
+                    <!-- Offcut Name & ID -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="manEbName">End Bit Name / Label <span class="required">*</span></label>
+                            <input type="text" id="manEbName" name="name" required placeholder="e.g. End bit - Guillotine #2 Offcut" value="End bit - Shop Floor Offcut">
+                        </div>
+                        <div class="form-group">
+                            <label for="manEbId">End Bit ID (Tracking Code)</label>
+                            <input type="text" id="manEbId" name="endbit_id" placeholder="Auto-generated e.g. EB-MAN-..." style="background: #f8fafc;">
+                        </div>
+                    </div>
+
+                    <!-- Dimensions (Thickness * Length * Width) -->
+                    <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                        <label style="font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 8px; display: block;">
+                            <i class="fa-solid fa-ruler-combined" style="color: #0284c7;"></i> Offcut Dimensions (mm) <span class="required">*</span>
+                        </label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Thickness (T)</span>
+                                <input type="number" step="0.1" min="0.1" id="manEbThickness" name="thickness" required value="4.8" oninput="calculateManualEbWeight()">
+                            </div>
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Length (L)</span>
+                                <input type="number" step="1" min="1" id="manEbLength" name="length" required placeholder="e.g. 1200" oninput="calculateManualEbWeight()">
+                            </div>
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Width (W)</span>
+                                <input type="number" step="1" min="1" id="manEbWidth" name="width" required placeholder="e.g. 450" oninput="calculateManualEbWeight()">
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.8rem; color: #0284c7;">
+                            <span>Size: <strong id="manEbDimPreview">4.8 * 0.0 * 0.0 mm</strong></span>
+                            <span id="manEbWeightPreview" style="color: #059669; font-weight: 600;">Est. Weight: ~0.0 kg</span>
+                        </div>
+                    </div>
+
+                    <!-- Quantity & Grade -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="manEbQty">Available Quantity (Nos) <span class="required">*</span></label>
+                            <input type="number" step="1" min="1" id="manEbQty" name="quantity" required value="1" oninput="calculateManualEbWeight()">
+                        </div>
+                        <div class="form-group">
+                            <label for="manEbGrade">Material Grade <span class="required">*</span></label>
+                            <input type="text" id="manEbGrade" name="grade" required value="YS" placeholder="e.g. YS, CR, HR">
+                        </div>
+                    </div>
+
+                    <!-- Associated Part / Origin -->
+                    <div class="form-group">
+                        <label for="manEbParentPart">Origin / Related Part No (Optional)</label>
+                        <input type="text" id="manEbParentPart" name="parent_part_no" placeholder="e.g. MBA01008 or General Shop Floor Scrap">
+                    </div>
+
+                    <!-- Notes -->
+                    <div class="form-group">
+                        <label for="manEbNotes">Remarks / Notes</label>
+                        <input type="text" id="manEbNotes" name="notes" placeholder="e.g. Clean straight-sheared offcut, available for small child parts">
+                    </div>
+                </div>
+
+                <div class="mo-modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #fafafa;">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddManualEndbitModal()">Cancel</button>
+                    <button type="submit" class="btn btn-success" id="submitAddManualEbBtn" style="background: #10b981; border-color: #059669; color: #fff;">
+                        <i class="fa-solid fa-floppy-disk"></i> Save End Bit to Store
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: 2D Cut List & Yield Optimizer (OptiCutter Integration) -->
+    <div class="mo-modal-backdrop" id="cutOptimizerModal" style="display: none; z-index: 2000;">
+        <div class="mo-modal-dialog" style="max-width: 960px; width: 95%; max-height: 92vh; display: flex; flex-direction: column;">
+            <div class="mo-modal-header" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #fff; padding: 16px 24px; border-bottom: 1px solid #334155;">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="background: #0284c7; color: #fff; padding: 3px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">2D Nesting</span>
+                        <h3 style="color: #fff; margin: 0; font-size: 1.15rem; font-weight: 700;"><i class="fa-solid fa-shapes" style="color: #38bdf8;"></i> 2D Cut List Optimizer &amp; Yield Analyzer</h3>
+                    </div>
+                    <p style="color: #94a3b8; margin: 3px 0 0 0; font-size: 0.8rem;">
+                        Guillotine nesting optimizer for non-standard sheets &amp; offcuts. Calculates blank output, true yield %, remnants, and exports to <a href="https://www.opticutter.com/cut-list-optimizer" target="_blank" style="color: #38bdf8; text-decoration: underline;">OptiCutter.com</a>.
+                    </p>
+                </div>
+                <button class="modal-close-btn" style="color: #cbd5e1;" onclick="closeCutOptimizerModal()"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div class="mo-modal-body" style="padding: 20px 24px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 16px;">
+                <!-- 1. Interactive Inputs Toolbar -->
+                <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px 16px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; align-items: end;">
+                        <div>
+                            <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">
+                                <i class="fa-solid fa-layer-group" style="color: #0284c7;"></i> Sheet Length (mm)
+                            </label>
+                            <input type="number" step="0.5" id="optSheetLength" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;" placeholder="e.g. 2500">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">
+                                <i class="fa-solid fa-arrows-left-right" style="color: #0284c7;"></i> Sheet Width (mm)
+                            </label>
+                            <input type="number" step="0.5" id="optSheetWidth" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;" placeholder="e.g. 1500">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">
+                                <i class="fa-solid fa-vector-square" style="color: #10b981;"></i> Blank Length (mm)
+                            </label>
+                            <input type="number" step="0.5" id="optBlankLength" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;" placeholder="e.g. 529.5">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">
+                                <i class="fa-solid fa-arrows-up-down" style="color: #10b981;"></i> Blank Width (mm)
+                            </label>
+                            <input type="number" step="0.5" id="optBlankWidth" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;" placeholder="e.g. 359">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">
+                                <i class="fa-solid fa-tag"></i> Part Label
+                            </label>
+                            <input type="text" id="optPartLabel" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-weight: 600;" placeholder="Part No" value="Part-1">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">
+                                <i class="fa-solid fa-scissors"></i> Kerf (mm)
+                            </label>
+                            <input type="number" step="0.5" id="optKerf" style="width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px;" value="0">
+                        </div>
+                        <div>
+                            <label style="font-size: 0.75rem; font-weight: 700; color: #475569; display: block; margin-bottom: 4px;">
+                                <i class="fa-solid fa-wand-magic-sparkles" style="color: #0284c7;"></i> Cutting Strategy
+                            </label>
+                            <select id="optCuttingStrategy" style="width: 100%; padding: 7px 10px; border: 1.5px solid #0284c7; border-radius: 6px; font-weight: 700; background: #f0f9ff; color: #0369a1;" onchange="run2DCutOptimization()">
+                                <option value="auto" selected>⚡ Auto-Optimize (Max Parts &amp; Min Scrap)</option>
+                                <option value="longitudinal">↔️ All Lengthwise (0°)</option>
+                                <option value="transverse">↕️ All Transverse (90°)</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; flex-direction: column; justify-content: flex-end;">
+                            <button type="button" class="btn btn-primary" onclick="run2DCutOptimization()" style="padding: 7px 14px; font-size: 0.82rem; font-weight: 600; width: 100%;">
+                                <i class="fa-solid fa-rotate"></i> Re-Calculate
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Multi-Part Batch Items Strip (visible when multiple parts are being nested) -->
+                <div id="optMultiPartsSection" style="display: none; background: #ffffff; border: 1.5px solid #93c5fd; border-radius: 8px; padding: 12px 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="background: #0284c7; color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;">BATCH NESTING</span>
+                            <strong style="font-size: 0.88rem; color: #0f172a;"><i class="fa-solid fa-layer-group" style="color: #0284c7;"></i> Parts in This Cutting Batch (<span id="optMultiPartsCount">0</span> Parts)</strong>
+                        </div>
+                        <span style="font-size: 0.75rem; color: #64748b;">All parts below are placed together onto the sheet</span>
+                    </div>
+                    <div id="optMultiPartsList" style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <!-- Dynamically filled with part cards -->
+                    </div>
+                </div>
+
+                <!-- 2. Performance KPI Strip -->
+                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;" id="optKpiStrip">
+                    <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; color: #166534; font-weight: 700; text-transform: uppercase;"><i class="fa-solid fa-chart-pie"></i> Material Yield %</span>
+                        <div id="optKpiYield" style="font-size: 1.6rem; font-weight: 800; color: #15803d; line-height: 1.2; margin-top: 2px;">0.00%</div>
+                        <small style="font-size: 0.72rem; color: #16a34a;" id="optKpiYieldSub">Blanks / Sheet Area</small>
+                    </div>
+                    <div style="background: #eff6ff; border: 1.5px solid #93c5fd; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; color: #1e40af; font-weight: 700; text-transform: uppercase;"><i class="fa-solid fa-shapes"></i> Blanks Output</span>
+                        <div id="optKpiBlanks" style="font-size: 1.6rem; font-weight: 800; color: #1d4ed8; line-height: 1.2; margin-top: 2px;">0 Nos</div>
+                        <small style="font-size: 0.72rem; color: #3b82f6;" id="optKpiBlanksSub">Per Sheet</small>
+                    </div>
+                    <div style="background: #fff7ed; border: 1.5px solid #fed7aa; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; color: #9a3412; font-weight: 700; text-transform: uppercase;"><i class="fa-solid fa-trash-can"></i> Scrap / Waste</span>
+                        <div id="optKpiWaste" style="font-size: 1.6rem; font-weight: 800; color: #c2410c; line-height: 1.2; margin-top: 2px;">0.00%</div>
+                        <small style="font-size: 0.72rem; color: #ea580c;">Cutting Offcut Scrap</small>
+                    </div>
+                    <div style="background: #faf5ff; border: 1.5px solid #e9d5ff; border-radius: 8px; padding: 12px 14px;">
+                        <span style="font-size: 0.72rem; color: #6b21a8; font-weight: 700; text-transform: uppercase;"><i class="fa-solid fa-scissors"></i> End Bits Generated</span>
+                        <div id="optKpiRemnants" style="font-size: 1.1rem; font-weight: 700; color: #7e22ce; line-height: 1.3; margin-top: 4px;">None</div>
+                        <small style="font-size: 0.72rem; color: #9333ea;" id="optKpiRemnantsSub">Reusable offcuts</small>
+                    </div>
+                </div>
+
+                <!-- 3. Visual 2D SVG Cutting Map -->
+                <div style="background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; position: relative;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-eye" style="color: #0284c7;"></i> Visual Cutting Layout Map
+                            <small id="optPatternStrategy" style="color: #64748b; font-weight: normal; margin-left: 6px;">(Guillotine Nesting)</small>
+                        </span>
+                        <div id="optSvgLegendStrip" style="display: flex; gap: 10px; font-size: 0.75rem; flex-wrap: wrap; align-items: center;">
+                            <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 12px; height: 12px; background: #38bdf8; border: 1px solid #0284c7; border-radius: 2px;"></span> Cut Blank</span>
+                            <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 12px; height: 12px; background: #fef08a; border: 1px dashed #ca8a04; border-radius: 2px;"></span> Reusable End Bit</span>
+                            <span style="display: flex; align-items: center; gap: 4px;"><span style="display: inline-block; width: 12px; height: 12px; background: #f1f5f9; border: 1px solid #cbd5e1; border-radius: 2px;"></span> Scrap</span>
+                        </div>
+                    </div>
+                    <div id="optSvgContainer" style="width: 100%; min-height: 280px; max-height: 380px; display: flex; justify-content: center; align-items: center; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 6px; overflow: hidden; padding: 10px;">
+                        <span style="color: #94a3b8; font-size: 0.85rem;"><i class="fa-solid fa-spinner fa-spin"></i> Initializing cut pattern...</span>
+                    </div>
+                </div>
+
+                <!-- 4. OptiCutter Integration Box -->
+                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 8px; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="background: #0284c7; color: #fff; width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.1rem; flex-shrink: 0;">
+                            <i class="fa-solid fa-up-right-from-square"></i>
+                        </div>
+                        <div>
+                            <strong style="color: #0369a1; font-size: 0.88rem;">Need advanced multi-stock or guillotine cutting optimization on OptiCutter?</strong>
+                            <p style="margin: 2px 0 0 0; color: #0284c7; font-size: 0.78rem;">
+                                Download the pre-formatted CSV file ready to import directly into <a href="https://www.opticutter.com/cut-list-optimizer" target="_blank" style="font-weight: 700; text-decoration: underline;">opticutter.com</a> or launch external solver.
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="exportOptiCutterCsv()" style="background: #fff; border-color: #0284c7; color: #0284c7; font-weight: 600;">
+                            <i class="fa-solid fa-download"></i> OptiCutter CSV
+                        </button>
+                        <a href="https://www.opticutter.com/cut-list-optimizer" target="_blank" class="btn btn-secondary btn-sm" style="background: #0284c7; border-color: #0284c7; color: #fff; font-weight: 600;">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open OptiCutter.com
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mo-modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+                <div style="font-size: 0.8rem; color: #64748b;" id="optFooterSummary">
+                    Ready to optimize
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeCutOptimizerModal()">Close</button>
+                    <button type="button" class="btn btn-success" id="btnApplyCutYield" onclick="applyCutOptimizerResults()" style="background: #10b981; border-color: #059669; color: #fff; font-weight: 700;">
+                        <i class="fa-solid fa-check-double"></i> Apply Yield to Material Order
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PDF Generation Libraries (jsPDF + AutoTable) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=2"></script>
-    <script src="/static/mo_chat_widget.js?v=1"></script>
+    <script src="/static/mo_app.js?v=101"></script>
+    <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
+
 </html>
+

@@ -270,8 +270,27 @@ def export_mrp_rm_sheet_bom():
     headers = [
         "sl_no", "parent_part_no", "child_part_no", "os_part", "erp_part_no",
         "scope", "offtake", "grade", "blank_length", "blank_width", "blank_thickness",
-        "blank_weight", "sheet_length", "sheet_width", "sheet_thickness"
+        "blank_weight", "sheet_length", "sheet_width", "sheet_thickness",
+        "sheet_weight", "existing_sheet_used", "components_per_sheet",
+        "schedule_qty", "total_qty", "inhouse_erp_qty", "outsource_erp_qty",
+        "balance_qty", "sheet_working", "no_of_sheets", "total_sheet_weight",
+        "remarks", "remarks_2"
     ]
+    
+    def _num(val):
+        if val is None or val == "" or val == "-":
+            return ""
+        if isinstance(val, (int, float)):
+            return val
+        try:
+            return float(str(val).replace(",", "").strip())
+        except (ValueError, TypeError):
+            return ""
+
+    def _str(val):
+        if val is None or val == "-":
+            return ""
+        return str(val).strip()
     
     rows_written = 0
     with open(out_csv, "w", newline="", encoding="utf-8") as f:
@@ -282,30 +301,51 @@ def export_mrp_rm_sheet_bom():
             if idx == 0 or not row or len(row) < 3 or not row[1]:
                 continue
             
-            parent_part = str(row[1]).strip()
+            parent_part = _str(row[1])
             if not parent_part or parent_part.lower() == "part no":
                 continue
             
-            sl_no = row[0] if isinstance(row[0], (int, float)) else idx
-            child_part = str(row[2]).strip() if len(row) > 2 and row[2] else ""
-            os_part = str(row[3]).strip() if len(row) > 3 and row[3] else ""
-            erp_part = str(row[4]).strip() if len(row) > 4 and row[4] else ""
-            scope = str(row[5]).strip() if len(row) > 5 and row[5] else ""
-            offtake = row[6] if len(row) > 6 and isinstance(row[6], (int, float)) else 1.0
-            grade = str(row[7]).strip() if len(row) > 7 and row[7] else ""
+            sl_no = _num(row[0]) if _num(row[0]) != "" else idx
+            child_part = _str(row[2]) if len(row) > 2 else ""
+            os_part = _str(row[3]) if len(row) > 3 else ""
+            erp_part = _str(row[4]) if len(row) > 4 else ""
+            scope = _str(row[5]) if len(row) > 5 else ""
+            offtake = _num(row[6]) if len(row) > 6 and _num(row[6]) != "" else 1.0
+            grade = _str(row[7]) if len(row) > 7 else ""
             
-            b_l = row[8] if len(row) > 8 and isinstance(row[8], (int, float)) else ""
-            b_w = row[9] if len(row) > 9 and isinstance(row[9], (int, float)) else ""
-            b_t = row[10] if len(row) > 10 and isinstance(row[10], (int, float)) else ""
-            b_wt = row[11] if len(row) > 11 and isinstance(row[11], (int, float)) else ""
+            b_l = _num(row[8]) if len(row) > 8 else ""
+            b_w = _num(row[9]) if len(row) > 9 else ""
+            b_t = _num(row[10]) if len(row) > 10 else ""
+            b_wt = _num(row[11]) if len(row) > 11 else ""
             
-            s_l = row[12] if len(row) > 12 and isinstance(row[12], (int, float)) else ""
-            s_w = row[13] if len(row) > 13 and isinstance(row[13], (int, float)) else ""
-            s_t = row[14] if len(row) > 14 and isinstance(row[14], (int, float)) else b_t
+            s_l = _num(row[12]) if len(row) > 12 else ""
+            s_w = _num(row[13]) if len(row) > 13 else ""
+            s_t = _num(row[14]) if len(row) > 14 else b_t
+            
+            sheet_wt = _num(row[15]) if len(row) > 15 else ""
+            sheet_used = _str(row[16]) if len(row) > 16 else ""
+            compt_sheet = _num(row[17]) if len(row) > 17 else ""
+            
+            sched_qty = _num(row[18]) if len(row) > 18 else ""
+            total_qty = _num(row[19]) if len(row) > 19 else ""
+            inhouse_qty = _num(row[20]) if len(row) > 20 else ""
+            outsource_qty = _num(row[21]) if len(row) > 21 else ""
+            bal_qty = _num(row[22]) if len(row) > 22 else ""
+            
+            sheet_working = _num(row[23]) if len(row) > 23 else ""
+            no_sheets = _num(row[24]) if len(row) > 24 else ""
+            total_weight = _num(row[25]) if len(row) > 25 else ""
+            
+            remarks_1 = _str(row[26]) if len(row) > 26 else ""
+            remarks_2 = _str(row[27]) if len(row) > 27 else ""
             
             writer.writerow([
                 sl_no, parent_part, child_part, os_part, erp_part,
-                scope, offtake, grade, b_l, b_w, b_t, b_wt, s_l, s_w, s_t
+                scope, offtake, grade, b_l, b_w, b_t, b_wt, s_l, s_w, s_t,
+                sheet_wt, sheet_used, compt_sheet,
+                sched_qty, total_qty, inhouse_qty, outsource_qty,
+                bal_qty, sheet_working, no_sheets, total_weight,
+                remarks_1, remarks_2
             ])
             rows_written += 1
             
