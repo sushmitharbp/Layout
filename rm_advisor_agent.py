@@ -636,6 +636,8 @@ class RMAdvisorAgent:
 
     def _build_langgraph(self):
         """Constructs and compiles the StateGraph workflow."""
+        if not HAS_LANGGRAPH or StateGraph is None:
+            return None
         workflow = StateGraph(RMAdvisorState)
 
         # 1. Add Nodes
@@ -657,10 +659,6 @@ class RMAdvisorAgent:
         workflow.add_edge("mine_alternatives", "rank_candidates")
         workflow.add_edge("rank_candidates", "llm_reasoning")
         workflow.add_edge("llm_reasoning", END)
-
-        if not HAS_LANGGRAPH or StateGraph is None:
-            return None
-
         return workflow.compile()
 
     # =========================================================================
