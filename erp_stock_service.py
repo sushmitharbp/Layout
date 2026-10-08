@@ -12,8 +12,10 @@ import re
 import json
 import glob
 import time
-import requests
-import openpyxl
+try:
+    import openpyxl
+except (ImportError, ModuleNotFoundError):
+    openpyxl = None
 from dotenv import load_dotenv
 
 load_dotenv()
