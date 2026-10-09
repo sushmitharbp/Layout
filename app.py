@@ -867,7 +867,9 @@ def create_mo():
             except (ValueError, TypeError):
                 data["yield_pct"] = None
 
-    created_by = request.headers.get("X-Role", "shearing")
+    created_by = request.headers.get("X-Role") or session.get("role") or ""
+    if created_by != "shearing":
+        return jsonify({"error": "Unauthorized: Only the Shearing Production team can create or produce Material Orders. Other departments have view-only access."}), 403
     record = MO_ENGINE.create_mo(data, created_by_role=created_by)
     return jsonify(record), 201
 
@@ -1186,7 +1188,9 @@ def get_endbit_detail(endbit_id):
 def produce_part_from_endbit_endpoint(endbit_id):
     """Produce parts from an existing end bit and record the transaction"""
     body = request.json or {}
-    role = request.headers.get("X-Role") or session.get("role") or "shearing"
+    role = request.headers.get("X-Role") or session.get("role") or ""
+    if role != "shearing":
+        return jsonify({"error": "Unauthorized: Only the Shearing Production team can produce parts or create Material Orders from end bits. Other departments have view-only access."}), 403
     updated_eb, tx_entry, err = MO_ENGINE.produce_part_from_endbit(endbit_id, body, role=role)
     if err:
         return jsonify({"error": err}), 400

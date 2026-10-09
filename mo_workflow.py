@@ -342,6 +342,8 @@ class MOWorkflowEngine:
 
     def create_mo(self, mo_data, created_by_role="shearing"):
         """Create a new Material Order and route to first stage"""
+        if created_by_role != "shearing":
+            raise PermissionError("Unauthorized: Only the Shearing Production team can create Material Orders.")
         is_std = bool(mo_data.get("is_standard_layout", True))
         constraints = mo_data.get("constraints_status", {})
         constraints_satisfied = bool(constraints.get("all_satisfied", True))
@@ -1297,6 +1299,8 @@ class MOWorkflowEngine:
         Produces parts from an available end bit, updates end bit inventory,
         increments finished goods / WIP stock, and records the cutting order.
         """
+        if role != "shearing":
+            return None, None, "Unauthorized: Only the Shearing Production team can produce parts or create Material Orders from end bits."
         all_ebs = self._load_endbits_local()
         target_eb = None
         for eb in all_ebs:
