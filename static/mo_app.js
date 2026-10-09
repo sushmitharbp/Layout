@@ -825,15 +825,22 @@ function openCreateModal() {
         moNumInput.readOnly = true;
     }
 
-    // Reset auto-calculated target quantity
+    // Reset auto-calculated & manual target quantity
     const autoQtyVal = document.getElementById("autoTargetQtyDisplay");
     if (autoQtyVal) autoQtyVal.textContent = "- Units";
     const autoQtyHint = document.getElementById("autoQtyHint");
     if (autoQtyHint) autoQtyHint.textContent = "Select part & layout";
     const targetQtyInput = document.getElementById("targetQty");
     if (targetQtyInput) targetQtyInput.value = 1;
+    const manualQtyInput = document.getElementById("targetQtyManual");
+    if (manualQtyInput) manualQtyInput.value = "";
     const sheetsInput = document.getElementById("sheetsRequired");
     if (sheetsInput) sheetsInput.value = 1;
+
+    // Reset layout standardization UI to Standard by default
+    const stdRadio = document.querySelector('input[name="is_standard_layout"][value="true"]');
+    if (stdRadio) stdRadio.checked = true;
+    updateLayoutTypeUI(true);
 
     // Reset planning & stock indicators (RM on-hand, MRP Target, Remaining Qty)
     renderDefaultSinglePartKpis(null, null, null, null, null, null, null);
@@ -1284,9 +1291,16 @@ function selectCustomRmRecord(record) {
     // 6. Target quantity & parts breakdown for custom RM
     const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
     const targetQtyInput = document.getElementById("targetQty");
-    if (targetQtyInput) targetQtyInput.value = sheetsNeeded;
+    const manualQtyInput = document.getElementById("targetQtyManual");
+    let planQty = sheetsNeeded;
+    if (manualQtyInput && manualQtyInput.value && parseInt(manualQtyInput.value, 10) > 0) {
+        planQty = parseInt(manualQtyInput.value, 10);
+    } else if (manualQtyInput) {
+        manualQtyInput.value = sheetsNeeded;
+    }
+    if (targetQtyInput) targetQtyInput.value = planQty;
     const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
-    if (autoQtyDisplay) autoQtyDisplay.textContent = `${sheetsNeeded} Units`;
+    if (autoQtyDisplay) autoQtyDisplay.textContent = `${planQty} Units`;
     const autoQtyHint = document.getElementById("autoQtyHint");
     if (autoQtyHint) autoQtyHint.textContent = `1 Part per Sheet (${sheetsNeeded} sheets)`;
 
@@ -1362,8 +1376,14 @@ function recalculateTargetQtyFromLayout() {
 
     // Custom RM Layout handling
     if (opt.dataset.isCustom === "true") {
-        const totalQty = sheetsNeeded;
+        const manualInput = document.getElementById("targetQtyManual");
         const targetQtyInput = document.getElementById("targetQty");
+        let totalQty = sheetsNeeded;
+        if (manualInput && manualInput.value && parseInt(manualInput.value, 10) > 0) {
+            totalQty = parseInt(manualInput.value, 10);
+        } else if (manualInput) {
+            manualInput.value = totalQty;
+        }
         if (targetQtyInput) targetQtyInput.value = totalQty;
         const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
         if (autoQtyDisplay) autoQtyDisplay.textContent = `${totalQty.toLocaleString()} Units`;
@@ -1447,9 +1467,25 @@ function recalculateTargetQtyFromLayout() {
     // Sum of all strips per blank quantity for all the parts (sheet qty * part qty * strip qty)
     const computedTargetQty = allLayoutParts.reduce((sum, p) => sum + p.totalQty, 0);
 
-    // Update targetQty hidden input & auto-display box
+    // Sync with targetQty hidden input & manual input if non-standard
+    const isStd = document.querySelector('input[name="is_standard_layout"]:checked')?.value === "true";
+    const manualInput = document.getElementById("targetQtyManual");
     const targetQtyInput = document.getElementById("targetQty");
-    if (targetQtyInput) targetQtyInput.value = computedTargetQty;
+
+    let effectivePlanQty = computedTargetQty;
+    if (isStd) {
+        effectivePlanQty = computedTargetQty;
+        if (manualInput) manualInput.value = computedTargetQty;
+        if (targetQtyInput) targetQtyInput.value = computedTargetQty;
+    } else {
+        if (manualInput && manualInput.value && parseInt(manualInput.value, 10) > 0) {
+            effectivePlanQty = parseInt(manualInput.value, 10);
+        } else {
+            effectivePlanQty = computedTargetQty;
+            if (manualInput) manualInput.value = computedTargetQty;
+        }
+        if (targetQtyInput) targetQtyInput.value = effectivePlanQty;
+    }
 
     const autoQtyVal = document.getElementById("autoTargetQtyDisplay");
     if (autoQtyVal) {
@@ -1564,7 +1600,56 @@ function updateLayoutTypeUI(isStandard) {
     if (nonStdCard) nonStdCard.classList.toggle("active", !isStandard);
     if (uploadBox) uploadBox.style.display = isStandard ? "none" : "block";
 
+    // Dynamic Plan Mode UI: Auto-Fetched vs Manual Entry
+    const autoDisplay = document.getElementById("autoQtyDisplayBox");
+    const manualBox = document.getElementById("manualQtyInputBox");
+    const badge = document.getElementById("currentPlanBadge");
+    const manualInput = document.getElementById("targetQtyManual");
+    const hiddenTarget = document.getElementById("targetQty");
+
+    if (isStandard) {
+        if (autoDisplay) autoDisplay.style.display = "flex";
+        if (manualBox) manualBox.style.display = "none";
+        if (badge) {
+            badge.className = "badge-auto";
+            badge.innerHTML = '<i class="fa-solid fa-calculator"></i> Auto-Fetched';
+        }
+        recalculateTargetQtyFromLayout();
+    } else {
+        if (autoDisplay) autoDisplay.style.display = "none";
+        if (manualBox) manualBox.style.display = "block";
+        if (badge) {
+            badge.className = "badge-manual";
+            badge.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Manual Entry';
+        }
+        if (manualInput) {
+            if (!manualInput.value || manualInput.value === "0") {
+                const curVal = hiddenTarget?.value && hiddenTarget.value !== "0" ? hiddenTarget.value : "1";
+                manualInput.value = curVal;
+            }
+            if (hiddenTarget) hiddenTarget.value = manualInput.value;
+        }
+    }
+
     updateAutomatedConstraints(currentIntelData?.stock_feasibility, getSelectedLayoutRecord());
+}
+
+function onManualTargetQtyInput(val) {
+    const hiddenTarget = document.getElementById("targetQty");
+    const num = Math.max(1, parseInt(val, 10) || 1);
+    if (hiddenTarget) {
+        hiddenTarget.value = num;
+    }
+
+    // Reflect manual plan in Primary Part Chip
+    const primaryChipQty = document.querySelector("#layoutPartsList .layout-part-chip.primary .part-chip-qty");
+    if (primaryChipQty) {
+        primaryChipQty.innerHTML = `${num.toLocaleString()} Nos <small>(Manual Plan)</small>`;
+    }
+
+    // Live update constraints verification check
+    const record = getSelectedLayoutRecord();
+    updateAutomatedConstraints(currentIntelData?.stock_feasibility, record);
 }
 
 // Dismiss custom dropdown and part dropdown on click outside
@@ -2070,6 +2155,12 @@ async function submitCreateMo(e) {
     }
 
     const isStd = formData.get("is_standard_layout") === "true";
+    if (!isStd) {
+        const manualInput = document.getElementById("targetQtyManual");
+        if (manualInput && manualInput.value && parseInt(manualInput.value, 10) > 0) {
+            formData.set("target_qty", manualInput.value);
+        }
+    }
     const file = formData.get("layout_doc");
 
     if (!isStd && (!file || !file.name)) {

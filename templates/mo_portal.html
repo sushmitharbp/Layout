@@ -668,19 +668,30 @@
                         </div>
                     </div>
 
-                    <!-- 4. Quantity Row: Sheets Required & Auto-Fetched Current Plan -->
+                    <!-- 4. Quantity Row: Sheets Required & Current Plan (Auto-Fetched for Standard, Manual Entry for Non-Standard) -->
                     <div class="form-row">
                         <div class="form-group flex-1">
                             <label for="sheetsRequired">Sheets Required <span class="required">*</span></label>
                             <input type="number" step="1" min="1" id="sheetsRequired" name="sheets_required" value="1" required oninput="recalculateTargetQtyFromLayout()">
                         </div>
-                        <div class="form-group flex-1">
-                            <label>Current Plan <span class="badge-auto"><i class="fa-solid fa-calculator"></i> Auto-Fetched</span></label>
+                        <div class="form-group flex-1" id="currentPlanGroup">
+                            <label id="currentPlanLabel">
+                                Current Plan 
+                                <span class="badge-auto" id="currentPlanBadge"><i class="fa-solid fa-calculator"></i> Auto-Fetched</span>
+                            </label>
+                            <!-- Auto-calculated display box for Standard Layouts -->
                             <div class="auto-qty-display-box" id="autoQtyDisplayBox">
                                 <span class="auto-qty-val" id="autoTargetQtyDisplay">- Units</span>
                                 <small class="auto-qty-hint" id="autoQtyHint">Select part &amp; layout</small>
                             </div>
-                            <!-- Hidden input so target_qty is automatically submitted with form -->
+                            <!-- Manual entry input box for Non-Standard Layouts -->
+                            <div class="manual-qty-input-box" id="manualQtyInputBox" style="display: none;">
+                                <input type="number" step="1" min="1" id="targetQtyManual" placeholder="Enter target units/plan manually..." style="width: 100%; padding: 10px 12px; font-size: 1.05rem; font-weight: 700; color: #b45309; background: #fffdf5; border: 1.5px solid #f59e0b; border-radius: 8px;" oninput="onManualTargetQtyInput(this.value)">
+                                <small style="margin-top: 4px; display: block; font-size: 0.76rem; color: #92400e;">
+                                    <i class="fa-solid fa-pen"></i> Non-Standard Layout: Enter total units / cutting plan target manually.
+                                </small>
+                            </div>
+                            <!-- Hidden input so target_qty is always submitted with form -->
                             <input type="hidden" id="targetQty" name="target_qty" value="1">
                         </div>
                     </div>
@@ -721,22 +732,22 @@
                         <input type="hidden" id="moEndbitsJson" name="endbits" value="[]">
                     </div>
 
-                    <!-- Layout Type Selection (Auto-Locked) -->
+                    <!-- Layout Type Selection -->
                     <div class="form-group layout-type-group">
                         <label>
                             Layout Standardization Status <span class="required">*</span>
-                            <span class="badge-auto" style="margin-left: 8px;"><i class="fa-solid fa-lock"></i> Auto-Determined (Locked)</span>
+                            <span class="badge-auto" id="layoutTypeStatusBadge" style="margin-left: 8px;"><i class="fa-solid fa-tags"></i> Standard / Non-Standard</span>
                         </label>
-                        <div class="radio-cards-wrap" style="pointer-events: none; opacity: 0.95;">
-                            <label class="radio-card standard active" id="radioCardStd">
-                                <input type="radio" name="is_standard_layout" value="true" checked readonly tabindex="-1">
+                        <div class="radio-cards-wrap" id="radioCardsWrap">
+                            <label class="radio-card standard active" id="radioCardStd" onclick="toggleLayoutType(true)">
+                                <input type="radio" name="is_standard_layout" value="true" checked>
                                 <div class="radio-content">
                                     <div class="radio-title"><i class="fa-solid fa-circle-check"></i> Standardized Layout</div>
                                     <div class="radio-desc">Pre-approved technical layout from master sheet data.</div>
                                 </div>
                             </label>
-                            <label class="radio-card non-standard" id="radioCardNonStd">
-                                <input type="radio" name="is_standard_layout" value="false" readonly tabindex="-1">
+                            <label class="radio-card non-standard" id="radioCardNonStd" onclick="toggleLayoutType(false)">
+                                <input type="radio" name="is_standard_layout" value="false">
                                 <div class="radio-content">
                                     <div class="radio-title"><i class="fa-solid fa-triangle-exclamation"></i> Non-Standard Layout</div>
                                     <div class="radio-desc">Requires mandatory layout document upload and Krysalis review.</div>
@@ -1563,7 +1574,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=104"></script>
+    <script src="/static/mo_app.js?v=105"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
 
