@@ -5807,6 +5807,129 @@ function exportOptiCutterCsv() {
     URL.revokeObjectURL(url);
 }
 
+/**
+ * Applies the calculated 2D Cut Optimization results (Yield %, blanks, remnants)
+ * directly into the active Material Order form.
+ */
+function applyCutOptimizerResults() {
+    if (!currentCutOptResult) {
+        alert("Please run the 2D Cut Optimization first.");
+        return;
+    }
+
+    const yieldVal = currentCutOptResult.yield_pct;
+    const totalBlanks = currentCutOptResult.total_blanks || 0;
+
+    if (cutOptCallingContext === "endbitMo") {
+        // End Bit MO Form Context
+        const totalYieldDisplay = document.getElementById("totalYieldDisplay");
+        const yieldHidden = document.getElementById("yieldHidden");
+        if (yieldHidden) yieldHidden.value = `${yieldVal}%`;
+        if (totalYieldDisplay) totalYieldDisplay.innerHTML = `<span style="color: #059669; font-weight: 700;">${yieldVal}%</span>`;
+
+        // If part row exists, update blanks per endbit
+        const rows = document.querySelectorAll(".eb-part-card-row");
+        if (rows.length > 0 && totalBlanks > 0) {
+            const firstRow = rows[0];
+            const blanksInput = firstRow.querySelector(".eb-blanks-per-endbit");
+            if (blanksInput) {
+                blanksInput.value = totalBlanks;
+                if (typeof recalculateEbPartRow === "function") {
+                    recalculateEbPartRow(firstRow);
+                }
+            }
+        }
+        if (typeof recalculateAllEbTotals === "function") {
+            recalculateAllEbTotals();
+        }
+        closeCutOptimizerModal();
+        alert(`✅ Applied 2D Cut Optimization: ${yieldVal}% Yield to End Bit Order!`);
+    } else {
+        // Normal Create MO Context (moModal)
+        const yieldInput = document.getElementById("yieldPctInput");
+        if (yieldInput) {
+            yieldInput.value = `${yieldVal}%`;
+        }
+
+        // If blanks per sheet is computed, update target quantity display/calculation
+        if (totalBlanks > 0) {
+            const sheetsInput = document.getElementById("sheetsRequired");
+            const sheetsNeeded = Math.max(1, parseFloat(sheetsInput?.value) || 1);
+            const targetQtyInput = document.getElementById("targetQty");
+            const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
+            const autoQtyHint = document.getElementById("autoQtyHint");
+
+            const calculatedTarget = Math.round(sheetsNeeded * totalBlanks);
+            if (targetQtyInput) {
+                targetQtyInput.value = calculatedTarget;
+            }
+            if (autoQtyDisplay) {
+                autoQtyDisplay.textContent = `${calculatedTarget.toLocaleString()} Units`;
+            }
+            if (autoQtyHint) {
+                autoQtyHint.textContent = `${sheetsNeeded} sheets × ${totalBlanks} blanks/sheet (OptiCutter 2D Nesting)`;
+            }
+        }
+
+        // Auto-populate generated remnants into End Bits Offcuts if any exist
+        if (currentCutOptResult.remnants && currentCutOptResult.remnants.length > 0) {
+            const ebBanner = document.getElementById("layoutEndbitsBanner");
+            const ebList = document.getElementById("layoutEndbitsList");
+            const hiddenJson = document.getElementById("moEndbitsJson");
+            const sheetsInput = document.getElementById("sheetsRequired");
+            const sheetsNeeded = Math.max(1, parseFloat(sheetsInput?.value) || 1);
+            const thickness = parseFloat(document.getElementById("thicknessInput")?.value) || 2.0;
+
+            const optEndbits = currentCutOptResult.remnants.map((r, i) => ({
+                name: `Offcut Remnant ${i + 1} (${r.length}×${r.width} mm)`,
+                dim: `${thickness}*${r.length}*${r.width}`,
+                thickness: thickness,
+                length: r.length,
+                width: r.width,
+                qty_per_sheet: 1,
+                total_qty: sheetsNeeded,
+                grade: document.getElementById("gradeInput")?.value || "YS"
+            }));
+
+            if (hiddenJson) {
+                hiddenJson.value = JSON.stringify(optEndbits);
+            }
+            if (ebBanner && ebList) {
+                ebList.innerHTML = optEndbits.map(eb => `
+                    <div class="endbit-mini-card neat-endbit-card">
+                        <div class="reb-clean-field">
+                            <span class="reb-clean-label">End Bit Name</span>
+                            <strong class="reb-clean-val reb-name-val"><i class="fa-solid fa-scissors" style="color: #0284c7; margin-right: 5px;"></i>${escapeHtml(eb.name)}</strong>
+                        </div>
+                        <div class="reb-clean-row">
+                            <div class="reb-clean-field">
+                                <span class="reb-clean-label">No. of End Bits Produced</span>
+                                <strong class="reb-clean-val">${eb.total_qty} Nos</strong>
+                            </div>
+                            <div class="reb-clean-field" style="text-align: right;">
+                                <span class="reb-clean-label">Grade</span>
+                                <span class="reb-grade-pill">${escapeHtml(eb.grade)}</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join("");
+                ebBanner.style.display = "block";
+            }
+        }
+
+        // Re-evaluate constraints and workflow route with updated yield
+        if (typeof updateAutomatedConstraints === "function") {
+            updateAutomatedConstraints();
+        }
+        if (typeof recalculateWorkflowRoute === "function") {
+            recalculateWorkflowRoute();
+        }
+
+        closeCutOptimizerModal();
+        alert(`✅ Applied 2D Cut Optimization: ${yieldVal}% Yield applied to Material Order!`);
+    }
+}
+
 // Global window bindings for 2D Cut Optimizer
 window.openCutOptimizerForModal = openCutOptimizerForModal;
 window.openCutOptimizerForEndbit = openCutOptimizerForEndbit;
