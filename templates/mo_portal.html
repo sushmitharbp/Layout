@@ -51,6 +51,32 @@
 
             <!-- Authenticated Department & User Actions -->
             <div class="mo-nav-right">
+                <!-- Real-time Notification Bell & Activity Center -->
+                <div class="notif-bell-wrap" id="notifBellWrap">
+                    <button class="notif-bell-btn" id="notifBellBtn" onclick="toggleNotificationsDropdown(event)" title="Department Notifications & Alerts">
+                        <i class="fa-solid fa-bell"></i>
+                        <span class="notif-badge" id="notifBadge" style="display: none;">0</span>
+                    </button>
+                    <!-- Notification Dropdown Panel -->
+                    <div class="notif-dropdown-panel" id="notifDropdownPanel" style="display: none;">
+                        <div class="notif-panel-header">
+                            <div class="notif-panel-title">
+                                <i class="fa-solid fa-bell" style="color: #0284c7;"></i> Notifications
+                                <span class="notif-unread-count" id="notifUnreadCount">0 Unread</span>
+                            </div>
+                            <button type="button" class="btn-mark-all-read" onclick="markAllNotificationsAsRead(event)" title="Mark all as read">
+                                <i class="fa-solid fa-check-double"></i> Mark all read
+                            </button>
+                        </div>
+                        <div class="notif-panel-body" id="notifPanelList">
+                            <div class="notif-empty-state">
+                                <i class="fa-regular fa-bell-slash"></i>
+                                <span>No notifications yet</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="active-role-pill {{ current_role }}" id="activeRolePill">
                     <span class="role-dot"></span>
                     <strong id="activeRoleName">{{ user_info.name }}</strong>
@@ -69,6 +95,9 @@
                 }
             </script>
         </header>
+
+        <!-- Floating In-App Real-time Toast Notifications -->
+        <div id="moToastContainer" class="mo-toast-container"></div>
 
         <!-- DB Tables Dropdown Panel (replaces sidebar) -->
         <div class="db-tables-panel" id="dbTablesPanel" style="display: none;">
@@ -1597,7 +1626,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=106"></script>
+    <script src="/static/mo_app.js?v=107"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
 

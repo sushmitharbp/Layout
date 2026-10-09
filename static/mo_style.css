@@ -4365,3 +4365,313 @@ body {
     flex-wrap: wrap;
 }
 
+/* =========================================================================
+   REAL-TIME WORKFLOW NOTIFICATIONS & TOASTS
+   ========================================================================= */
+
+.notif-bell-wrap {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.notif-bell-btn {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    color: #475569;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.notif-bell-btn:hover {
+    background: #f8fafc;
+    color: #0284c7;
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+}
+
+.notif-badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    background: #ef4444;
+    color: #ffffff;
+    font-size: 0.68rem;
+    font-weight: 800;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 2px solid #ffffff;
+    animation: pulseBadge 2s infinite;
+}
+
+@keyframes pulseBadge {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+}
+
+.notif-dropdown-panel {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    width: 380px;
+    max-height: 480px;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    animation: fadeInDown 0.2s ease;
+}
+
+@keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.notif-panel-header {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #f8fafc;
+}
+
+.notif-panel-title {
+    font-size: 0.88rem;
+    font-weight: 700;
+    color: #1e293b;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.notif-unread-count {
+    background: #e0f2fe;
+    color: #0369a1;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 999px;
+}
+
+.btn-mark-all-read {
+    background: none;
+    border: none;
+    color: #0284c7;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: background 0.15s;
+}
+
+.btn-mark-all-read:hover {
+    background: #e0f2fe;
+    text-decoration: underline;
+}
+
+.notif-panel-body {
+    max-height: 400px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.notif-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #f1f5f9;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    text-decoration: none;
+}
+
+.notif-item:hover {
+    background: #f8fafc;
+}
+
+.notif-item.unread {
+    background: #f0f9ff;
+    border-left: 3.5px solid #0284c7;
+}
+
+.notif-item.urgent {
+    border-left-color: #ef4444;
+    background: #fff5f5;
+}
+
+.notif-item.success {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+}
+
+.notif-icon-col {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.95rem;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.notif-icon-col.urgent {
+    background: #fee2e2;
+    color: #ef4444;
+}
+
+.notif-icon-col.success {
+    background: #dcfce7;
+    color: #10b981;
+}
+
+.notif-icon-col.info {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+.notif-content-col {
+    flex: 1;
+    min-width: 0;
+}
+
+.notif-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.notif-item-title {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #1e293b;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.notif-item-time {
+    font-size: 0.7rem;
+    color: #94a3b8;
+    white-space: nowrap;
+}
+
+.notif-item-msg {
+    font-size: 0.77rem;
+    color: #475569;
+    line-height: 1.35;
+    margin: 2px 0 0 0;
+    word-break: break-word;
+}
+
+.notif-item-chip {
+    display: inline-block;
+    background: #f1f5f9;
+    color: #334155;
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-top: 5px;
+    font-family: 'JetBrains Mono', monospace;
+}
+
+.notif-empty-state {
+    padding: 36px 20px;
+    text-align: center;
+    color: #94a3b8;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.notif-empty-state i {
+    font-size: 2rem;
+    color: #cbd5e1;
+}
+
+/* Floating In-App Toast Container & Cards */
+.mo-toast-container {
+    position: fixed;
+    top: 70px;
+    right: 24px;
+    z-index: 99999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 380px;
+    pointer-events: none;
+}
+
+.mo-toast-card {
+    pointer-events: auto;
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 10px;
+    padding: 12px 16px;
+    box-shadow: 0 12px 28px rgba(15, 23, 42, 0.16);
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    animation: toastSlideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mo-toast-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 32px rgba(15, 23, 42, 0.22);
+}
+
+.mo-toast-card.urgent {
+    border-left: 4px solid #ef4444;
+}
+
+.mo-toast-card.success {
+    border-left: 4px solid #10b981;
+}
+
+.mo-toast-card.info {
+    border-left: 4px solid #0284c7;
+}
+
+@keyframes toastSlideIn {
+    from {
+        opacity: 0;
+        transform: translateX(40px) scale(0.95);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0) scale(1);
+    }
+}
+

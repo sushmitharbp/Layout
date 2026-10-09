@@ -123,11 +123,14 @@ ROLES = {
     }
 }
 
+from notification_engine import NotificationEngine
+
 class MOWorkflowEngine:
     def __init__(self):
         self.use_supabase = bool(SUPABASE_URL and SUPABASE_KEY)
         self._ensure_local_store()
         self._ensure_local_endbits_store()
+        self.notification_engine = NotificationEngine()
         self.session = requests.Session()
         adapter = requests.adapters.HTTPAdapter(pool_connections=20, pool_maxsize=20, max_retries=2)
         self.session.mount("https://", adapter)
@@ -440,6 +443,22 @@ class MOWorkflowEngine:
         # Always keep local backup store synchronized
         self._save_local(record)
 
+        # Dispatch real-time notification to the assigned review department
+        first_stage = routing.get("first_stage", "ERP")
+        target_role = first_stage.lower()
+        role_name = ROLES.get(target_role, {}).get("name", first_stage)
+        self.notification_engine.create_notification(
+            target_role=target_role,
+            notif_type="MO_CREATED",
+            mo_number=mo_id,
+            title=f"New MO {mo_id} Received",
+            message=f"New Material Order {mo_id} ({record.get('part_no','')}) created by Shearing. Assigned to {role_name} for clearance.",
+            sender_role=created_by_role,
+            sender_name=ROLES.get(created_by_role, {}).get("name", "Shearing"),
+            priority="normal",
+            extra_data={"part_no": record.get("part_no"), "stage": first_stage}
+        )
+
         self._cached_mos = None  # Invalidate cache on new creation
         return record
 
@@ -578,6 +597,47 @@ class MOWorkflowEngine:
         mo["audit_trail"] = audit_trail
 
         self._update_mo(mo)
+
+        # Dispatch real-time notifications based on stage movement
+        if next_stage == "PURCHASE":
+            self.notification_engine.create_notification(
+                target_role="purchase",
+                notif_type="MO_ROUTED",
+                mo_number=mo_number,
+                title=f"MO {mo_number} Routed to Purchase",
+                message=f"Material Order {mo_number} ({mo.get('part_no','')}) cleared by Krysalis. Raw material clearance required by Purchase.",
+                sender_role=role,
+                sender_name=role_info.get("name", role),
+                priority="normal",
+                extra_data={"part_no": mo.get("part_no"), "stage": "PURCHASE"}
+            )
+        elif next_stage == "ERP":
+            prev_name = role_info.get("name", role)
+            self.notification_engine.create_notification(
+                target_role="erp",
+                notif_type="MO_ROUTED",
+                mo_number=mo_number,
+                title=f"MO {mo_number} Routed to ERP",
+                message=f"Material Order {mo_number} ({mo.get('part_no','')}) cleared by {prev_name}. Pending final release into live ERP.",
+                sender_role=role,
+                sender_name=prev_name,
+                priority="normal",
+                extra_data={"part_no": mo.get("part_no"), "stage": "ERP"}
+            )
+        elif next_stage == "COMPLETED":
+            erp_tag = f" (ERP MO: {mo.get('erp_mo_number')})" if mo.get("erp_mo_number") else ""
+            self.notification_engine.create_notification(
+                target_role="shearing",
+                notif_type="MO_APPROVED",
+                mo_number=mo_number,
+                title=f"🎉 MO {mo_number} Released to Live ERP",
+                message=f"Material Order {mo_number} ({mo.get('part_no','')}) has been approved and released to live ERP{erp_tag}! Production cutting can proceed.",
+                sender_role=role,
+                sender_name=role_info.get("name", role),
+                priority="success",
+                extra_data={"part_no": mo.get("part_no"), "erp_mo_number": mo.get("erp_mo_number"), "stage": "COMPLETED"}
+            )
+
         return mo, None
 
     def execute_mo_completion(self, mo):
@@ -1079,6 +1139,21 @@ class MOWorkflowEngine:
         mo["audit_trail"] = audit_trail
 
         self._update_mo(mo)
+
+        # Dispatch real-time release notification to Shearing
+        erp_tag = f" (ERP MO: {mo.get('erp_mo_number')})" if mo.get("erp_mo_number") else ""
+        self.notification_engine.create_notification(
+            target_role="shearing",
+            notif_type="MO_APPROVED",
+            mo_number=mo_number,
+            title=f"🎉 MO {mo_number} Released to Live ERP",
+            message=f"Material Order {mo_number} ({mo.get('part_no','')}) has been approved and released to live ERP{erp_tag}! Production cutting can proceed.",
+            sender_role=role,
+            sender_name=ROLES.get(role, {}).get("name", "ERP Team"),
+            priority="success",
+            extra_data={"part_no": mo.get("part_no"), "erp_mo_number": mo.get("erp_mo_number"), "stage": "COMPLETED"}
+        )
+
         return mo, summary
 
     def save_endbits_from_mo(self, mo_record, endbits_input=None):
@@ -1755,6 +1830,19 @@ class MOWorkflowEngine:
         self._save_local(mo_record)
         self._cached_mos = None  # Invalidate cache on new creation
 
+        # Dispatch real-time notification to ERP
+        self.notification_engine.create_notification(
+            target_role="erp",
+            notif_type="MO_CREATED",
+            mo_number=mo_number,
+            title=f"New End Bit MO {mo_number} Received",
+            message=f"New End Bit Material Order {mo_number} ({mo_record.get('part_no','')}) created by Shearing from offcut stock. Fast-tracked for ERP master release.",
+            sender_role=created_by_role,
+            sender_name=ROLES.get(created_by_role, {}).get("name", "Shearing"),
+            priority="normal",
+            extra_data={"part_no": mo_record.get("part_no"), "stage": "ERP", "is_endbit": True}
+        )
+
         return mo_record, None
 
     def get_endbit_stats(self):
@@ -1954,6 +2042,21 @@ class MOWorkflowEngine:
         mo["audit_trail"] = audit_trail
 
         self._update_mo(mo)
+
+        # Dispatch urgent rejection notification to Shearing
+        role_label = role_info.get("name", role.upper())
+        self.notification_engine.create_notification(
+            target_role="shearing",
+            notif_type="MO_REJECTED",
+            mo_number=mo_number,
+            title=f"⚠️ MO {mo_number} REJECTED by {role_label}",
+            message=f"Material Order {mo_number} ({mo.get('part_no','')}) was rejected by {role_label}. Reason: '{reason}'. Action required: Edit & Resubmit.",
+            sender_role=role,
+            sender_name=role_label,
+            priority="urgent",
+            extra_data={"part_no": mo.get("part_no"), "reason": reason, "stage": current_stage}
+        )
+
         return mo, None
 
     def resubmit_mo(self, mo_number, form_data, role="shearing"):
@@ -2079,6 +2182,23 @@ class MOWorkflowEngine:
         mo["audit_trail"] = audit_trail
 
         self._update_mo(mo)
+
+        # Dispatch real-time notification to the receiving department
+        target_stage = routing.get("first_stage", "ERP")
+        target_role = target_stage.lower()
+        role_name = ROLES.get(target_role, {}).get("name", target_stage)
+        self.notification_engine.create_notification(
+            target_role=target_role,
+            notif_type="MO_RESUBMITTED",
+            mo_number=mo_number,
+            title=f"🔄 MO {mo_number} Resubmitted by Shearing",
+            message=f"Material Order {mo_number} ({mo.get('part_no','')}) has been revised and resubmitted by Shearing. Assigned to {role_name} for clearance.",
+            sender_role="shearing",
+            sender_name=ROLES.get("shearing", {}).get("name", "Shearing"),
+            priority="normal",
+            extra_data={"part_no": mo.get("part_no"), "stage": target_stage}
+        )
+
         return mo, None
 
     def get_stats(self):

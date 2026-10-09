@@ -55,7 +55,7 @@ const ROLE_CONFIGS = {
 document.addEventListener("DOMContentLoaded", () => {
     initRole();
     Promise.all([loadStats(), loadOrders(), loadDbTablesOverview()]).catch(console.error);
-
+    startNotificationsPolling();
 
     const sheetsInput = document.getElementById("sheetsRequired");
     if (sheetsInput) {
@@ -2232,6 +2232,7 @@ async function submitCreateMo(e) {
             closeCreateModal();
             await loadStats();
             await loadOrders();
+            fetchNotifications(true);
             alert("Material Order created and routed successfully!");
         } else {
             const err = await res.json();
@@ -2573,6 +2574,7 @@ async function confirmApproveMo() {
             if (currentDbTable) {
                 await loadDbTableData();
             }
+            fetchNotifications(true);
         } else {
             const err = await res.json();
             alert(`Approval failed: ${err.error || 'Server error'}`);
@@ -2606,6 +2608,7 @@ async function promptRejectMo() {
             closeReviewModal();
             await loadStats();
             await loadOrders();
+            fetchNotifications(true);
         } else {
             const err = await res.json();
             alert(`Rejection failed: ${err.error || 'Server error'}`);
@@ -3278,6 +3281,7 @@ async function executeCurrentMoDirectly() {
             if (currentDbTable) {
                 await loadDbTableData();
             }
+            fetchNotifications(true);
         } else {
             const err = await res.json();
             alert(`Execution failed: ${err.error || 'Server error'}`);
@@ -3320,13 +3324,22 @@ function toggleDbTablesPanel() {
     }
 }
 
-// Close DB panel when clicking outside
+// Close DB panel & Notification panel when clicking outside
 document.addEventListener("click", function(evt) {
     const panel = document.getElementById("dbTablesPanel");
     const navBtn = document.getElementById("navTabDbTables");
-    if (!panel || panel.style.display === "none") return;
-    if (!panel.contains(evt.target) && !navBtn?.contains(evt.target)) {
-        panel.style.display = "none";
+    if (panel && panel.style.display !== "none") {
+        if (!panel.contains(evt.target) && !navBtn?.contains(evt.target)) {
+            panel.style.display = "none";
+        }
+    }
+
+    const notifPanel = document.getElementById("notifDropdownPanel");
+    const notifWrap = document.getElementById("notifBellWrap");
+    if (notifPanel && notifPanel.style.display !== "none") {
+        if (!notifWrap?.contains(evt.target)) {
+            notifPanel.style.display = "none";
+        }
     }
 });
 
@@ -5631,6 +5644,7 @@ async function submitCreateEndbitMo(e) {
             await loadStats();
             await loadOrders();
             await loadEndbitsStoreData();
+            fetchNotifications(true);
             showMoWorkflowView();
         } else {
             const err = await res.json();
@@ -6655,6 +6669,7 @@ async function submitResubmitMo(e) {
             closeReviewModal();
             await loadStats();
             await loadOrders();
+            fetchNotifications(true);
             filterByTab("all");
         } else {
             const err = await res.json();
@@ -6675,6 +6690,277 @@ async function submitResubmitMo(e) {
 window.openEditResubmitModal = openEditResubmitModal;
 window.closeEditResubmitModal = closeEditResubmitModal;
 window.submitResubmitMo = submitResubmitMo;
+
+// =========================================================================
+// Real-time Notification Engine & In-App Activity Center Logic
+// =========================================================================
+
+let lastKnownNotifIds = new Set();
+let notifsInitialFetchDone = false;
+let notificationsPollInterval = null;
+
+function formatNotifTime(isoString) {
+    if (!isoString) return "";
+    try {
+        const d = new Date(isoString);
+        const now = new Date();
+        const diffSec = Math.floor((now - d) / 1000);
+        if (diffSec < 45) return "Just now";
+        if (diffSec < 3600) return `${Math.floor(diffSec / 60)}m ago`;
+        if (diffSec < 86400) return `${Math.floor(diffSec / 3600)}h ago`;
+        if (diffSec < 604800) return `${Math.floor(diffSec / 86400)}d ago`;
+        return d.toLocaleDateString([], { month: "short", day: "numeric" });
+    } catch (e) {
+        return "";
+    }
+}
+
+function toggleNotificationsDropdown(e) {
+    if (e) e.stopPropagation();
+    const panel = document.getElementById("notifDropdownPanel");
+    if (!panel) return;
+    const isHidden = panel.style.display === "none" || !panel.style.display;
+    panel.style.display = isHidden ? "flex" : "none";
+    if (isHidden) {
+        fetchNotifications(true);
+    }
+}
+
+async function fetchNotifications(silent = false) {
+    try {
+        const res = await fetch(`/api/notifications?limit=50&_t=${Date.now()}`, {
+            headers: {
+                "X-Role": currentRole
+            }
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const notifs = data.notifications || [];
+        const unreadCount = data.unread_count || 0;
+
+        // Update bell badge
+        const badge = document.getElementById("notifBadge");
+        if (badge) {
+            if (unreadCount > 0) {
+                badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
+                badge.style.display = "inline-flex";
+            } else {
+                badge.style.display = "none";
+            }
+        }
+
+        // Update dropdown header counter
+        const unreadText = document.getElementById("notifUnreadCount");
+        if (unreadText) {
+            unreadText.textContent = `${unreadCount} Unread`;
+        }
+
+        // Render notifications in dropdown panel
+        renderNotificationsList(notifs);
+
+        // Check for newly arrived unread notifications to trigger floating toast
+        if (notifsInitialFetchDone) {
+            let hasNewAction = false;
+            // Iterate in reverse (oldest to newest) to display toasts chronologically
+            const reversed = [...notifs].reverse();
+            reversed.forEach(n => {
+                if (!lastKnownNotifIds.has(n.id)) {
+                    lastKnownNotifIds.add(n.id);
+                    if (!n.is_read) {
+                        showMoToast(n);
+                        hasNewAction = true;
+                    }
+                }
+            });
+            // If new notifications arrived from other teams, refresh orders table and stats dynamically
+            if (hasNewAction) {
+                loadOrders();
+                loadStats();
+            }
+        } else {
+            // First page load: record initial IDs without firing popups
+            notifs.forEach(n => lastKnownNotifIds.add(n.id));
+            notifsInitialFetchDone = true;
+        }
+
+    } catch (err) {
+        console.error("Failed to fetch notifications:", err);
+    }
+}
+
+function renderNotificationsList(notifs) {
+    const listEl = document.getElementById("notifPanelList");
+    if (!listEl) return;
+
+    if (!notifs || notifs.length === 0) {
+        listEl.innerHTML = `
+            <div class="notif-empty-state">
+                <i class="fa-regular fa-bell-slash"></i>
+                <span>No notifications yet</span>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = notifs.map(n => {
+        const isUnread = !n.is_read;
+        const priority = n.priority || "normal";
+        const notifType = n.type || "";
+
+        let iconClass = "fa-bell";
+        let colClass = "info";
+        let itemExtraClass = "";
+
+        if (priority === "urgent" || notifType === "MO_REJECTED") {
+            iconClass = "fa-triangle-exclamation";
+            colClass = "urgent";
+            itemExtraClass = "urgent";
+        } else if (priority === "success" || notifType === "MO_APPROVED") {
+            iconClass = "fa-circle-check";
+            colClass = "success";
+            itemExtraClass = "success";
+        } else if (notifType === "MO_CREATED" || notifType === "MO_ROUTED" || notifType === "MO_RESUBMITTED") {
+            iconClass = "fa-file-invoice";
+            colClass = "info";
+        }
+
+        const timeStr = formatNotifTime(n.created_at);
+        const unreadClass = isUnread ? "unread" : "";
+        const moNum = n.mo_number || "";
+
+        return `
+            <div class="notif-item ${unreadClass} ${itemExtraClass}" onclick="onNotificationClick('${escapeHtml(n.id)}', '${escapeHtml(moNum)}')">
+                <div class="notif-icon-col ${colClass}">
+                    <i class="fa-solid ${iconClass}"></i>
+                </div>
+                <div class="notif-content-col">
+                    <div class="notif-title-row">
+                        <span class="notif-item-title">${escapeHtml(n.title)}</span>
+                        <span class="notif-item-time">${timeStr}</span>
+                    </div>
+                    <p class="notif-item-msg">${escapeHtml(n.message)}</p>
+                    ${moNum ? `<span class="notif-item-chip"><i class="fa-solid fa-hashtag" style="font-size:0.6rem;"></i> ${escapeHtml(moNum)}</span>` : ""}
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+function showMoToast(notif) {
+    const container = document.getElementById("moToastContainer");
+    if (!container) return;
+
+    const toast = document.createElement("div");
+    const priority = notif.priority || "normal";
+    const notifType = notif.type || "";
+    let toastType = "info";
+    let iconClass = "fa-bell";
+
+    if (priority === "urgent" || notifType === "MO_REJECTED") {
+        toastType = "urgent";
+        iconClass = "fa-triangle-exclamation";
+    } else if (priority === "success" || notifType === "MO_APPROVED") {
+        toastType = "success";
+        iconClass = "fa-circle-check";
+    } else {
+        toastType = "info";
+        iconClass = "fa-file-invoice";
+    }
+
+    toast.className = `mo-toast-card ${toastType}`;
+    toast.title = "Click to inspect Material Order";
+    toast.innerHTML = `
+        <div class="notif-icon-col ${toastType}" style="width:28px; height:28px; font-size:0.85rem;">
+            <i class="fa-solid ${iconClass}"></i>
+        </div>
+        <div style="flex:1; min-width:0;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                <strong style="font-size:0.82rem; color:#1e293b;">${escapeHtml(notif.title)}</strong>
+                <span style="font-size:0.68rem; color:#94a3b8;">Just now</span>
+            </div>
+            <div style="font-size:0.75rem; color:#475569; margin-top:2px; line-height:1.3;">${escapeHtml(notif.message)}</div>
+            ${notif.mo_number ? `<span class="notif-item-chip" style="margin-top:4px;"><i class="fa-solid fa-arrow-up-right-from-square" style="font-size:0.6rem;"></i> Open ${escapeHtml(notif.mo_number)}</span>` : ""}
+        </div>
+    `;
+
+    toast.onclick = () => {
+        onNotificationClick(notif.id, notif.mo_number);
+        toast.remove();
+    };
+
+    container.appendChild(toast);
+
+    // Auto remove toast after 6.5s
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.style.transition = "opacity 0.3s ease, transform 0.3s ease";
+            toast.style.opacity = "0";
+            toast.style.transform = "translateX(50px)";
+            setTimeout(() => toast.remove(), 300);
+        }
+    }, 6500);
+}
+
+async function onNotificationClick(notifId, moNumber) {
+    // Hide dropdown panel
+    const panel = document.getElementById("notifDropdownPanel");
+    if (panel) panel.style.display = "none";
+
+    // Mark as read in backend
+    try {
+        await fetch("/api/notifications/mark-read", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify({ notif_id: notifId })
+        });
+    } catch (e) {
+        console.error("Error marking notification as read:", e);
+    }
+
+    // Refresh notification badge and count
+    fetchNotifications(true);
+
+    // Open target MO modal for review / clearance
+    if (moNumber) {
+        openReviewModal(moNumber);
+    }
+}
+
+async function markAllNotificationsAsRead(e) {
+    if (e) e.stopPropagation();
+    try {
+        await fetch("/api/notifications/mark-read", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify({ notif_id: null })
+        });
+        await fetchNotifications(true);
+    } catch (err) {
+        console.error("Failed to mark all notifications as read:", err);
+    }
+}
+
+function startNotificationsPolling() {
+    if (notificationsPollInterval) clearInterval(notificationsPollInterval);
+    fetchNotifications();
+    notificationsPollInterval = setInterval(() => {
+        fetchNotifications(true);
+    }, 8000);
+}
+
+// Window bindings for notification center
+window.toggleNotificationsDropdown = toggleNotificationsDropdown;
+window.markAllNotificationsAsRead = markAllNotificationsAsRead;
+window.onNotificationClick = onNotificationClick;
+window.fetchNotifications = fetchNotifications;
+window.startNotificationsPolling = startNotificationsPolling;
+
 
 
 
