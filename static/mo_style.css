@@ -3977,3 +3977,350 @@ body {
 .widget-table tr:hover td {
     background: #f8fafc;
 }
+
+/* =========================================================================
+   PURCHASE AI CLEARANCE & PROCUREMENT DECISION ASSISTANT STYLES
+   ========================================================================= */
+.purchase-ai-card {
+    background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 40%, #ffffff 100%);
+    border: 1.5px solid #f59e0b;
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: 0 4px 18px rgba(217, 119, 6, 0.12);
+    animation: fadeInSlideDown 0.25s ease-out;
+}
+
+.purchase-ai-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #fde68a;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+}
+
+.purchase-ai-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.purchase-ai-robot {
+    width: 38px;
+    height: 38px;
+    background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+    color: #ffffff;
+    border-radius: 10px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    box-shadow: 0 3px 8px rgba(180, 83, 9, 0.3);
+}
+
+.purchase-ai-title h4 {
+    margin: 0;
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: #92400e;
+}
+
+.purchase-ai-title p {
+    margin: 2px 0 0 0;
+    font-size: 0.8rem;
+    color: #78350f;
+}
+
+.purchase-ai-badges {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.purchase-ai-engine-badge {
+    background: #fef3c7;
+    border: 1px solid #fcd34d;
+    color: #92400e;
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.purchase-ai-severity-badge {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.purchase-ai-severity-badge.loading {
+    background: #e2e8f0;
+    color: #475569;
+}
+
+.purchase-ai-severity-badge.danger {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+.purchase-ai-severity-badge.warning {
+    background: #fffbeb;
+    color: #b45309;
+    border: 1px solid #fde68a;
+}
+
+.purchase-ai-severity-badge.success {
+    background: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+/* Failing Constraints Strip */
+.purchase-ai-constraints-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+}
+
+.failing-constraint-pill {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-size: 0.8rem;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border-left: 4px solid #f59e0b;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.failing-constraint-pill.critical {
+    border-left-color: #dc2626;
+    background: #fff5f5;
+    color: #991b1b;
+}
+
+.failing-constraint-pill.warning {
+    border-left-color: #f59e0b;
+    background: #fffdf5;
+    color: #92400e;
+}
+
+.failing-constraint-pill.info {
+    border-left-color: #7c3aed;
+    background: #faf5ff;
+    color: #5b21b6;
+}
+
+.failing-constraint-pill.success {
+    border-left-color: #10b981;
+    background: #f0fdf4;
+    color: #166534;
+}
+
+.failing-constraint-pill strong {
+    font-weight: 700;
+}
+
+.failing-constraint-pill span {
+    flex: 1;
+}
+
+.failing-constraint-pill .pill-metric {
+    flex: 0 0 auto;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(0, 0, 0, 0.06);
+    font-size: 0.74rem;
+}
+
+/* Verdict Box */
+.purchase-ai-verdict-box {
+    background: #ffffff;
+    border: 1px solid #fed7aa;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.purchase-ai-verdict-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #b45309;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.purchase-ai-verdict-text {
+    font-size: 0.84rem;
+    color: #334155;
+    line-height: 1.5;
+    margin: 0;
+}
+
+.purchase-ai-strategy-callout {
+    margin-top: 10px;
+    background: #fefce8;
+    border: 1px dashed #eab308;
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 0.8rem;
+    color: #713f12;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.4;
+}
+
+/* Procurement Metrics Grid */
+.purchase-ai-metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 8px;
+    margin-bottom: 14px;
+}
+
+.purchase-metric-item {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    flex-direction: column;
+}
+
+.purchase-metric-item .metric-label {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.purchase-metric-item .metric-val {
+    font-size: 0.92rem;
+    color: #0f172a;
+    margin-top: 3px;
+}
+
+.purchase-metric-item.danger {
+    border-color: #fca5a5;
+    background: #fff5f5;
+}
+
+.purchase-metric-item.danger .metric-val {
+    color: #dc2626;
+}
+
+.purchase-metric-item.success {
+    border-color: #86efac;
+    background: #f0fdf4;
+}
+
+.purchase-metric-item.success .metric-val {
+    color: #16a34a;
+}
+
+/* In-Stock Substitute Box */
+.purchase-ai-substitute-box {
+    background: #f0fdf4;
+    border: 1.5px solid #22c55e;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    animation: fadeInSlideDown 0.2s ease-out;
+}
+
+.substitute-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+}
+
+.substitute-title {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: #15803d;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.substitute-badge {
+    background: #16a34a;
+    color: #ffffff;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.substitute-desc {
+    font-size: 0.8rem;
+    color: #166534;
+    margin: 0 0 10px 0;
+    line-height: 1.45;
+}
+
+.substitute-action-row {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-substitute {
+    background: #16a34a;
+    color: #ffffff;
+    border: none;
+    font-weight: 700;
+    box-shadow: 0 2px 6px rgba(22, 163, 74, 0.25);
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+
+.btn-substitute:hover {
+    background: #15803d;
+}
+
+/* Decision Actions Bar */
+.purchase-ai-decision-actions {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.decision-action-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: #334155;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.decision-buttons-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+

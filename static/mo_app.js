@@ -2148,6 +2148,9 @@ async function openReviewModal(moNumber) {
 
 function closeReviewModal() {
     activeReviewMo = null;
+    activePurchaseAiDecision = null;
+    const pCard = document.getElementById("purchaseAiCard");
+    if (pCard) pCard.style.display = "none";
     document.getElementById("reviewModal").style.display = "none";
 }
 
@@ -2305,6 +2308,9 @@ function renderReviewModal(mo) {
     } else {
         actionPanel.style.display = "none";
     }
+
+    // Trigger Purchase AI Decision Agent analysis for Purchase role or failing constraints
+    fetchAndDisplayPurchaseAi(mo);
 }
 
 function renderStepper(mo) {
@@ -2463,6 +2469,214 @@ function formatDate(isoStr) {
     } catch (e) {
         return isoStr;
     }
+}
+
+/* =========================================================================
+   PURCHASE AI CLEARANCE & PROCUREMENT DECISION ASSISTANT CLIENT LOGIC
+   ========================================================================= */
+let activePurchaseAiDecision = null;
+
+async function fetchAndDisplayPurchaseAi(mo) {
+    const card = document.getElementById("purchaseAiCard");
+    if (!card) return;
+
+    // Show when role is purchase OR stage is PURCHASE OR constraints failed
+    const isPurchaseContext = (currentRole === "purchase") || 
+                              (mo.current_stage === "PURCHASE") || 
+                              (mo.workflow_path && mo.workflow_path.includes("PURCHASE"));
+
+    if (!isPurchaseContext) {
+        card.style.display = "none";
+        return;
+    }
+
+    card.style.display = "block";
+    const engineBadge = document.getElementById("purchaseAiEngineBadge");
+    const severityBadge = document.getElementById("purchaseAiSeverityBadge");
+    const titleEl = document.getElementById("purchaseAiVerdictTitle");
+    const textEl = document.getElementById("purchaseAiVerdictText");
+    const stripEl = document.getElementById("purchaseAiConstraintsStrip");
+    const stratCallout = document.getElementById("purchaseAiStrategyCallout");
+    const stratText = document.getElementById("purchaseAiStrategyText");
+    const subBox = document.getElementById("purchaseAiSubstituteBox");
+    const subDesc = document.getElementById("purchaseAiSubDesc");
+    const btnPartial = document.getElementById("btnApplyPartialRemarks");
+
+    // Loading states
+    if (severityBadge) {
+        severityBadge.className = "purchase-ai-severity-badge loading";
+        severityBadge.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Evaluating Constraints...`;
+    }
+    if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-brain fa-pulse"></i> AI Decision Engine Scanning Constraints...`;
+    if (textEl) textEl.textContent = "Analyzing RM inventory shortfall, MRP balance, and optimal procurement strategy...";
+    if (stripEl) stripEl.innerHTML = "";
+    if (stratCallout) stratCallout.style.display = "none";
+    if (subBox) subBox.style.display = "none";
+
+    try {
+        const res = await fetch(`/api/agent/purchase-advisor?mo_number=${encodeURIComponent(mo.mo_number)}`);
+        if (!res.ok) {
+            if (severityBadge) severityBadge.textContent = "Unavailable";
+            return;
+        }
+
+        const data = await res.json();
+        activePurchaseAiDecision = data;
+
+        // Engine badge
+        if (engineBadge && data.decision?.powered_by) {
+            engineBadge.innerHTML = `<i class="fa-solid fa-microchip"></i> ${escapeHtml(data.decision.powered_by)}`;
+        }
+
+        // Severity badge & status
+        const hasShortfall = data.metrics?.shortfall_sheets > 0;
+        const failCount = data.failing_constraints_count || 0;
+        if (severityBadge) {
+            if (hasShortfall) {
+                severityBadge.className = "purchase-ai-severity-badge danger";
+                severityBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Stock Shortfall (${data.metrics.shortfall_sheets} Sheets)`;
+            } else if (failCount > 0) {
+                severityBadge.className = "purchase-ai-severity-badge warning";
+                severityBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${failCount} Constraint(s) Failing`;
+            } else {
+                severityBadge.className = "purchase-ai-severity-badge success";
+                severityBadge.innerHTML = `<i class="fa-solid fa-square-check"></i> Standard Clearance`;
+            }
+        }
+
+        // Constraints strip
+        if (stripEl) {
+            if (data.failing_constraints && data.failing_constraints.length > 0) {
+                stripEl.innerHTML = data.failing_constraints.map(c => `
+                    <div class="failing-constraint-pill ${escapeHtml((c.severity || 'warning').toLowerCase())}">
+                        <i class="fa-solid ${escapeHtml(c.icon || 'fa-circle-exclamation')}"></i>
+                        <strong>${escapeHtml(c.name)}:</strong>
+                        <span>${escapeHtml(c.details)}</span>
+                        <span class="pill-metric">${escapeHtml(c.deficit_metric)}</span>
+                    </div>
+                `).join("");
+            } else {
+                stripEl.innerHTML = `
+                    <div class="failing-constraint-pill success">
+                        <i class="fa-solid fa-square-check"></i>
+                        <span>No physical inventory shortage detected. Proceed with standard procurement review.</span>
+                    </div>
+                `;
+            }
+        }
+
+        // Decision headline & summary
+        if (titleEl) {
+            titleEl.innerHTML = `<i class="fa-solid fa-shield-halved"></i> ${escapeHtml(data.decision?.decision_title || "Procurement Decision Formulated")}`;
+        }
+        if (textEl) {
+            textEl.textContent = data.decision?.executive_summary || "Decision synthesized.";
+        }
+        if (stratCallout && data.decision?.action_strategy) {
+            stratCallout.style.display = "flex";
+            if (stratText) stratText.textContent = data.decision.action_strategy;
+        }
+
+        // Key metrics
+        const m = data.metrics || {};
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        setVal("pMetricOnhand", `${m.onhand_stock ?? 0} Sheets`);
+        setVal("pMetricRequired", `${m.sheets_required ?? 0} Sheets`);
+        setVal("pMetricShortfall", `${m.shortfall_sheets ?? 0} Sheets`);
+        setVal("pMetricWeight", `${m.shortfall_weight_kg ?? 0} kg`);
+        setVal("pMetricPo", `${m.recommended_po_sheets ?? 0} Sheets`);
+        setVal("pMetricLeadTime", m.est_lead_time || "3-5 Days");
+
+        // Viable in-stock substitute
+        if (subBox) {
+            if (data.viable_substitute && data.viable_substitute.onhand_stock > 0) {
+                subBox.style.display = "block";
+                const sub = data.viable_substitute;
+                if (subDesc) {
+                    subDesc.innerHTML = `
+                        In-Store Alternative: <strong>${escapeHtml(sub.rm_erp)}</strong> (${sub.tier_label || 'Compatible Sheet'}). 
+                        Confirmed store balance: <strong>${sub.onhand_stock} sheets</strong> (${sub.yield_pct || 0}% yield). 
+                        Authorizing this in-stock sheet eliminates <strong>${sub.lead_time_days_saved || 5} days</strong> of supplier lead time!
+                    `;
+                }
+            } else {
+                subBox.style.display = "none";
+            }
+        }
+
+        // Partial shearing button
+        if (btnPartial) {
+            if (data.decision?.recommended_remarks_partial) {
+                btnPartial.style.display = "inline-flex";
+            } else {
+                btnPartial.style.display = "none";
+            }
+        }
+
+    } catch (err) {
+        console.error("Failed to load Purchase AI decision:", err);
+        if (severityBadge) severityBadge.textContent = "Error";
+    }
+}
+
+function applyPurchasePoRemarks() {
+    if (!activePurchaseAiDecision?.decision?.recommended_remarks_po) {
+        return;
+    }
+    const remarksInput = document.getElementById("approvalRemarks");
+    if (remarksInput) {
+        remarksInput.value = activePurchaseAiDecision.decision.recommended_remarks_po;
+        remarksInput.focus();
+        remarksInput.style.transition = "box-shadow 0.3s";
+        remarksInput.style.boxShadow = "0 0 0 3px rgba(245, 158, 11, 0.4)";
+        setTimeout(() => { remarksInput.style.boxShadow = ""; }, 1200);
+    }
+}
+
+function applyPurchaseSubstitutionRemarks() {
+    if (!activePurchaseAiDecision?.decision?.recommended_remarks_substitute) {
+        return;
+    }
+    const remarksInput = document.getElementById("approvalRemarks");
+    if (remarksInput) {
+        remarksInput.value = activePurchaseAiDecision.decision.recommended_remarks_substitute;
+        remarksInput.focus();
+        remarksInput.style.transition = "box-shadow 0.3s";
+        remarksInput.style.boxShadow = "0 0 0 3px rgba(34, 197, 94, 0.4)";
+        setTimeout(() => { remarksInput.style.boxShadow = ""; }, 1200);
+    }
+}
+
+function applyPurchasePartialRemarks() {
+    if (!activePurchaseAiDecision?.decision?.recommended_remarks_partial) {
+        return;
+    }
+    const remarksInput = document.getElementById("approvalRemarks");
+    if (remarksInput) {
+        remarksInput.value = activePurchaseAiDecision.decision.recommended_remarks_partial;
+        remarksInput.focus();
+        remarksInput.style.transition = "box-shadow 0.3s";
+        remarksInput.style.boxShadow = "0 0 0 3px rgba(234, 179, 8, 0.4)";
+        setTimeout(() => { remarksInput.style.boxShadow = ""; }, 1200);
+    }
+}
+
+async function quickApproveWithPurchaseAi() {
+    if (!activePurchaseAiDecision || !activeReviewMo) {
+        alert("Please wait for the AI Decision Assistant to finish analyzing constraints.");
+        return;
+    }
+    const remarksInput = document.getElementById("approvalRemarks");
+    const remarksText = activePurchaseAiDecision.decision?.recommended_remarks_po || 
+                        activePurchaseAiDecision.decision?.recommended_remarks_substitute || 
+                        "Procurement clearance authorized by Purchase AI Agent.";
+    if (remarksInput) {
+        remarksInput.value = remarksText;
+    }
+    await confirmApproveMo();
 }
 
 // ERP, Stock & MRP Intelligence Functions

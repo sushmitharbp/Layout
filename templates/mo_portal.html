@@ -13,7 +13,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/mo_style.css?v=101">
+    <link rel="stylesheet" href="/static/mo_style.css?v=102">
     <link rel="stylesheet" href="/static/mo_chat_widget.css?v=1">
 
 </head>
@@ -939,6 +939,103 @@
                     <div class="timeline" id="auditTimeline"></div>
                 </div>
 
+                <!-- Purchase AI Clearance & Procurement Decision Assistant (Shown for Purchase Team / Failing Constraints) -->
+                <div class="purchase-ai-card" id="purchaseAiCard" style="display: none; margin-bottom: 22px;">
+                    <div class="purchase-ai-header">
+                        <div class="purchase-ai-title">
+                            <span class="purchase-ai-robot"><i class="fa-solid fa-robot"></i></span>
+                            <div>
+                                <h4>Purchase AI Decision Assistant</h4>
+                                <p>Autonomous procurement decision based on RM stock deficit &amp; production constraints</p>
+                            </div>
+                        </div>
+                        <div class="purchase-ai-badges">
+                            <span class="purchase-ai-engine-badge" id="purchaseAiEngineBadge"><i class="fa-solid fa-microchip"></i> Gemini AI</span>
+                            <span class="purchase-ai-severity-badge" id="purchaseAiSeverityBadge">Analyzing Constraints...</span>
+                        </div>
+                    </div>
+
+                    <!-- Failing Constraints Strip -->
+                    <div class="purchase-ai-constraints-strip" id="purchaseAiConstraintsStrip"></div>
+
+                    <div class="purchase-ai-body">
+                        <!-- Decision Headline & Executive Summary -->
+                        <div class="purchase-ai-verdict-box">
+                            <div class="purchase-ai-verdict-title" id="purchaseAiVerdictTitle">
+                                <i class="fa-solid fa-file-signature"></i> Evaluating Procurement Options...
+                            </div>
+                            <p class="purchase-ai-verdict-text" id="purchaseAiVerdictText">
+                                Analyzing store inventory levels, coil lead times, and feasible in-store substitutions...
+                            </p>
+                            <div class="purchase-ai-strategy-callout" id="purchaseAiStrategyCallout" style="display: none;">
+                                <strong><i class="fa-solid fa-lightbulb"></i> Recommended Strategy:</strong>
+                                <span id="purchaseAiStrategyText"></span>
+                            </div>
+                        </div>
+
+                        <!-- Procurement Key Metrics Grid -->
+                        <div class="purchase-ai-metrics-grid" id="purchaseAiMetricsGrid">
+                            <div class="purchase-metric-item">
+                                <span class="metric-label">Store Stock</span>
+                                <strong class="metric-val" id="pMetricOnhand">- Sheets</strong>
+                            </div>
+                            <div class="purchase-metric-item">
+                                <span class="metric-label">Order Demand</span>
+                                <strong class="metric-val" id="pMetricRequired">- Sheets</strong>
+                            </div>
+                            <div class="purchase-metric-item danger">
+                                <span class="metric-label">Net Shortfall</span>
+                                <strong class="metric-val" id="pMetricShortfall">- Sheets</strong>
+                            </div>
+                            <div class="purchase-metric-item">
+                                <span class="metric-label">Deficit Weight</span>
+                                <strong class="metric-val" id="pMetricWeight">- kg</strong>
+                            </div>
+                            <div class="purchase-metric-item success">
+                                <span class="metric-label">Recommended PO</span>
+                                <strong class="metric-val" id="pMetricPo">- Sheets</strong>
+                            </div>
+                            <div class="purchase-metric-item">
+                                <span class="metric-label">Est. Lead Time</span>
+                                <strong class="metric-val" id="pMetricLeadTime">3-5 Days</strong>
+                            </div>
+                        </div>
+
+                        <!-- In-Stock Substitute Callout (if available with > 0 sheets) -->
+                        <div class="purchase-ai-substitute-box" id="purchaseAiSubstituteBox" style="display: none;">
+                            <div class="substitute-head">
+                                <div class="substitute-title">
+                                    <i class="fa-solid fa-arrows-rotate"></i>
+                                    <span>Zero-Delay In-Stock Substitution Option</span>
+                                </div>
+                                <span class="substitute-badge" id="purchaseAiSubBadge">Stock Ready</span>
+                            </div>
+                            <p class="substitute-desc" id="purchaseAiSubDesc"></p>
+                            <div class="substitute-action-row">
+                                <button type="button" class="btn btn-sm btn-substitute" id="btnApplySubRemarks" onclick="applyPurchaseSubstitutionRemarks()">
+                                    <i class="fa-solid fa-check"></i> Authorize In-Stock Substitution
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons to Quick Apply Decision into Remarks or Approve -->
+                        <div class="purchase-ai-decision-actions">
+                            <span class="decision-action-label"><i class="fa-solid fa-wand-magic-sparkles"></i> AI 1-Click Clearances:</span>
+                            <div class="decision-buttons-row">
+                                <button type="button" class="btn btn-outline-primary btn-sm" id="btnApplyPoRemarks" onclick="applyPurchasePoRemarks()">
+                                    <i class="fa-solid fa-pen-nib"></i> Fill PO Requisition Remarks
+                                </button>
+                                <button type="button" class="btn btn-outline-warning btn-sm" id="btnApplyPartialRemarks" onclick="applyPurchasePartialRemarks()" style="display: none;">
+                                    <i class="fa-solid fa-scissors"></i> Authorize Split Run Remarks
+                                </button>
+                                <button type="button" class="btn btn-success btn-sm" id="btnQuickApprovePurchase" onclick="quickApproveWithPurchaseAi()">
+                                    <i class="fa-solid fa-bolt"></i> 1-Click Approve &amp; Advance to ERP
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Approval / Action Panel (Shown if active role matches stage) -->
                 <div class="action-panel" id="actionPanel" style="display: none;">
                     <div class="action-panel-header">
@@ -1453,7 +1550,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=102"></script>
+    <script src="/static/mo_app.js?v=103"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
 

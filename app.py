@@ -602,6 +602,8 @@ ERP_STOCK_SERVICE = ERPStockService()
 MO_ENGINE.set_erp_service(ERP_STOCK_SERVICE)
 from rm_advisor_agent import RMAdvisorAgent
 RM_ADVISOR_AGENT = RMAdvisorAgent(DATA_STORE, ERP_STOCK_SERVICE)
+from purchase_advisor_agent import PurchaseAdvisorAgent
+PURCHASE_ADVISOR_AGENT = PurchaseAdvisorAgent(DATA_STORE, ERP_STOCK_SERVICE, MO_ENGINE, RM_ADVISOR_AGENT)
 from production_planner_agent import ProductionPlannerAgent
 PRODUCTION_PLANNER_AGENT = ProductionPlannerAgent(DATA_STORE, ERP_STOCK_SERVICE, MO_ENGINE)
 from endbit_capacity_agent import EndbitCapacityAgent
@@ -1004,6 +1006,33 @@ def suggest_rm_alternatives():
             if float(r.get("onhand_stock") or r.get("available_qty") or 0.0) > 0
         ]
         analysis["total_alternatives_found"] = len(analysis["recommendations"])
+    return jsonify(analysis)
+
+
+@app.route("/api/agent/purchase-advisor", methods=["GET", "POST"])
+def api_purchase_advisor():
+    """
+    AI Purchase Decision Agent endpoint:
+    Evaluates failing constraints (RM store shortage, MRP monthly schedule deficits, quota violations)
+    for a Material Order and generates an executive procurement decision, PO sizing,
+    in-stock substitution clearance, and 1-click signoff remarks.
+    """
+    if request.method == "POST":
+        params = request.json or request.form.to_dict() or {}
+    else:
+        params = request.args.to_dict()
+
+    mo_number = params.get("mo_number", "").strip()
+    mo_record = {}
+    if mo_number and MO_ENGINE:
+        mo_record = MO_ENGINE.get_mo(mo_number) or {}
+
+    merged_data = dict(mo_record) if mo_record else {}
+    for k, v in params.items():
+        if v is not None and v != "":
+            merged_data[k] = v
+
+    analysis = PURCHASE_ADVISOR_AGENT.analyze_order_and_decide(merged_data)
     return jsonify(analysis)
 
 
