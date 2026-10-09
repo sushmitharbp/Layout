@@ -92,6 +92,12 @@ class NotificationEngine:
         for n in all_notifs:
             tgt = (n.get("target_role") or "").lower()
             if tgt == role_lower or tgt == "all":
+                # For Purchase team, strictly only show notifications for MOs that come for Purchase approval (not endbits or direct-ERP)
+                if role_lower == "purchase":
+                    extra = n.get("extra_data") or {}
+                    if extra.get("is_endbit") or (extra.get("stage") and extra.get("stage") != "PURCHASE"):
+                        continue
+
                 is_read = role_lower in n.get("read_by", [])
                 filtered.append({
                     **n,
@@ -109,25 +115,28 @@ class NotificationEngine:
         """
         Marks a specific notification or all notifications as read for the role.
         """
+        if notif_id in (None, "", "null", "undefined"):
+            notif_id = None
+
         role_lower = (role or "").lower().strip()
         all_notifs = self._load_notifications()
         updated = False
 
         for n in all_notifs:
             tgt = (n.get("target_role") or "").lower()
-            if tgt == role_lower or tgt == "all":
+            if not role_lower or tgt == role_lower or tgt == "all":
+                tag = role_lower if role_lower else tgt
+                read_by = n.get("read_by", [])
                 if notif_id:
-                    if n.get("id") == notif_id:
-                        read_by = n.get("read_by", [])
-                        if role_lower not in read_by:
-                            read_by.append(role_lower)
+                    if str(n.get("id")) == str(notif_id):
+                        if tag not in read_by:
+                            read_by.append(tag)
                             n["read_by"] = read_by
                             updated = True
                         break
                 else:
-                    read_by = n.get("read_by", [])
-                    if role_lower not in read_by:
-                        read_by.append(role_lower)
+                    if tag not in read_by:
+                        read_by.append(tag)
                         n["read_by"] = read_by
                         updated = True
 

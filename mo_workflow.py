@@ -537,6 +537,12 @@ class MOWorkflowEngine:
         if current_stage not in allowed_stages:
             return None, f"Role '{role}' is not authorized to approve stage '{current_stage}'."
 
+        if role == "purchase":
+            is_eb = bool(mo.get("is_endbit") or mo.get("is_end_bit") or mo.get("is_endbit_mo"))
+            wf_path = mo.get("workflow_path") or ""
+            if is_eb or "PURCHASE" not in wf_path or current_stage != "PURCHASE":
+                return None, "Purchase clearance is strictly for orders requiring raw material clearance or layout verification, not for endbits or direct-ERP orders."
+
         now_iso = datetime.utcnow().isoformat() + "Z"
         audit_trail = mo.get("audit_trail", [])
         path = mo.get("workflow_path", "DIRECT_ERP")
@@ -2024,6 +2030,12 @@ class MOWorkflowEngine:
 
         if current_stage not in allowed_stages:
             return None, f"Role '{role}' is not authorized to reject stage '{current_stage}'."
+
+        if role == "purchase":
+            is_eb = bool(mo.get("is_endbit") or mo.get("is_end_bit") or mo.get("is_endbit_mo"))
+            wf_path = mo.get("workflow_path") or ""
+            if is_eb or "PURCHASE" not in wf_path or current_stage != "PURCHASE":
+                return None, "Purchase clearance is strictly for orders requiring raw material clearance or layout verification, not for endbits or direct-ERP orders."
 
         now_iso = datetime.utcnow().isoformat() + "Z"
         audit_trail = mo.get("audit_trail", [])

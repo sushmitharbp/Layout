@@ -198,6 +198,13 @@ function updateActionCount() {
     if (currentRole === "shearing") {
         // For Shearing team (the creators), Rejected MOs require immediate attention/revision
         count = allOrders.filter(o => o.status === "REJECTED").length;
+    } else if (currentRole === "purchase") {
+        // For Purchase team: only count MOs that come for their approval (NOT endbits and other MOs)
+        count = allOrders.filter(o => {
+            const isEb = Boolean(o.is_endbit || o.is_end_bit || o.is_endbit_mo || (o.source_endbit_ids && o.source_endbit_ids.length > 0));
+            const requiresPurchase = Boolean(o.workflow_path && o.workflow_path.includes("PURCHASE"));
+            return !isEb && requiresPurchase && o.current_stage === "PURCHASE" && o.status !== "REJECTED";
+        }).length;
     } else {
         const roleStage = ROLE_CONFIGS[currentRole]?.stage;
         if (roleStage) {
@@ -314,6 +321,15 @@ function renderOrders() {
 
     let filtered = [...allOrders];
 
+    // For Purchase team: strictly only work for MOs that come for their approval (NOT endbits and other MOs)
+    if (currentRole === "purchase") {
+        filtered = filtered.filter(o => {
+            const isEb = Boolean(o.is_endbit || o.is_end_bit || o.is_endbit_mo || (o.source_endbit_ids && o.source_endbit_ids.length > 0));
+            const requiresPurchase = Boolean(o.workflow_path && o.workflow_path.includes("PURCHASE"));
+            return !isEb && requiresPurchase;
+        });
+    }
+
     // 1. Tab filter
     if (currentFilter === "my_action") {
         if (currentRole === "shearing") {
@@ -324,7 +340,11 @@ function renderOrders() {
             filtered = roleStage ? filtered.filter(o => o.current_stage === roleStage && o.status !== "REJECTED") : [];
         }
     } else if (currentFilter === "pending") {
-        filtered = filtered.filter(o => o.status && o.status.startsWith("PENDING_"));
+        if (currentRole === "purchase") {
+            filtered = filtered.filter(o => o.current_stage === "PURCHASE" && o.status !== "REJECTED");
+        } else {
+            filtered = filtered.filter(o => o.status && o.status.startsWith("PENDING_"));
+        }
     } else if (currentFilter === "released") {
         filtered = filtered.filter(o => o.status === "RELEASED_TO_ERP" || o.status === "RELEASED");
     } else if (currentFilter === "rejected") {
@@ -414,6 +434,13 @@ function renderOrders() {
         if (currentRole === "shearing" && mo.status === "REJECTED") {
             actionBtnText = '<i class="fa-solid fa-pen-to-square"></i> Revise &amp; Resubmit';
             actionBtnClass = 'btn-danger';
+        } else if (currentRole === "purchase") {
+            const isEb = Boolean(mo.is_endbit || mo.is_end_bit || mo.is_endbit_mo);
+            const requiresPurchase = Boolean(mo.workflow_path && mo.workflow_path.includes("PURCHASE"));
+            if (!isEb && requiresPurchase && mo.current_stage === "PURCHASE" && mo.status !== "REJECTED") {
+                actionBtnText = '<i class="fa-solid fa-stamp"></i> Review & Action';
+                actionBtnClass = 'btn-primary';
+            }
         } else if (ROLE_CONFIGS[currentRole]?.stage === mo.current_stage && mo.status !== "REJECTED") {
             actionBtnText = '<i class="fa-solid fa-stamp"></i> Review & Action';
             actionBtnClass = 'btn-primary';
@@ -2415,7 +2442,14 @@ function renderReviewModal(mo) {
 
     // Render Approval / Action Panel
     const actionPanel = document.getElementById("actionPanel");
-    const canAction = ROLE_CONFIGS[currentRole]?.stage === mo.current_stage && mo.status !== "REJECTED";
+    let canAction = false;
+    if (currentRole === "purchase") {
+        const isEb = Boolean(mo.is_endbit || mo.is_end_bit || mo.is_endbit_mo || (mo.source_endbit_ids && mo.source_endbit_ids.length > 0));
+        const requiresPurchase = Boolean(mo.workflow_path && mo.workflow_path.includes("PURCHASE"));
+        canAction = !isEb && requiresPurchase && mo.current_stage === "PURCHASE" && mo.status !== "REJECTED";
+    } else {
+        canAction = ROLE_CONFIGS[currentRole]?.stage === mo.current_stage && mo.status !== "REJECTED";
+    }
     const btnExecute = document.getElementById("btnExecuteDirect");
     const btnApprove = document.getElementById("btnApproveAdvance");
 
@@ -2650,10 +2684,18 @@ async function fetchAndDisplayPurchaseAi(mo) {
     const card = document.getElementById("purchaseAiCard");
     if (!card) return;
 
-    // Show when role is purchase OR stage is PURCHASE OR constraints failed
-    const isPurchaseContext = (currentRole === "purchase") || 
-                              (mo.current_stage === "PURCHASE") || 
-                              (mo.workflow_path && mo.workflow_path.includes("PURCHASE"));
+    // Check if this MO comes for Purchase clearance
+    const isEndbit = Boolean(mo.is_endbit || mo.is_end_bit || mo.is_endbit_mo || (mo.source_endbit_ids && mo.source_endbit_ids.length > 0));
+    const requiresPurchase = Boolean(mo.workflow_path && mo.workflow_path.includes("PURCHASE"));
+
+    // For Purchase team / review, ONLY activate for orders that come for Purchase approval (NOT for endbits and other MOs)
+    if (isEndbit || !requiresPurchase) {
+        card.style.display = "none";
+        return;
+    }
+
+    // Show when role is purchase OR stage is PURCHASE
+    const isPurchaseContext = (currentRole === "purchase") || (mo.current_stage === "PURCHASE");
 
     if (!isPurchaseContext) {
         card.style.display = "none";
@@ -6914,7 +6956,7 @@ async function onNotificationClick(notifId, moNumber) {
                 "Content-Type": "application/json",
                 "X-Role": currentRole
             },
-            body: JSON.stringify({ notif_id: notifId })
+            body: JSON.stringify({ notif_id: notifId, role: currentRole })
         });
     } catch (e) {
         console.error("Error marking notification as read:", e);
@@ -6930,7 +6972,28 @@ async function onNotificationClick(notifId, moNumber) {
 }
 
 async function markAllNotificationsAsRead(e) {
-    if (e) e.stopPropagation();
+    if (e) {
+        if (typeof e.preventDefault === "function") e.preventDefault();
+        if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
+
+    // Immediate optimistic UI response
+    const badge = document.getElementById("notifBadge");
+    if (badge) {
+        badge.textContent = "0";
+        badge.style.display = "none";
+    }
+    const unreadCountEl = document.getElementById("notifUnreadCount");
+    if (unreadCountEl) {
+        unreadCountEl.textContent = "0 Unread";
+    }
+    const listEl = document.getElementById("notifPanelList");
+    if (listEl) {
+        listEl.querySelectorAll(".notif-item").forEach(item => {
+            item.classList.remove("unread");
+        });
+    }
+
     try {
         await fetch("/api/notifications/mark-read", {
             method: "POST",
@@ -6938,7 +7001,7 @@ async function markAllNotificationsAsRead(e) {
                 "Content-Type": "application/json",
                 "X-Role": currentRole
             },
-            body: JSON.stringify({ notif_id: null })
+            body: JSON.stringify({ notif_id: null, role: currentRole })
         });
         await fetchNotifications(true);
     } catch (err) {

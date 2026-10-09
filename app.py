@@ -1541,7 +1541,7 @@ def export_mos():
 @app.route("/api/notifications", methods=["GET"])
 def get_notifications_endpoint():
     """Returns real-time notifications for the active authenticated department"""
-    role = session.get("role") or request.headers.get("X-Role") or "shearing"
+    role = request.headers.get("X-Role") or request.args.get("role") or session.get("role") or "shearing"
     limit = int(request.args.get("limit", 50))
     res = MO_ENGINE.notification_engine.get_notifications_for_role(role, limit=limit)
     return jsonify(res)
@@ -1550,9 +1550,11 @@ def get_notifications_endpoint():
 @app.route("/api/notifications/mark-read", methods=["POST"])
 def mark_notifications_read_endpoint():
     """Mark a specific notification or all notifications as read for current department"""
-    role = session.get("role") or request.headers.get("X-Role") or "shearing"
-    body = request.json or {}
+    body = request.get_json(silent=True) or {}
+    role = request.headers.get("X-Role") or body.get("role") or session.get("role") or "shearing"
     notif_id = body.get("notif_id")
+    if notif_id in (None, "", "null", "undefined"):
+        notif_id = None
     MO_ENGINE.notification_engine.mark_as_read(role, notif_id=notif_id)
     return jsonify({"success": True})
 
@@ -1560,7 +1562,8 @@ def mark_notifications_read_endpoint():
 @app.route("/api/notifications/clear", methods=["POST"])
 def clear_notifications_endpoint():
     """Mark all notifications as read / cleared for current department"""
-    role = session.get("role") or request.headers.get("X-Role") or "shearing"
+    body = request.get_json(silent=True) or {}
+    role = request.headers.get("X-Role") or body.get("role") or session.get("role") or "shearing"
     MO_ENGINE.notification_engine.clear_notifications_for_role(role)
     return jsonify({"success": True})
 
