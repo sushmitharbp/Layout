@@ -895,6 +895,28 @@ function openCreateModal() {
     const hiddenJson = document.getElementById("moEndbitsJson");
     if (hiddenJson) hiddenJson.value = "[]";
     hideRmAgentSuggestions();
+    activeOptiCutterLayoutFile = null;
+    customOptiCutterUploadedFile = null;
+    const layoutFileInput = document.getElementById("layoutDocFile");
+    if (layoutFileInput) layoutFileInput.value = "";
+    const fileChosenName = document.getElementById("fileChosenName");
+    if (fileChosenName) {
+        fileChosenName.textContent = "No file selected";
+        fileChosenName.style.color = "";
+    }
+    const docDropzone = document.getElementById("docDropzone");
+    if (docDropzone) {
+        docDropzone.style.background = "";
+        docDropzone.style.borderColor = "";
+    }
+    const customDrawInput = document.getElementById("optCustomDrawingInput");
+    if (customDrawInput) customDrawInput.value = "";
+    const customDrawLabel = document.getElementById("optCustomDrawingLabel");
+    if (customDrawLabel) {
+        customDrawLabel.textContent = "";
+        customDrawLabel.style.display = "none";
+    }
+
     if (modal) modal.style.display = "flex";
 }
 
@@ -2161,7 +2183,11 @@ async function submitCreateMo(e) {
             formData.set("target_qty", manualInput.value);
         }
     }
-    const file = formData.get("layout_doc");
+    let file = formData.get("layout_doc");
+    if ((!file || !file.name) && activeOptiCutterLayoutFile) {
+        formData.set("layout_doc", activeOptiCutterLayoutFile);
+        file = activeOptiCutterLayoutFile;
+    }
 
     if (!isStd && (!file || !file.name)) {
         alert("Please upload a layout document. It is mandatory for Non-Standard layouts before Krysalis review.");
@@ -3426,7 +3452,24 @@ async function showCreateEndbitMoView(preselectedEndbitId = null) {
     if (createEbView) createEbView.style.display = "flex";
 
     setActiveNavTab("navTabEndbits");
-    renderSidebarTablesList();
+    // Reset layout attachment state
+    activeEbOptiCutterLayoutFile = null;
+    const ebFileInput = document.getElementById("ebLayoutDocFile");
+    if (ebFileInput) ebFileInput.value = "";
+    const ebChosenName = document.getElementById("ebFileChosenName");
+    if (ebChosenName) {
+        ebChosenName.textContent = "No file selected";
+        ebChosenName.style.color = "";
+    }
+    const ebDropzone = document.getElementById("ebDocDropzone");
+    if (ebDropzone) {
+        ebDropzone.style.background = "#f8fafc";
+        ebDropzone.style.borderColor = "#cbd5e1";
+    }
+    const ebStatusBadge = document.getElementById("ebDocStatusBadge");
+    if (ebStatusBadge) {
+        ebStatusBadge.innerHTML = "Auto-attaches via 2D Optimizer or upload";
+    }
 
     // Populate all end bits into dropdown and chips grid
     await populateEbMoDropdown(preselectedEndbitId);
@@ -5533,6 +5576,12 @@ async function submitCreateEndbitMo(e) {
     const form = document.getElementById("createEndbitMoForm");
     const formData = new FormData(form);
 
+    // Include layout document from file input or auto-attached OptiCutter file
+    const ebFile = formData.get("layout_doc");
+    if ((!ebFile || !ebFile.name) && activeEbOptiCutterLayoutFile) {
+        formData.set("layout_doc", activeEbOptiCutterLayoutFile);
+    }
+
     // Primary part for high-level lists
     formData.set("part_no", parts[0].part_no);
     formData.set("base_part", parts[0].base_part);
@@ -5603,6 +5652,118 @@ async function submitCreateEndbitMo(e) {
 
 let currentCutOptResult = null;
 let cutOptCallingContext = "moModal"; // "moModal" or "endbitMo"
+let activeOptiCutterLayoutFile = null;
+let activeEbOptiCutterLayoutFile = null;
+let customOptiCutterUploadedFile = null;
+
+function onOptCustomDrawingSelected(input) {
+    if (input.files && input.files[0]) {
+        customOptiCutterUploadedFile = input.files[0];
+        const label = document.getElementById("optCustomDrawingLabel");
+        if (label) {
+            label.textContent = `Attached: ${input.files[0].name} (${(input.files[0].size / 1024).toFixed(1)} KB)`;
+            label.style.display = "inline-block";
+        }
+    }
+}
+
+function onEbFileSelected(input) {
+    const nameSpan = document.getElementById("ebFileChosenName");
+    const dropzone = document.getElementById("ebDocDropzone");
+    if (input.files && input.files[0]) {
+        activeEbOptiCutterLayoutFile = input.files[0];
+        if (nameSpan) {
+            nameSpan.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #059669;"></i> Attached: <strong>${escapeHtml(input.files[0].name)}</strong> <small>(${(input.files[0].size / 1024).toFixed(1)} KB)</small>`;
+            nameSpan.style.color = "#047857";
+        }
+        if (dropzone) {
+            dropzone.style.background = "#f0fdf4";
+            dropzone.style.borderColor = "#10b981";
+        }
+    } else {
+        activeEbOptiCutterLayoutFile = null;
+        if (nameSpan) {
+            nameSpan.textContent = "No file selected";
+            nameSpan.style.color = "";
+        }
+        if (dropzone) {
+            dropzone.style.background = "#f8fafc";
+            dropzone.style.borderColor = "#cbd5e1";
+        }
+    }
+}
+
+/**
+ * Converts the visual SVG cutting map from OptiCutter into a PNG or SVG File object.
+ */
+async function generateOptiCutterLayoutFile(filename = "OptiCutter_Layout_Plan.png") {
+    if (customOptiCutterUploadedFile) {
+        return customOptiCutterUploadedFile;
+    }
+
+    const svg = document.querySelector("#optSvgContainer svg");
+    if (!svg) return null;
+
+    return new Promise((resolve) => {
+        try {
+            let svgString = new XMLSerializer().serializeToString(svg);
+            if (!svgString.includes('xmlns="http://www.w3.org/2000/svg"')) {
+                svgString = svgString.replace('<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ');
+            }
+
+            const svgBlob = new Blob([svgString], { type: "image/svg+xml;charset=utf-8" });
+            const url = URL.createObjectURL(svgBlob);
+            const img = new Image();
+
+            const viewBox = svg.viewBox?.baseVal;
+            const origW = (viewBox && viewBox.width > 0) ? viewBox.width : (parseFloat(svg.getAttribute("width")) || 1200);
+            const origH = (viewBox && viewBox.height > 0) ? viewBox.height : (parseFloat(svg.getAttribute("height")) || 800);
+
+            const targetW = 1600;
+            const targetH = Math.max(300, Math.round((origH / origW) * targetW));
+
+            img.onload = () => {
+                try {
+                    const canvas = document.createElement("canvas");
+                    canvas.width = targetW;
+                    canvas.height = targetH;
+                    const ctx = canvas.getContext("2d");
+
+                    ctx.fillStyle = "#ffffff";
+                    ctx.fillRect(0, 0, targetW, targetH);
+                    ctx.drawImage(img, 0, 0, targetW, targetH);
+                    URL.revokeObjectURL(url);
+
+                    canvas.toBlob((pngBlob) => {
+                        if (pngBlob) {
+                            const file = new File([pngBlob], filename, { type: "image/png", lastModified: Date.now() });
+                            resolve(file);
+                        } else {
+                            const file = new File([svgBlob], filename.replace(/\.png$/, ".svg"), { type: "image/svg+xml", lastModified: Date.now() });
+                            resolve(file);
+                        }
+                    }, "image/png");
+                } catch (err) {
+                    console.warn("Canvas conversion fallback to SVG file:", err);
+                    URL.revokeObjectURL(url);
+                    const file = new File([svgBlob], filename.replace(/\.png$/, ".svg"), { type: "image/svg+xml", lastModified: Date.now() });
+                    resolve(file);
+                }
+            };
+
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                const file = new File([svgBlob], filename.replace(/\.png$/, ".svg"), { type: "image/svg+xml", lastModified: Date.now() });
+                resolve(file);
+            };
+
+            img.src = url;
+        } catch (e) {
+            console.error("Failed to generate layout file from SVG:", e);
+            resolve(null);
+        }
+    });
+}
 
 /**
  * Opens 2D Cut Optimizer for Normal MO Modal (Standard or Custom RM)
@@ -6127,7 +6288,7 @@ function renderOptSvgCutMap(data) {
 
     const svgHeightView = (data.blocks && data.blocks.length > 1) ? (sWid + 35) : sWid;
     const svgHtml = `
-        <svg viewBox="0 0 ${sLen} ${svgHeightView}" style="width: 100%; height: 100%; max-height: 380px; display: block;" preserveAspectRatio="xMidYMid meet">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${sLen} ${svgHeightView}" style="width: 100%; height: 100%; max-height: 380px; display: block;" preserveAspectRatio="xMidYMid meet">
             <!-- Sheet Boundary -->
             <rect x="0" y="0" width="${sLen}" height="${sWid}" fill="#f1f5f9" stroke="#64748b" stroke-width="${strokeWidth * 2}" rx="0" />
             
@@ -6177,9 +6338,10 @@ function exportOptiCutterCsv() {
 
 /**
  * Applies the calculated 2D Cut Optimization results (Yield %, blanks, remnants)
- * directly into the active Material Order form.
+ * directly into the active Material Order form, and automatically generates
+ * and attaches the visual layout drawing to attachments for both MO and End Bit MO.
  */
-function applyCutOptimizerResults() {
+async function applyCutOptimizerResults() {
     if (!currentCutOptResult) {
         alert("Please run the 2D Cut Optimization first.");
         return;
@@ -6189,7 +6351,9 @@ function applyCutOptimizerResults() {
     const totalBlanks = currentCutOptResult.total_blanks || 0;
 
     if (cutOptCallingContext === "endbitMo") {
-        // End Bit MO Form Context
+        // ---------------------------------------------------------------------
+        // 1. END BIT MO CONTEXT
+        // ---------------------------------------------------------------------
         const totalYieldDisplay = document.getElementById("totalYieldDisplay");
         const yieldHidden = document.getElementById("yieldHidden");
         if (yieldHidden) yieldHidden.value = `${yieldVal}%`;
@@ -6210,24 +6374,67 @@ function applyCutOptimizerResults() {
         if (typeof recalculateAllEbTotals === "function") {
             recalculateAllEbTotals();
         }
+
+        // Generate and auto-attach OptiCutter layout image to End Bit MO attachment
+        const fname = customOptiCutterUploadedFile?.name || `OptiCutter_Endbit_Layout_${Date.now()}.png`;
+        const ebFile = await generateOptiCutterLayoutFile(fname);
+        if (ebFile) {
+            activeEbOptiCutterLayoutFile = ebFile;
+            const ebFileInput = document.getElementById("ebLayoutDocFile");
+            if (ebFileInput) {
+                try {
+                    const dt = new DataTransfer();
+                    dt.items.add(ebFile);
+                    ebFileInput.files = dt.files;
+                } catch (e) {
+                    console.log("DataTransfer not supported:", e);
+                }
+            }
+            const ebChosenName = document.getElementById("ebFileChosenName");
+            if (ebChosenName) {
+                ebChosenName.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #059669;"></i> <strong>Attached from OptiCutter:</strong> ${escapeHtml(ebFile.name)} <span style="color: #64748b; font-size: 0.75rem;">(${(ebFile.size / 1024).toFixed(1)} KB)</span>`;
+                ebChosenName.style.color = "#047857";
+            }
+            const ebDropzone = document.getElementById("ebDocDropzone");
+            if (ebDropzone) {
+                ebDropzone.style.background = "#f0fdf4";
+                ebDropzone.style.borderColor = "#10b981";
+            }
+            const ebStatusBadge = document.getElementById("ebDocStatusBadge");
+            if (ebStatusBadge) {
+                ebStatusBadge.innerHTML = `<span style="color: #059669; font-weight: 700;"><i class="fa-solid fa-circle-check"></i> 2D Layout Drawing Attached</span>`;
+            }
+        }
+
         closeCutOptimizerModal();
-        alert(`✅ Applied 2D Cut Optimization: ${yieldVal}% Yield to End Bit Order!`);
+        alert(`✅ Applied 2D Cut Optimization (${yieldVal}% Yield) & attached OptiCutter layout drawing to End Bit MO!`);
     } else {
-        // Normal Create MO Context (moModal)
+        // ---------------------------------------------------------------------
+        // 2. NORMAL CREATE MO CONTEXT (moModal)
+        // ---------------------------------------------------------------------
         const yieldInput = document.getElementById("yieldPctInput");
         if (yieldInput) {
             yieldInput.value = `${yieldVal}%`;
         }
+
+        // Automatically mark layout as Non-Standard (custom OptiCutter 2D nesting)
+        const nonStdRadio = document.querySelector('input[name="is_standard_layout"][value="false"]');
+        if (nonStdRadio) nonStdRadio.checked = true;
+        updateLayoutTypeUI(false);
 
         // If blanks per sheet is computed, update target quantity display/calculation
         if (totalBlanks > 0) {
             const sheetsInput = document.getElementById("sheetsRequired");
             const sheetsNeeded = Math.max(1, parseFloat(sheetsInput?.value) || 1);
             const targetQtyInput = document.getElementById("targetQty");
+            const manualQtyInput = document.getElementById("targetQtyManual");
             const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
             const autoQtyHint = document.getElementById("autoQtyHint");
 
             const calculatedTarget = Math.round(sheetsNeeded * totalBlanks);
+            if (manualQtyInput) {
+                manualQtyInput.value = calculatedTarget;
+            }
             if (targetQtyInput) {
                 targetQtyInput.value = calculatedTarget;
             }
@@ -6285,7 +6492,44 @@ function applyCutOptimizerResults() {
             }
         }
 
-        // Re-evaluate constraints and workflow route with updated yield
+        // Generate and auto-attach OptiCutter layout image into Material Order
+        const fname = customOptiCutterUploadedFile?.name || `OptiCutter_Layout_Plan_${Date.now()}.png`;
+        const moFile = await generateOptiCutterLayoutFile(fname);
+        if (moFile) {
+            activeOptiCutterLayoutFile = moFile;
+            const moFileInput = document.getElementById("layoutDocFile");
+            if (moFileInput) {
+                try {
+                    const dt = new DataTransfer();
+                    dt.items.add(moFile);
+                    moFileInput.files = dt.files;
+                } catch (e) {
+                    console.log("DataTransfer not supported:", e);
+                }
+            }
+            const fileChosenName = document.getElementById("fileChosenName");
+            if (fileChosenName) {
+                fileChosenName.innerHTML = `<i class="fa-solid fa-circle-check" style="color: #059669;"></i> <strong>Attached from OptiCutter:</strong> ${escapeHtml(moFile.name)} <span style="color: #64748b; font-size: 0.75rem;">(${(moFile.size / 1024).toFixed(1)} KB)</span>`;
+                fileChosenName.style.color = "#047857";
+            }
+            const docDropzone = document.getElementById("docDropzone");
+            if (docDropzone) {
+                docDropzone.style.background = "#f0fdf4";
+                docDropzone.style.borderColor = "#10b981";
+            }
+
+            // Thumbnail preview update in layout parts banner
+            const thumbWrap = document.getElementById("layoutThumbWrap");
+            const thumbImg = document.getElementById("layoutThumbImg");
+            if (thumbWrap && thumbImg) {
+                try {
+                    thumbImg.src = URL.createObjectURL(moFile);
+                    thumbWrap.style.display = "flex";
+                } catch (e) {}
+            }
+        }
+
+        // Re-evaluate constraints and workflow route with updated yield & non-standard status
         if (typeof updateAutomatedConstraints === "function") {
             updateAutomatedConstraints();
         }
@@ -6294,7 +6538,7 @@ function applyCutOptimizerResults() {
         }
 
         closeCutOptimizerModal();
-        alert(`✅ Applied 2D Cut Optimization: ${yieldVal}% Yield applied to Material Order!`);
+        alert(`✅ Applied 2D Cut Optimization (${yieldVal}% Yield) & attached OptiCutter layout drawing to Material Order!`);
     }
 }
 
@@ -6306,6 +6550,8 @@ window.run2DCutOptimization = run2DCutOptimization;
 window.applyCutOptimizerResults = applyCutOptimizerResults;
 window.exportOptiCutterCsv = exportOptiCutterCsv;
 window.updateOptMultiPartQty = updateOptMultiPartQty;
+window.onOptCustomDrawingSelected = onOptCustomDrawingSelected;
+window.onEbFileSelected = onEbFileSelected;
 
 /* =========================================================================
    REVISION & RESUBMISSION OF REJECTED MOS (SHEARING TEAM)

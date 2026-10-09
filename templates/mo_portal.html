@@ -516,10 +516,28 @@
                                 </div>
                             </div>
 
-                            <!-- 3. PRODUCTION REMARKS -->
+                            <!-- 3. LAYOUT ATTACHMENT / DRAWING (Auto-Attached from OptiCutter or Manual Upload) -->
+                            <div class="eb-section-block" id="ebDocUploadBlock">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <label style="font-weight: 700; font-size: 0.88rem; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 6px;">
+                                        <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+                                        Layout Document / Nesting Drawing Attachment
+                                    </label>
+                                    <span id="ebDocStatusBadge" style="font-size: 0.75rem; color: #64748b; font-weight: 600;">Auto-attaches via 2D Optimizer or upload</span>
+                                </div>
+                                <div class="dropzone" id="ebDocDropzone" onclick="document.getElementById('ebLayoutDocFile').click()" style="padding: 12px; border: 1.5px dashed #cbd5e1; border-radius: 8px; text-align: center; cursor: pointer; background: #f8fafc; transition: all 0.2s;">
+                                    <i class="fa-solid fa-cloud-arrow-up drop-icon" style="font-size: 1.4rem; color: #0284c7; margin-bottom: 3px;"></i>
+                                    <div class="drop-text" style="font-size: 0.84rem; font-weight: 600; color: #334155;">Click or drag layout document here</div>
+                                    <small style="color: #64748b; font-size: 0.72rem;">Supported formats: PNG, JPG, PDF, SVG, CAD/DWG, DXF</small>
+                                    <div id="ebFileChosenName" style="margin-top: 5px; font-weight: 700; color: #64748b; font-size: 0.82rem;">No file selected</div>
+                                </div>
+                                <input type="file" id="ebLayoutDocFile" name="layout_doc" style="display: none;" onchange="onEbFileSelected(this)">
+                            </div>
+
+                            <!-- 4. PRODUCTION REMARKS -->
                             <div class="eb-section-block">
                                 <label for="ebRemarks" style="font-weight: 700; font-size: 0.88rem; color: #1e293b; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
-                                    <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">3</span>
+                                    <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">4</span>
                                     Production Remarks <span style="font-weight: 400; color: #64748b; font-size: 0.8rem;">(Optional)</span>
                                 </label>
                                 <input type="text" id="ebRemarks" name="notes" placeholder="e.g. Sheared from offcut stock, urgent order" style="width: 100%;">
@@ -1545,13 +1563,18 @@
                             </p>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                    <div style="display: flex; gap: 8px; flex-shrink: 0; align-items: center; flex-wrap: wrap;">
                         <button type="button" class="btn btn-secondary btn-sm" onclick="exportOptiCutterCsv()" style="background: #fff; border-color: #0284c7; color: #0284c7; font-weight: 600;">
                             <i class="fa-solid fa-download"></i> OptiCutter CSV
                         </button>
                         <a href="https://www.opticutter.com/cut-list-optimizer" target="_blank" class="btn btn-secondary btn-sm" style="background: #0284c7; border-color: #0284c7; color: #fff; font-weight: 600;">
                             <i class="fa-solid fa-arrow-up-right-from-square"></i> Open OptiCutter.com
                         </a>
+                        <label class="btn btn-sm" style="background: #ecfdf5; border: 1.5px dashed #059669; color: #059669; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; margin: 0;" title="Upload custom screenshot or exported layout image from OptiCutter.com">
+                            <i class="fa-solid fa-file-image"></i> Custom Image
+                            <input type="file" id="optCustomDrawingInput" accept="image/*,.pdf,.svg" style="display: none;" onchange="onOptCustomDrawingSelected(this)">
+                        </label>
+                        <span id="optCustomDrawingLabel" style="display: none; font-size: 0.75rem; color: #059669; font-weight: 600;"></span>
                     </div>
                 </div>
             </div>
@@ -1563,7 +1586,7 @@
                 <div style="display: flex; gap: 10px;">
                     <button type="button" class="btn btn-secondary" onclick="closeCutOptimizerModal()">Close</button>
                     <button type="button" class="btn btn-success" id="btnApplyCutYield" onclick="applyCutOptimizerResults()" style="background: #10b981; border-color: #059669; color: #fff; font-weight: 700;">
-                        <i class="fa-solid fa-check-double"></i> Apply Yield to Material Order
+                        <i class="fa-solid fa-check-double"></i> Apply Yield &amp; Layout to Material Order
                     </button>
                 </div>
             </div>
@@ -1574,7 +1597,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=105"></script>
+    <script src="/static/mo_app.js?v=106"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
 
