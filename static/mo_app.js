@@ -1911,9 +1911,17 @@ function triggerRmAgentSuggestions(params) {
                 return;
             }
 
+            // Strictly filter out any alternative with 0 sheets / 0 available stock
+            if (data.recommendations && Array.isArray(data.recommendations)) {
+                data.recommendations = data.recommendations.filter(r => {
+                    const st = parseFloat(r.onhand_stock !== undefined ? r.onhand_stock : r.available_qty) || 0;
+                    return st > 0;
+                });
+            }
+
             if (!data.recommendations || data.recommendations.length === 0) {
                 activeRmAgentRecommendations = [];
-                if (verdict) verdict.textContent = data.agent_verdict || "Critical Shortage: No alternative RM sheets or offcuts with compatible thickness found in store.";
+                if (verdict) verdict.textContent = data.agent_verdict || "Critical Shortage: No alternative in-stock RM sheets or offcuts found in store.";
                 if (badge) badge.textContent = "0 Options";
                 list.innerHTML = `
                     <div class="rm-agent-card partial" style="justify-content: center; text-align: center; padding: 14px;">

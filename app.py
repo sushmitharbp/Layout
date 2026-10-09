@@ -998,6 +998,12 @@ def suggest_rm_alternatives():
         grade=grade,
         current_onhand=current_onhand
     )
+    if isinstance(analysis, dict) and "recommendations" in analysis:
+        analysis["recommendations"] = [
+            r for r in analysis["recommendations"]
+            if float(r.get("onhand_stock") or r.get("available_qty") or 0.0) > 0
+        ]
+        analysis["total_alternatives_found"] = len(analysis["recommendations"])
     return jsonify(analysis)
 
 

@@ -313,6 +313,8 @@ class RMAdvisorAgent:
                 )
 
             onhand = float(st.get("onhand_stock") or 0.0) if st else 0.0
+            if onhand <= 0:
+                continue
             display_grade = layout_grade or req_grade or grade_str
             item_desc = (st.get("item_desc") or f"{rm_code} ({display_grade})") if st else rm_code
 
@@ -542,6 +544,8 @@ class RMAdvisorAgent:
             state.get("candidate_sheets", []) +
             state.get("candidate_endbits", [])
         )
+        # Strictly exclude raw material alternatives with 0 sheets
+        all_alts = [alt for alt in all_alts if float(alt.get("onhand_stock") or alt.get("available_qty") or 0.0) > 0]
         all_alts.sort(key=lambda x: (1 if x["stock_sufficient"] else 0, x["score"]), reverse=True)
 
         for idx, alt in enumerate(all_alts):
@@ -582,6 +586,7 @@ class RMAdvisorAgent:
                 f"• Requested RM: {current_rm} has ONLY {int(current_onhand)} sheets in store (Shortfall: {shortfall} sheets).\n\n"
                 f"Verified In-Stock Substitution Candidates:\n{recs_text}\n\n"
                 f"Task: In 1 or 2 concise, executive sentences, state the recommended production decision. "
+                f"STRICT RULE: Never recommend or suggest any raw material with 0 sheets in stock. Only recommend items with confirmed positive on-hand stock (> 0 sheets). "
                 f"Highlight which RM to switch to, the material yield, and the cost/scrap advantage. Be decisive and professional."
             )
 
@@ -611,7 +616,8 @@ class RMAdvisorAgent:
                     continue
 
         # Deterministic fallback reasoning
-        best = ranked[0] if ranked else None
+        in_stock_recs = [r for r in ranked if float(r.get("onhand_stock") or r.get("available_qty") or 0) > 0]
+        best = in_stock_recs[0] if in_stock_recs else None
         if best and best["stock_sufficient"]:
             verdict = (
                 f"Shortage Alert: Current RM '{current_rm}' is short by {shortfall} sheets. "
@@ -620,10 +626,10 @@ class RMAdvisorAgent:
         elif best:
             verdict = (
                 f"Critical Shortage Alert: Current RM '{current_rm}' is depleted. "
-                f"Partial substitution available on '{best['rm_erp']}' ({int(best['onhand_stock'])} sheets), or route to Purchase requisition."
+                f"Partial substitution available on '{best['rm_erp']}' ({int(best['onhand_stock'])} sheets), or route to Purchase clearance."
             )
         else:
-            verdict = f"Critical Shortage: No compatible sheet stock or CAD layouts found for '{current_rm}'. Route to Purchase Requisition."
+            verdict = f"Critical Shortage: Requested RM '{current_rm}' has only {int(current_onhand)} sheets (Shortfall: {shortfall} sheets), and no alternative in-stock raw material sheets are currently available in the store. Order must be routed to Purchase Clearance."
 
         return {
             "llm_verdict": verdict,
@@ -714,6 +720,10 @@ class RMAdvisorAgent:
             initial_state.update(s4)
             final_state = initial_state
 
+        filtered_recs = [r for r in final_state.get("ranked_alternatives", []) if float(r.get("onhand_stock") or r.get("available_qty") or 0.0) > 0]
+        for idx, alt in enumerate(filtered_recs):
+            alt["rank"] = idx + 1
+
         return {
             "has_shortage": final_state["has_shortage"],
             "part_no": final_state["part_no"],
@@ -723,6 +733,6 @@ class RMAdvisorAgent:
             "shortfall": final_state["shortfall"],
             "agent_verdict": final_state["llm_verdict"],
             "powered_by": final_state["llm_powered_by"],
-            "total_alternatives_found": len(final_state["ranked_alternatives"]),
-            "recommendations": final_state["ranked_alternatives"]
+            "total_alternatives_found": len(filtered_recs),
+            "recommendations": filtered_recs
         }
