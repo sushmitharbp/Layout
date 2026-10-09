@@ -335,6 +335,7 @@ function renderOrders() {
     if (currentSearchQuery) {
         filtered = filtered.filter(o => 
             (o.mo_number && o.mo_number.toLowerCase().includes(currentSearchQuery)) ||
+            (o.erp_mo_number && o.erp_mo_number.toLowerCase().includes(currentSearchQuery)) ||
             (o.part_no && o.part_no.toLowerCase().includes(currentSearchQuery)) ||
             (o.rm_erp && o.rm_erp.toLowerCase().includes(currentSearchQuery)) ||
             (o.base_part && o.base_part.toLowerCase().includes(currentSearchQuery)) ||
@@ -422,6 +423,13 @@ function renderOrders() {
             <tr>
                 <td>
                     <strong class="mo-id-badge">${escapeHtml(mo.mo_number)}</strong>
+                    ${mo.erp_mo_number ? `
+                        <div style="margin-top: 3px;">
+                            <span style="background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; font-size: 0.72rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px;" title="Live ERP System MO Number">
+                                <i class="fa-solid fa-hashtag"></i> ERP: ${escapeHtml(mo.erp_mo_number)}
+                            </span>
+                        </div>
+                    ` : ''}
                     <div class="mo-date-subtext"><i class="fa-regular fa-calendar"></i> ${formatMoDate(mo.created_at)}</div>
                 </td>
                 <td>
@@ -2151,6 +2159,8 @@ function closeReviewModal() {
     activePurchaseAiDecision = null;
     const pCard = document.getElementById("purchaseAiCard");
     if (pCard) pCard.style.display = "none";
+    const erpInput = document.getElementById("erpMoNumberInput");
+    if (erpInput) erpInput.value = "";
     document.getElementById("reviewModal").style.display = "none";
 }
 
@@ -2243,6 +2253,12 @@ function renderReviewModal(mo) {
             <span class="review-label">Current Stage</span>
             <span class="review-val"><strong style="color: #2563eb;">${escapeHtml(mo.current_stage || 'Completed')}</strong></span>
         </div>
+        ${mo.erp_mo_number ? `
+        <div class="review-item" style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px;">
+            <span class="review-label" style="color: #166534;"><i class="fa-solid fa-hashtag"></i> ERP System MO #</span>
+            <span class="review-val" style="color: #15803d; font-weight: 800; font-family: monospace; font-size: 0.95rem;">${escapeHtml(mo.erp_mo_number)}</span>
+        </div>
+        ` : ''}
     `;
 
     // Render End Bits Section in Review Modal
@@ -2307,6 +2323,24 @@ function renderReviewModal(mo) {
         if (btnApprove) btnApprove.innerHTML = `<i class="fa-solid fa-check-double"></i> Approve &amp; Release to ERP`;
     } else {
         actionPanel.style.display = "none";
+    }
+
+    // Toggle ERP MO Number input visibility (Mandatory for ERP Release)
+    const erpMoGroup = document.getElementById("erpMoNumberGroup");
+    const erpMoInput = document.getElementById("erpMoNumberInput");
+    const isErpRelease = (mo.current_stage === "ERP") || (currentRole === "erp" && mo.status === "PENDING_ERP");
+    if (erpMoGroup) {
+        if (isErpRelease && (canAction || (currentRole === "erp" && mo.status === "PENDING_ERP"))) {
+            erpMoGroup.style.display = "block";
+            if (erpMoInput) {
+                erpMoInput.value = mo.erp_mo_number || "";
+            }
+        } else {
+            erpMoGroup.style.display = "none";
+            if (erpMoInput) {
+                erpMoInput.value = "";
+            }
+        }
     }
 
     // Trigger Purchase AI Decision Agent analysis for Purchase role or failing constraints
@@ -2386,6 +2420,22 @@ async function confirmApproveMo() {
     if (!activeReviewMo) return;
     const remarks = document.getElementById("approvalRemarks")?.value.trim() || "Approved";
 
+    // Validate and capture ERP MO Number if releasing to live ERP
+    const erpMoInput = document.getElementById("erpMoNumberInput");
+    const erpMoNumber = erpMoInput ? erpMoInput.value.trim() : "";
+    const isErpRelease = (activeReviewMo.current_stage === "ERP") || (currentRole === "erp" && activeReviewMo.status === "PENDING_ERP");
+    if (isErpRelease) {
+        if (!erpMoNumber) {
+            alert("⚠️ ERP System MO Number is required!\n\nPlease enter the MO number created in your live ERP software to proceed with the release.");
+            erpMoInput?.focus();
+            if (erpMoInput) {
+                erpMoInput.style.boxShadow = "0 0 0 3px rgba(220, 38, 38, 0.4)";
+                setTimeout(() => { if (erpMoInput) erpMoInput.style.boxShadow = ""; }, 2500);
+            }
+            return;
+        }
+    }
+
     try {
         const res = await fetch(`/api/mo/${encodeURIComponent(activeReviewMo.mo_number)}/approve`, {
             method: "POST",
@@ -2393,7 +2443,7 @@ async function confirmApproveMo() {
                 "Content-Type": "application/json",
                 "X-Role": currentRole
             },
-            body: JSON.stringify({ role: currentRole, remarks })
+            body: JSON.stringify({ role: currentRole, remarks, erp_mo_number: erpMoNumber })
         });
 
         if (res.ok) {
@@ -3062,6 +3112,19 @@ async function executeCurrentMoDirectly() {
     const moNum = activeReviewMo.mo_number;
     const remarks = document.getElementById("approvalRemarks")?.value.trim() || "Executed and Released to Live ERP";
 
+    // Validate and capture ERP MO Number
+    const erpMoInput = document.getElementById("erpMoNumberInput");
+    const erpMoNumber = erpMoInput ? erpMoInput.value.trim() : "";
+    if (!erpMoNumber) {
+        alert("⚠️ ERP System MO Number is required!\n\nPlease enter the MO number created in your live ERP software to proceed with the release.");
+        erpMoInput?.focus();
+        if (erpMoInput) {
+            erpMoInput.style.boxShadow = "0 0 0 3px rgba(220, 38, 38, 0.4)";
+            setTimeout(() => { if (erpMoInput) erpMoInput.style.boxShadow = ""; }, 2500);
+        }
+        return;
+    }
+
     try {
         const res = await fetch(`/api/mo/${encodeURIComponent(moNum)}/complete`, {
             method: "POST",
@@ -3069,7 +3132,7 @@ async function executeCurrentMoDirectly() {
                 "Content-Type": "application/json",
                 "X-Role": currentRole
             },
-            body: JSON.stringify({ role: currentRole, remarks })
+            body: JSON.stringify({ role: currentRole, remarks, erp_mo_number: erpMoNumber })
         });
 
         if (res.ok) {

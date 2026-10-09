@@ -1116,7 +1116,8 @@ def approve_mo(mo_number):
     body = request.json or {}
     role = session.get("role") or request.headers.get("X-Role") or body.get("role") or "shearing"
     remarks = body.get("remarks", "Approved")
-    mo, err = MO_ENGINE.approve_mo(mo_number, role, remarks)
+    erp_mo_number = body.get("erp_mo_number") or request.args.get("erp_mo_number")
+    mo, err = MO_ENGINE.approve_mo(mo_number, role, remarks, erp_mo_number=erp_mo_number)
     if err:
         return jsonify({"error": err}), 400
     return jsonify(mo)
@@ -1166,7 +1167,8 @@ def complete_mo_endpoint(mo_number):
     body = request.json or {}
     role = session.get("role") or request.headers.get("X-Role") or body.get("role") or "erp"
     remarks = body.get("remarks", "Executed and released to live ERP")
-    mo, updates_summary = MO_ENGINE.complete_mo(mo_number, role=role, remarks=remarks)
+    erp_mo_number = body.get("erp_mo_number") or request.args.get("erp_mo_number")
+    mo, updates_summary = MO_ENGINE.complete_mo(mo_number, role=role, remarks=remarks, erp_mo_number=erp_mo_number)
     if not mo:
         return jsonify({"error": "Failed to complete MO."}), 400
     return jsonify({

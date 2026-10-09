@@ -308,6 +308,18 @@ class MOWorkflowEngine:
                 except Exception:
                     pass
 
+        if not mo.get("erp_mo_number"):
+            c_status = mo.get("constraints_status")
+            if isinstance(c_status, dict) and c_status.get("erp_mo_number"):
+                mo["erp_mo_number"] = c_status.get("erp_mo_number")
+            elif isinstance(c_status, str):
+                try:
+                    c_dict = json.loads(c_status)
+                    if isinstance(c_dict, dict) and c_dict.get("erp_mo_number"):
+                        mo["erp_mo_number"] = c_dict.get("erp_mo_number")
+                except Exception:
+                    pass
+
         return mo
 
     def evaluate_workflow_path(self, is_standard_layout, constraints_satisfied):
@@ -493,7 +505,7 @@ class MOWorkflowEngine:
                 return self._normalize_mo(m)
         return None
 
-    def approve_mo(self, mo_number, role, remarks="Approved"):
+    def approve_mo(self, mo_number, role, remarks="Approved", erp_mo_number=None):
         """Process role approval and advance to next stage in workflow"""
         mo = self.get_mo(mo_number)
         if not mo:
@@ -522,6 +534,12 @@ class MOWorkflowEngine:
         elif current_stage == "ERP":
             next_stage = "COMPLETED"
             next_status = "RELEASED_TO_ERP"
+            if erp_mo_number:
+                clean_erp_no = str(erp_mo_number).strip()
+                mo["erp_mo_number"] = clean_erp_no
+                if isinstance(mo.get("constraints_status"), dict):
+                    mo["constraints_status"]["erp_mo_number"] = clean_erp_no
+                remarks = f"{remarks} [ERP System MO #: {clean_erp_no}]"
             # Real-time multi-table database execution strictly upon final ERP release
             db_updates = self.execute_mo_completion(mo)
             mo["db_updates"] = db_updates
@@ -758,8 +776,9 @@ class MOWorkflowEngine:
                     p_prod = float(itm.get("no_of_parts") or itm.get("target_qty") or 1)
                     sub_order_no = f"CUT-{mo_num}-{idx+1}" if len(parts_list) > 1 else f"CUT-{mo_num}"
                     try:
+                        erp_mo_id = mo.get("erp_mo_number") or mo_num
                         erp_entry = {
-                            "mo_doc_no": mo_num,
+                            "mo_doc_no": erp_mo_id,
                             "doc_date": now_date,
                             "order_status": "COMPLETED",
                             "cutting_order_no": sub_order_no,
@@ -767,6 +786,7 @@ class MOWorkflowEngine:
                             "rm_code": f"ENDBIT-{endbit_id or 'MANUAL'}",
                             "rm_desc": f"End Bit Offcut {endbit_name} ({dim_str})",
                             "number_of_sheets": endbits_used,
+                            "reference_no": mo_num,
                             "parent_code": p_item,
                             "parent_qty_per_sheet": round(p_prod / max(1.0, endbits_used), 2),
                             "total_parent_qty": p_prod,
@@ -934,8 +954,9 @@ class MOWorkflowEngine:
                         p_code = (itm.get("part_no") or part_no).strip()
                         p_qty = float(itm.get("no_of_parts") or itm.get("target_qty") or target_qty)
                         sub_order_no = f"CUT-{mo_num}-{idx+1}" if len(parts_list) > 1 else f"CUT-{mo_num}"
+                        erp_mo_id = mo.get("erp_mo_number") or mo_num
                         erp_entry = {
-                            "mo_doc_no": mo_num,
+                            "mo_doc_no": erp_mo_id,
                             "doc_date": now_date,
                             "order_status": "COMPLETED",
                             "cutting_order_no": sub_order_no,
@@ -943,6 +964,7 @@ class MOWorkflowEngine:
                             "rm_code": rm_erp,
                             "rm_desc": f"RM Sheet ({mo.get('thickness','')}*L{mo.get('length','')}*W{mo.get('width','')})",
                             "number_of_sheets": sheets,
+                            "reference_no": mo_num,
                             "parent_code": p_code,
                             "parent_qty_per_sheet": round(p_qty / max(1.0, sheets), 2),
                             "total_parent_qty": p_qty,
@@ -1003,11 +1025,17 @@ class MOWorkflowEngine:
                 mo["constraints_status"]["stock_deducted"] = True
             return updates_summary
 
-    def complete_mo(self, mo_number, role="erp", remarks="Executed & Released to ERP"):
+    def complete_mo(self, mo_number, role="erp", remarks="Executed & Released to ERP", erp_mo_number=None):
         """Explicitly mark an MO as completed/done and execute database updates"""
         mo = self.get_mo(mo_number)
         if not mo:
             return None, "Material Order not found."
+
+        if erp_mo_number:
+            clean_erp_no = str(erp_mo_number).strip()
+            mo["erp_mo_number"] = clean_erp_no
+            if isinstance(mo.get("constraints_status"), dict):
+                mo["constraints_status"]["erp_mo_number"] = clean_erp_no
 
         now_iso = datetime.utcnow().isoformat() + "Z"
         audit_trail = mo.get("audit_trail", [])
@@ -1033,7 +1061,8 @@ class MOWorkflowEngine:
             upd_notes.append(f"Posted cutting order to ERP MO Reports #{mo_number}")
 
         note_str = "; ".join(upd_notes) if upd_notes else "Live DB tables verified."
-        exec_remark = f"{remarks}. [Live Tables Updated: {note_str}]"
+        erp_tag = f" [ERP System MO #: {mo.get('erp_mo_number')}]" if mo.get("erp_mo_number") else ""
+        exec_remark = f"{remarks}{erp_tag}. [Live Tables Updated: {note_str}]"
 
         audit_trail.append({
             "action": "RELEASED_TO_ERP",

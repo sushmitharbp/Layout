@@ -171,6 +171,7 @@
     }
   },
   {
+    "id": 35,
     "mo_number": "MO-EB-1791456568",
     "part_no": "AUTOTEST-SHEARING-EB",
     "base_part": "AUTOTEST-SHEARING-EB",
@@ -178,7 +179,6 @@
     "grade": "YS",
     "is_standard_layout": false,
     "layout_name": "Manual End Bit Shearing (Offcut)",
-    "yield_pct": 4.17,
     "thickness": 0.0,
     "length": 400.0,
     "width": 300.0,
@@ -187,41 +187,61 @@
     "layout_doc_url": "",
     "layout_doc_filename": "",
     "constraints_status": {
-      "is_endbit_mo": true,
-      "endbit_id": "",
-      "endbit_name": "",
-      "source_mo_number": "",
-      "work_center": "Shearing Guillotine",
-      "cut_blank": "100.0*50.0*0.0",
-      "blanks_per_endbit": 1.0,
-      "cutting_order_no": "CUT-EB-1791456568",
-      "all_satisfied": true,
-      "yield_pct": 4.17,
       "parts": null,
-      "stock_deducted": false
+      "cut_blank": "100.0*50.0*0.0",
+      "endbit_id": "",
+      "yield_pct": 4.17,
+      "endbit_name": "",
+      "work_center": "Shearing Guillotine",
+      "is_endbit_mo": true,
+      "all_satisfied": true,
+      "stock_deducted": true,
+      "cutting_order_no": "CUT-EB-1791456568",
+      "source_mo_number": "",
+      "blanks_per_endbit": 1.0,
+      "erp_mo_number": "ERP-MO-2026-TEST99"
     },
     "workflow_path": "DIRECT_ERP",
-    "current_stage": "ERP",
-    "status": "PENDING_ERP",
-    "parts": null,
-    "part1": null,
-    "part2": null,
-    "part3": null,
-    "part4": null,
+    "current_stage": "COMPLETED",
+    "status": "RELEASED_TO_ERP",
     "audit_trail": [
       {
-        "action": "CREATED_FROM_ENDBIT",
-        "actor_role": "shearing",
-        "actor_name": "Shearing (Production) Team",
-        "timestamp": "2026-10-08T10:49:28.082176Z",
         "stage": "ERP",
-        "remarks": "Manual End Bit MO created by Shearing: 1 units of AUTOTEST-SHEARING-EB from 1.0 offcut(s) (Shop Floor Offcut). Fast-tracked directly to ERP Approval."
+        "action": "CREATED_FROM_ENDBIT",
+        "remarks": "Manual End Bit MO created by Shearing: 1 units of AUTOTEST-SHEARING-EB from 1.0 offcut(s) (Shop Floor Offcut). Fast-tracked directly to ERP Approval.",
+        "timestamp": "2026-10-08T10:49:28.082176Z",
+        "actor_name": "Shearing (Production) Team",
+        "actor_role": "shearing"
+      },
+      {
+        "action": "APPROVED",
+        "actor_role": "erp",
+        "actor_name": "ERP Team",
+        "timestamp": "2026-10-09T07:06:57.100520Z",
+        "stage": "ERP",
+        "remarks": "ERP Signoff Verification [ERP System MO #: ERP-MO-2026-TEST99]. [Database Updated: Added 1.0 units to FG/WIP (AUTOTEST-SHEARING-EB); ERP MO Cutting Report recorded]"
       }
     ],
     "created_by": "shearing",
-    "created_at": "2026-10-08T10:49:28.082176Z",
-    "updated_at": "2026-10-08T10:49:28.082176Z",
-    "stock_deducted": false
+    "created_at": "2026-10-08T10:49:28.082176+00:00",
+    "updated_at": "2026-10-09T07:06:57.100520Z",
+    "yield_pct": 4.17,
+    "stock_deducted": true,
+    "erp_mo_number": "ERP-MO-2026-TEST99",
+    "db_updates": {
+      "rm_stock": null,
+      "endbit_stock": null,
+      "parts_stock": [
+        {
+          "item_code": "AUTOTEST-SHEARING-EB",
+          "previous_stock": 0,
+          "added_qty": 1.0,
+          "new_stock": 1.0
+        }
+      ],
+      "erp_report": "Created 1 cutting report entries",
+      "mrp_sheet_bom": null
+    }
   },
   {
     "mo_number": "MO-EB-1791456016",
@@ -2211,6 +2231,7 @@
     ]
   },
   {
+    "id": 11,
     "mo_number": "MO-2026-3886",
     "part_no": "MBA01008 - Item 2",
     "base_part": "MBA01008",
@@ -2226,115 +2247,65 @@
     "layout_doc_url": "",
     "layout_doc_filename": "",
     "constraints_status": {
+      "all_satisfied": true,
       "stock_available": true,
       "yield_satisfied": true,
-      "all_satisfied": true,
-      "endbits": [
-        {
-          "id": "EB-MO-2026-3886-1",
-          "endbit_id": "EB-MO-2026-3886-1",
-          "mo_number": "MO-2026-3886",
-          "parent_part_no": "MBA01008 - Item 2",
-          "base_part": "MBA01008",
-          "rm_erp": "7*2520*1500",
-          "layout_name": "",
-          "grade": "YS",
-          "name": "End bit - 1",
-          "dim": "2520.0*21.0*7.0",
-          "thickness": 7.0,
-          "length": 2520.0,
-          "width": 21.0,
-          "qty_per_sheet": 1.0,
-          "initial_qty": 15,
-          "available_qty": 15,
-          "used_qty": 0,
-          "weight_kg": 43.619,
-          "status": "AVAILABLE",
-          "parts_created": [],
-          "created_at": "2026-10-05T11:31:35.229728Z",
-          "updated_at": "2026-10-05T11:31:35.229728Z"
-        }
-      ]
+      "erp_mo_number": "ERP-MO-2026-TEST88",
+      "stock_deducted": true
     },
     "workflow_path": "DIRECT_ERP",
-    "current_stage": "ERP",
-    "status": "PENDING_ERP",
+    "current_stage": "COMPLETED",
+    "status": "RELEASED_TO_ERP",
     "audit_trail": [
       {
-        "action": "CREATED",
-        "actor_role": "shearing",
-        "actor_name": "Shearing (Production) Team",
-        "timestamp": "2026-09-29T18:03:30.715064Z",
         "stage": "ERP",
-        "remarks": "MO initiated by Shearing team. [Live Stock Allocated: Deducted 15.0 sheets from RM (YS-7-2520-1500); Added 90.0 units to FG/WIP (MBA01008-ITEM02-LC)]"
+        "action": "CREATED",
+        "remarks": "MO initiated by Shearing team. [Live Stock Allocated: Deducted 15.0 sheets from RM (YS-7-2520-1500); Added 90.0 units to FG/WIP (MBA01008-ITEM02-LC)]",
+        "timestamp": "2026-09-29T18:03:30.715064Z",
+        "actor_name": "Shearing (Production) Team",
+        "actor_role": "shearing"
+      },
+      {
+        "action": "APPROVED",
+        "actor_role": "erp",
+        "actor_name": "ERP Team",
+        "timestamp": "2026-10-09T07:06:05.102715Z",
+        "stage": "ERP",
+        "remarks": "ERP Signoff Verification [ERP System MO #: ERP-MO-2026-TEST88]. [Database Updated: Deducted 15.0 sheets from RM (YS-7-2520-1500); Added 90.0 units to FG/WIP (MBA01008 - Item 2)]"
       }
     ],
     "created_by": "shearing",
-    "created_at": "2026-09-29T18:03:30.715064Z",
-    "updated_at": "2026-09-29T18:03:30.715064Z",
+    "created_at": "2026-09-29T18:03:30.715064+00:00",
+    "updated_at": "2026-10-09T07:06:05.102715Z",
+    "yield_pct": 98.6,
+    "erp_mo_number": "ERP-MO-2026-TEST88",
+    "stock_deducted": true,
     "db_updates": {
       "rm_stock": {
         "item_code": "YS-7-2520-1500",
         "item_desc": "SHEET YS550-7-2520-1500",
-        "previous_stock": 15.0,
+        "previous_stock": 0.0,
         "deducted_sheets": 15.0,
         "new_stock": 0.0
       },
-      "parts_stock": {
-        "item_code": "MBA01008-ITEM02-LC",
-        "item_desc": "MBA01008-FJP07213-ITEM02-LASER CUT",
-        "previous_stock": 190.0,
-        "added_qty": 90.0,
-        "new_stock": 280.0
-      },
-      "erp_report": {
-        "mo_doc_no": "MO-2026-3886",
-        "doc_date": "2026-09-29",
-        "order_status": "COMPLETED",
-        "cutting_order_no": "CUT-MO-2026-3886",
-        "cutting_order_date": "2026-09-29",
-        "rm_code": "7*2520*1500",
-        "rm_desc": "RM Sheet (7.0*L2520.0*W1500.0)",
-        "number_of_sheets": 15.0,
-        "parent_code": "MBA01008 - Item 2",
-        "parent_qty_per_sheet": 6.0,
-        "total_parent_qty": 90.0,
-        "cutting_plan_no": "MO-2026-3886",
-        "uom": "NOS"
-      },
-      "mrp_schedule": {
-        "part_no": "MBA01008",
-        "fg_pc_stock": 245.0,
-        "balance_planning": 1379.0
+      "endbit_stock": null,
+      "parts_stock": [
+        {
+          "item_code": "MBA01008 - Item 2",
+          "item_desc": "MBA01008 - Item 2 (Manual Offcut Cut from End bit - 1)",
+          "previous_stock": 3.0,
+          "added_qty": 90.0,
+          "new_stock": 93.0
+        }
+      ],
+      "erp_report": null,
+      "mrp_sheet_bom": {
+        "parent_part": "MBA01008",
+        "child_part": "Item 02",
+        "inhouse_erp_qty": 226.0,
+        "balance_qty": 5674.0
       }
-    },
-    "stock_deducted": true,
-    "endbits": [
-      {
-        "id": "EB-MO-2026-3886-1",
-        "endbit_id": "EB-MO-2026-3886-1",
-        "mo_number": "MO-2026-3886",
-        "parent_part_no": "MBA01008 - Item 2",
-        "base_part": "MBA01008",
-        "rm_erp": "7*2520*1500",
-        "layout_name": "",
-        "grade": "YS",
-        "name": "End bit - 1",
-        "dim": "2520.0*21.0*7.0",
-        "thickness": 7.0,
-        "length": 2520.0,
-        "width": 21.0,
-        "qty_per_sheet": 1.0,
-        "initial_qty": 15,
-        "available_qty": 15,
-        "used_qty": 0,
-        "weight_kg": 43.619,
-        "status": "AVAILABLE",
-        "parts_created": [],
-        "created_at": "2026-10-05T11:31:35.229728Z",
-        "updated_at": "2026-10-05T11:31:35.229728Z"
-      }
-    ]
+    }
   },
   {
     "mo_number": "MO-1790703001",
