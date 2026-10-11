@@ -323,7 +323,54 @@ class MOWorkflowEngine:
                 except Exception:
                     pass
 
+        # Standard layout parts, drawing, and sizes resolution
+        if getattr(self, "_raw_layout_records", None):
+            p_no = (mo.get("part_no") or "").strip().lower()
+            rm_code = (mo.get("rm_erp") or "").strip().lower()
+            matched_rec = None
+            if p_no:
+                for r in self._raw_layout_records:
+                    r_p = (r.get("part_no") or "").strip().lower()
+                    r_rm = (r.get("rm_erp") or "").strip().lower()
+                    if r_p == p_no and (not rm_code or r_rm == rm_code):
+                        matched_rec = r
+                        break
+                if not matched_rec:
+                    for r in self._raw_layout_records:
+                        if (r.get("part_no") or "").strip().lower() == p_no:
+                            matched_rec = r
+                            break
+
+            if matched_rec:
+                if not mo.get("layout_record"):
+                    mo["layout_record"] = matched_rec
+                if not mo.get("image_url") and matched_rec.get("image_url"):
+                    mo["image_url"] = matched_rec.get("image_url")
+
+                if not mo.get("layout_parts"):
+                    l_parts = []
+                    for pk, lbl, is_prim in [("part1", "Primary Part", True), ("part2", "Part 2", False), ("part3", "Part 3", False), ("part4", "Part 4", False)]:
+                        child = matched_rec.get(pk)
+                        if child and isinstance(child, dict) and child.get("part_no"):
+                            cb = child.get("cut_blank") or matched_rec.get("cut_blank") or ""
+                            l_parts.append({
+                                "label": lbl,
+                                "part_no": child.get("part_no"),
+                                "base_part": child.get("base_part") or matched_rec.get("base_part", ""),
+                                "cut_blank": cb,
+                                "part_size": cb,
+                                "blank_qty": child.get("blank_qty", 1),
+                                "strip_qty": child.get("strip_qty", 1),
+                                "total_blank_qty_sheet": child.get("total_blank_qty_sheet", 1),
+                                "is_primary": is_prim
+                            })
+                    if l_parts:
+                        mo["layout_parts"] = l_parts
+                        if not mo.get("parts"):
+                            mo["parts"] = l_parts
+
         return mo
+
 
     def evaluate_workflow_path(self, is_standard_layout, constraints_satisfied):
         """
@@ -410,6 +457,27 @@ class MOWorkflowEngine:
         # Live database stock allocation occurs strictly upon final ERP approval
         if isinstance(record.get("constraints_status"), dict):
             record["constraints_status"]["stock_deducted"] = False
+
+        # Multi-parts for non-standard layout (to increase yield)
+        parts_data = mo_data.get("parts")
+        parsed_parts = []
+        if isinstance(parts_data, str) and parts_data.strip():
+            try:
+                parsed_parts = json.loads(parts_data)
+            except Exception:
+                parsed_parts = []
+        elif isinstance(parts_data, list):
+            parsed_parts = parts_data
+
+        if parsed_parts:
+            record["parts"] = parsed_parts
+            record["parts_list"] = parsed_parts
+            record["part1"] = parsed_parts[0] if len(parsed_parts) > 0 else None
+            record["part2"] = parsed_parts[1] if len(parsed_parts) > 1 else None
+            record["part3"] = parsed_parts[2] if len(parsed_parts) > 2 else None
+            record["part4"] = parsed_parts[3] if len(parsed_parts) > 3 else None
+            if isinstance(record.get("constraints_status"), dict):
+                record["constraints_status"]["parts"] = parsed_parts
 
         # Process and save end bits (offcuts) produced from this MO layout
         created_endbits = self.save_endbits_from_mo(record, mo_data.get("endbits"))

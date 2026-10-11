@@ -803,6 +803,55 @@
                         </div>
                     </div>
 
+                    <!-- 5. Parts to Manufacture for Non-Standard Layout (Manual Adding & AI Capacity / Yield) -->
+                    <div class="form-group non-std-parts-box" id="nonStdPartsBox" style="display: none; background: #f8fafc; border: 1.5px solid #bae6fd; border-radius: 8px; padding: 14px 16px; margin-top: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                            <div>
+                                <label style="font-weight: 700; font-size: 0.88rem; color: #1e293b; display: flex; align-items: center; gap: 6px; margin: 0;">
+                                    <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">★</span>
+                                    Parts to Manufacture (Part Number, Size, Qty, Yield)
+                                    <span class="badge-yield-boost" style="background: #e0f2fe; color: #0284c7; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
+                                        <i class="fa-solid fa-shapes"></i> Non-Standard Parts
+                                    </span>
+                                </label>
+                                <small style="display: block; font-size: 0.76rem; color: #64748b; margin-top: 3px;">
+                                    Manually add parts to manufacture from this sheet. Enter part #, blank dimensions (T*L*W), quantity, and compute yield %.
+                                </small>
+                            </div>
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" class="btn btn-sm" onclick="runNonStdCapacityAgentForAllRows()" style="font-size: 0.8rem; padding: 4px 10px; border: 1px solid #0284c7; color: #0284c7; background: #ffffff; font-weight: 600; border-radius: 6px; cursor: pointer;" title="Calculate maximum parts from selected sheet dimensions without exceeding boundaries">
+                                    <i class="fa-solid fa-calculator"></i> Agent: Calculate Max Parts
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="addNonStdPartRow()" style="font-size: 0.8rem; padding: 4px 10px; border: 1px solid #0284c7; color: #0284c7; background: #ffffff; border-radius: 6px; cursor: pointer;">
+                                    <i class="fa-solid fa-plus"></i> Add Part
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Parts Rows Container -->
+                        <div id="nonStdPartsContainer" style="display: flex; flex-direction: column; gap: 10px;">
+                            <!-- Populated dynamically with non-standard part rows -->
+                        </div>
+
+                        <!-- Hidden serialized parts JSON -->
+                        <input type="hidden" id="nonStdPartsJson" name="parts" value="[]">
+
+                        <!-- Parts Summary Strip: Total Parts Output & Total Yield -->
+                        <div class="eb-parts-summary-strip" id="nonStdSummaryStrip" style="margin-top: 10px;">
+                            <div>
+                                <span style="font-size: 0.82rem; color: #166534; font-weight: 600;">Total Parts Output:</span>
+                                <strong id="nonStdTotalOutputDisplay" style="color: #15803d; font-size: 1.1rem; margin-left: 6px;">1 Units</strong>
+                            </div>
+                            <div>
+                                <span style="font-size: 0.82rem; color: #166534; font-weight: 600;"><i class="fa-solid fa-chart-pie"></i> Combined Yield:</span>
+                                <strong id="nonStdTotalYieldDisplay" style="color: #15803d; font-size: 1.1rem; margin-left: 6px;">0%</strong>
+                                <button type="button" class="btn btn-secondary btn-sm" onclick="openCutOptimizerForModal()" style="margin-left: 8px; font-size: 0.78rem; padding: 2px 8px; color: #0284c7; border: 1px solid #0284c7; background: #f0f9ff; font-weight: 600; border-radius: 4px; cursor: pointer;">
+                                    <i class="fa-solid fa-scissors"></i> 2D Cut Optimizer
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Non-Standard Document Upload Box (Shown when Non-Standard is selected) -->
                     <div class="form-group doc-upload-box" id="docUploadBox" style="display: none;">
                         <label for="layoutDocFile"><i class="fa-solid fa-file-arrow-up"></i> Upload Layout Document <span class="required">* (Required for Non-Standard)</span></label>
@@ -896,6 +945,42 @@
                 <!-- MO Summary Grid -->
                 <div class="review-details-grid" id="reviewDetailsGrid"></div>
 
+                <!-- Automated Constraint Verification & Safety Checks Banner -->
+                <div id="reviewConstraintNotice" style="margin-bottom: 18px; display: none;"></div>
+
+                <!-- Key Planning & Stock Indicators (RM Sheets On Hand, MRP Count, Remaining Quantity with Part Sizes) -->
+                <div id="reviewMoKpiContainer" style="display: none;"></div>
+
+                <!-- Selected Layout Parts & Off-Take Banner in Review Modal -->
+                <div class="layout-parts-banner" id="reviewLayoutPartsBanner" style="display: none; margin-bottom: 16px;">
+                    <div class="layout-parts-header">
+                        <div class="layout-parts-title">
+                            <i class="fa-solid fa-shapes"></i>
+                            <span>Selected Layout Parts &amp; Off-Take</span>
+                        </div>
+                        <span class="layout-plan-badge" id="reviewLayoutPlanBadge">Plan</span>
+                    </div>
+                    <div class="layout-parts-body">
+                        <div class="layout-parts-list" id="reviewLayoutPartsList"></div>
+                        <div class="layout-thumb-wrap" id="reviewLayoutThumbWrap" style="display: none;">
+                            <img id="reviewLayoutThumbImg" src="" alt="Layout Drawing Preview" onclick="window.open(this.src, '_blank')">
+                            <small><i class="fa-solid fa-arrow-up-right-from-square"></i> Layout Drawing</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- End Bits (Offcuts) Generated from Sheet in Review Modal -->
+                <div class="layout-endbits-banner" id="reviewLayoutEndbitsBanner" style="display: none; margin-bottom: 20px;">
+                    <div class="layout-endbits-header">
+                        <div class="layout-endbits-title">
+                            <i class="fa-solid fa-scissors"></i>
+                            <span>End Bits (Offcuts) Generated from Sheet</span>
+                        </div>
+                        <span class="endbits-count-badge" id="reviewEndbitsSummaryBadge">0 Offcut Specifications</span>
+                    </div>
+                    <div class="layout-endbits-body" id="reviewLayoutEndbitsList"></div>
+                </div>
+
                 <!-- Live ERP, Stock & MRP Intelligence in Review Modal -->
                 <div class="erp-intelligence-card" id="reviewErpIntelCard" style="display: none; margin-bottom: 20px;">
                     <div class="erp-intel-header">
@@ -968,6 +1053,20 @@
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Multi-Parts Nested in this MO (Non-Standard Layout / Batch Nesting) -->
+                <div class="review-parts-section" id="reviewPartsSection" style="display: none; margin-bottom: 20px;">
+                    <div class="erp-intel-header">
+                        <div class="intel-title">
+                            <i class="fa-solid fa-shapes" style="color: #0284c7;"></i>
+                            <span>Parts Manufactured in this Material Order</span>
+                        </div>
+                        <span class="intel-badge" id="reviewPartsCountBadge" style="background: rgba(2, 132, 199, 0.12); color: #0284c7;">0 Parts</span>
+                    </div>
+                    <div class="review-parts-grid" id="reviewPartsGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; margin-top: 10px;">
+                        <!-- Populated dynamically with nested part cards -->
                     </div>
                 </div>
 

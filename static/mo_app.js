@@ -864,6 +864,13 @@ function openCreateModal() {
     const sheetsInput = document.getElementById("sheetsRequired");
     if (sheetsInput) sheetsInput.value = 1;
 
+    // Reset non-standard manual parts container & state
+    const nonStdContainer = document.getElementById("nonStdPartsContainer");
+    if (nonStdContainer) nonStdContainer.innerHTML = "";
+    const nonStdJson = document.getElementById("nonStdPartsJson");
+    if (nonStdJson) nonStdJson.value = "[]";
+    nonStdPartRowCounter = 0;
+
     // Reset layout standardization UI to Standard by default
     const stdRadio = document.querySelector('input[name="is_standard_layout"][value="true"]');
     if (stdRadio) stdRadio.checked = true;
@@ -1594,9 +1601,16 @@ function recalculateTargetQtyFromLayout() {
             `;
         };
 
+        const p1RawSize = (currentIntelData?.planning_summary?.parts && currentIntelData.planning_summary.parts[0]?.cut_blank) ||
+            record.part1?.cut_blank || record.cut_blank || record.part_size || "";
+        const p1Size = formatPartSize(p1RawSize);
+
         let partsHtml = `
             <div class="layout-part-chip primary">
-                <span class="part-chip-name"><i class="fa-solid fa-star"></i> Primary: ${escapeHtml(record.part_no || record.base_part)}</span>
+                <span class="part-chip-name" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                    <span><i class="fa-solid fa-star"></i> Primary: ${escapeHtml(record.part_no || record.base_part)}</span>
+                    ${p1Size ? `<span class="part-kpi-size-badge"><i class="fa-solid fa-ruler-combined"></i> Part Size: <strong>${escapeHtml(p1Size)}</strong></span>` : ''}
+                </span>
                 <span class="part-chip-qty">${p1Info.totalQty.toLocaleString()} Nos <small>(${sheetsNeeded} sheet × ${p1Info.partQty} part qty × ${p1Info.stripQty} strip per part qty)</small></span>
                 ${getPartPlanBadges(record.part_no || record.base_part, 0)}
             </div>
@@ -1606,9 +1620,15 @@ function recalculateTargetQtyFromLayout() {
         [record.part2, record.part3, record.part4].forEach((child, cIdx) => {
             if (child && child.part_no) {
                 const cInfo = getPartBreakdown(child);
+                const cRawSize = (currentIntelData?.planning_summary?.parts && currentIntelData.planning_summary.parts[cIdx + 1]?.cut_blank) ||
+                    child.cut_blank || child.part_size || "";
+                const cSize = formatPartSize(cRawSize);
                 partsHtml += `
                     <div class="layout-part-chip">
-                        <span class="part-chip-name">Part ${cIdx + 2}: ${escapeHtml(child.part_no)}</span>
+                        <span class="part-chip-name" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                            <span>Part ${cIdx + 2}: ${escapeHtml(child.part_no)}</span>
+                            ${cSize ? `<span class="part-kpi-size-badge"><i class="fa-solid fa-ruler-combined"></i> Part Size: <strong>${escapeHtml(cSize)}</strong></span>` : ''}
+                        </span>
                         <span class="part-chip-qty">${cInfo.totalQty.toLocaleString()} Nos <small>(${sheetsNeeded} sheet × ${cInfo.partQty} part qty × ${cInfo.stripQty} strip per part qty)</small></span>
                         ${getPartPlanBadges(child.part_no, cIdx + 1)}
                     </div>
@@ -1648,6 +1668,8 @@ function updateLayoutTypeUI(isStandard) {
     if (stdCard) stdCard.classList.toggle("active", isStandard);
     if (nonStdCard) nonStdCard.classList.toggle("active", !isStandard);
     if (uploadBox) uploadBox.style.display = isStandard ? "none" : "block";
+    const nonStdPartsBox = document.getElementById("nonStdPartsBox");
+    if (nonStdPartsBox) nonStdPartsBox.style.display = isStandard ? "none" : "block";
 
     // Dynamic Plan Mode UI: Auto-Fetched vs Manual Entry
     const autoDisplay = document.getElementById("autoQtyDisplayBox");
@@ -1677,6 +1699,12 @@ function updateLayoutTypeUI(isStandard) {
                 manualInput.value = curVal;
             }
             if (hiddenTarget) hiddenTarget.value = manualInput.value;
+        }
+        if (typeof initNonStdPartsRows === "function") {
+            initNonStdPartsRows();
+        }
+        if (typeof recalculateAllNonStdTotals === "function") {
+            recalculateAllNonStdTotals();
         }
     }
 
@@ -2205,6 +2233,27 @@ async function submitCreateMo(e) {
 
     const isStd = formData.get("is_standard_layout") === "true";
     if (!isStd) {
+        const nonStdPartsJson = document.getElementById("nonStdPartsJson")?.value;
+        if (nonStdPartsJson && nonStdPartsJson !== "[]") {
+            try {
+                const partsArr = JSON.parse(nonStdPartsJson);
+                if (partsArr && partsArr.length > 0) {
+                    formData.set("parts", nonStdPartsJson);
+                    if (partsArr[0].part_no) {
+                        formData.set("part_no", partsArr[0].part_no);
+                    }
+                    if (partsArr[0].base_part) {
+                        formData.set("base_part", partsArr[0].base_part);
+                    }
+                    const totalPartsQty = partsArr.reduce((sum, p) => sum + (parseInt(p.no_of_parts || p.target_qty) || 1), 0);
+                    if (totalPartsQty > 0) {
+                        formData.set("target_qty", totalPartsQty);
+                    }
+                }
+            } catch (err) {
+                console.warn("Failed to parse nonStdPartsJson:", err);
+            }
+        }
         const manualInput = document.getElementById("targetQtyManual");
         if (manualInput && manualInput.value && parseInt(manualInput.value, 10) > 0) {
             formData.set("target_qty", manualInput.value);
@@ -2275,6 +2324,280 @@ async function submitCreateMo(e) {
 }
 
 // Modal: Review, Stepper & Approval
+function formatPartSize(sz) {
+    if (!sz) return "";
+    const str = String(sz).trim().replace(/^\*/, "").replace(/\*$/, "");
+    if (!str || str === "N/A" || str === "-") return "";
+    const parts = str.split("*").map(s => s.trim()).filter(Boolean);
+    if (parts.length >= 2) {
+        const cleaned = parts.map(p => {
+            const n = parseFloat(p);
+            return (!isNaN(n) && Number.isFinite(n)) ? (n % 1 === 0 ? n.toFixed(0) : String(n)) : p;
+        });
+        return cleaned.join(" × ") + " mm";
+    }
+    return str.includes("mm") ? str : `${str} mm`;
+}
+
+function renderReviewConstraints(mo) {
+    const el = document.getElementById("reviewConstraintNotice");
+    if (!el) return;
+
+    let cs = mo.constraints_status;
+    if (typeof cs === "string") {
+        try { cs = JSON.parse(cs); } catch(e) { cs = {}; }
+    }
+    if (!cs || typeof cs !== "object") {
+        el.style.display = "none";
+        return;
+    }
+
+    const stockOk = cs.stock_available !== false;
+    const mrpOk = cs.mrp_available !== false;
+    const remOk = cs.remaining_quota_satisfied !== false;
+    const allOk = cs.all_satisfied !== false && stockOk && mrpOk && remOk;
+
+    const failed = Array.isArray(cs.failed_constraints) ? [...cs.failed_constraints] : [];
+    if (!stockOk && !failed.includes("RM Stock Shortfall")) failed.push("RM Stock Shortfall");
+    if (!mrpOk && !failed.includes("MRP Schedule Target Missing")) failed.push("MRP Schedule Target Missing");
+    if (!remOk && !failed.includes("Plan Exceeds Remaining Demand")) failed.push("Plan Exceeds Remaining Demand");
+
+    const badgeClass = allOk ? "pass" : "fail";
+    const badgeText = allOk ? "All Constraints Satisfied" : `${failed.length} Constraint(s) Cleared / Requiring Review`;
+
+    el.innerHTML = `
+        <div style="background: ${allOk ? '#f0fdf4' : '#fffbeb'}; border: 1.5px solid ${allOk ? '#86efac' : '#fcd34d'}; border-radius: 8px; padding: 12px 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.88rem; color: ${allOk ? '#166534' : '#92400e'};">
+                    <i class="fa-solid ${allOk ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
+                    <span>Automated Technical &amp; Planning Safety Verification</span>
+                </div>
+                <span class="constraint-status-badge ${badgeClass}" style="padding: 3px 10px; border-radius: 16px; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; background: ${allOk ? '#dcfce7' : '#fef3c7'}; color: ${allOk ? '#15803d' : '#b45309'}; border: 1px solid ${allOk ? '#86efac' : '#fde68a'};">
+                    <i class="fa-solid ${allOk ? 'fa-square-check' : 'fa-triangle-exclamation'}"></i> ${badgeText}
+                </span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.78rem;">
+                <div style="display: flex; align-items: center; gap: 6px; color: ${stockOk ? '#15803d' : '#b45309'};">
+                    <i class="fa-solid ${stockOk ? 'fa-check' : 'fa-xmark'}"></i>
+                    <span>RM Main Store Stock Availability</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: ${mrpOk ? '#15803d' : '#b45309'};">
+                    <i class="fa-solid ${mrpOk ? 'fa-check' : 'fa-xmark'}"></i>
+                    <span>MRP Monthly Schedule Demand</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: ${remOk ? '#15803d' : '#b45309'};">
+                    <i class="fa-solid ${remOk ? 'fa-check' : 'fa-xmark'}"></i>
+                    <span>Production Quota vs Target Check</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: #15803d;">
+                    <i class="fa-solid fa-check"></i>
+                    <span>Guillotine Machine Routing Feasible</span>
+                </div>
+            </div>
+        </div>
+    `;
+    el.style.display = "block";
+}
+
+function renderReviewLayoutParts(mo) {
+    const banner = document.getElementById("reviewLayoutPartsBanner");
+    const list = document.getElementById("reviewLayoutPartsList");
+    const thumbWrap = document.getElementById("reviewLayoutThumbWrap");
+    const thumbImg = document.getElementById("reviewLayoutThumbImg");
+    const planBadge = document.getElementById("reviewLayoutPlanBadge");
+    if (!banner || !list) return;
+
+    let parts = mo.layout_parts;
+    if (!parts || !parts.length) {
+        const lr = mo.layout_record;
+        if (lr) {
+            parts = [];
+            [lr.part1, lr.part2, lr.part3, lr.part4].forEach((child, cIdx) => {
+                if (child && child.part_no) {
+                    const cb = child.cut_blank || lr.cut_blank || "";
+                    parts.push({
+                        label: cIdx === 0 ? "Primary Part" : `Part ${cIdx + 1}`,
+                        part_no: child.part_no,
+                        base_part: child.base_part || lr.base_part || "",
+                        cut_blank: cb,
+                        part_size: cb,
+                        blank_qty: child.blank_qty || 1,
+                        strip_qty: child.strip_qty || 1,
+                        total_blank_qty_sheet: child.total_blank_qty_sheet || (child.blank_qty * child.strip_qty) || 1,
+                        is_primary: cIdx === 0
+                    });
+                }
+            });
+        } else if (mo.parts && Array.isArray(mo.parts) && mo.parts.length > 0) {
+            parts = mo.parts.map((p, idx) => ({
+                label: p.label || (idx === 0 ? "Primary Part" : `Part ${idx + 1}`),
+                part_no: p.part_no,
+                base_part: p.base_part || mo.base_part || "",
+                cut_blank: p.part_size || p.cut_blank || `${p.thickness || mo.thickness || ''}*${p.cut_length || ''}*${p.cut_width || ''}`,
+                part_size: p.part_size || p.cut_blank || `${p.thickness || mo.thickness || ''}*${p.cut_length || ''}*${p.cut_width || ''}`,
+                blank_qty: p.blank_qty || p.no_of_parts || p.target_qty || 1,
+                strip_qty: p.strip_qty || 1,
+                total_blank_qty_sheet: p.total_blank_qty_sheet || p.no_of_parts || p.target_qty || 1,
+                is_primary: idx === 0 || p.is_primary
+            }));
+        } else if (mo.part_no) {
+            const cb = mo.part_size || (mo.thickness ? `${mo.thickness}*${mo.length}*${mo.width}` : '');
+            parts = [{
+                label: "Primary Part",
+                part_no: mo.part_no,
+                base_part: mo.base_part || "",
+                cut_blank: cb,
+                part_size: cb,
+                blank_qty: 1,
+                strip_qty: 1,
+                total_blank_qty_sheet: 1,
+                is_primary: true
+            }];
+        }
+    }
+
+    if (!parts || !parts.length) {
+        banner.style.display = "none";
+        return;
+    }
+
+    const sheetsNeeded = parseInt(mo.sheets_required) || 1;
+    const planName = mo.cutting_plan || mo.layout_record?.cutting_plan || (mo.is_standard_layout ? "Standard Layout" : "Multi-Part Off-Take");
+    const yieldPct = mo.yield_pct || mo.layout_record?.yield_pct || (mo.is_standard_layout ? "98.56" : "90");
+
+    if (planBadge) {
+        planBadge.textContent = `${planName} • Yield: ${yieldPct}%`;
+    }
+
+    const getReviewPartPlanBadges = (partNo, pIdx) => {
+        let pPlan = null;
+        if (reviewIntelData?.planning_summary?.parts) {
+            const cleanTarget = (partNo || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+            pPlan = reviewIntelData.planning_summary.parts.find(p => {
+                const cleanP = (p.child_part_no || p.part_no || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+                return cleanTarget.includes(cleanP) || cleanP.includes(cleanTarget);
+            }) || reviewIntelData.planning_summary.parts[pIdx];
+        }
+
+        const mrpTxt = (pPlan && pPlan.mrp_monthly_target !== null && pPlan.mrp_monthly_target !== undefined)
+            ? `${Number(pPlan.mrp_monthly_target).toLocaleString()} Nos`
+            : (mo.mrp_monthly_target ? `${Number(mo.mrp_monthly_target).toLocaleString()} Nos` : "N/A");
+
+        const moCount = pPlan ? (pPlan.monthly_mo_count || 0) : (mo.monthly_mo_count || 0);
+        const partsProd = Number(pPlan ? (pPlan.parts_produced || 0) : (mo.parts_produced || 0)).toLocaleString();
+        const moTxt = `${moCount} MO${moCount === 1 ? '' : 's'} (${partsProd} Parts)`;
+
+        const remTxt = (pPlan && pPlan.remaining_quantity !== null && pPlan.remaining_quantity !== undefined)
+            ? `${Number(pPlan.remaining_quantity).toLocaleString()} Nos`
+            : (mo.remaining_quantity ? `${Number(mo.remaining_quantity).toLocaleString()} Nos` : "N/A");
+
+        return `
+            <div class="part-chip-planning-row">
+                <span class="chip-plan-badge chip-plan-mrp" title="MRP Monthly Target"><i class="fa-solid fa-calendar-days"></i> MRP: <strong>${mrpTxt}</strong></span>
+                <span class="chip-plan-badge chip-plan-mo" title="MOs &amp; Parts Produced this month"><i class="fa-solid fa-industry"></i> MO Produced: <strong>${moTxt}</strong></span>
+                <span class="chip-plan-badge chip-plan-rem" title="Remaining Quantity (MRP - MO)"><i class="fa-solid fa-hourglass-half"></i> Remaining: <strong>${remTxt}</strong></span>
+            </div>
+        `;
+    };
+
+    list.innerHTML = parts.map((p, idx) => {
+        const isPrimary = p.is_primary !== undefined ? p.is_primary : (idx === 0);
+        const partName = p.part_no || mo.part_no || '';
+        const rawCb = (reviewIntelData?.planning_summary?.parts && reviewIntelData.planning_summary.parts[idx]?.cut_blank) ||
+                      p.part_size || p.cut_blank || "";
+        const fmtCb = formatPartSize(rawCb);
+        const bq = parseFloat(p.blank_qty) || 1;
+        const sq = parseFloat(p.strip_qty) || 1;
+        const totalPerSheet = parseFloat(p.total_blank_qty_sheet) || (bq * sq);
+        const totalQty = totalPerSheet * sheetsNeeded;
+
+        const partLabelHtml = isPrimary 
+            ? `<i class="fa-solid fa-star"></i> Primary: ${escapeHtml(partName)}` 
+            : (p.label ? escapeHtml(p.label) : `Part ${idx + 1}: ${escapeHtml(partName)}`);
+
+        return `
+            <div class="layout-part-chip ${isPrimary ? 'primary' : ''}">
+                <span class="part-chip-name" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                    <span>${partLabelHtml}</span>
+                    ${fmtCb ? `
+                    <span class="part-kpi-size-badge">
+                        <i class="fa-solid fa-ruler-combined"></i>
+                        Part Size: <strong>${escapeHtml(fmtCb)}</strong>
+                    </span>` : ''}
+                </span>
+                <span class="part-chip-qty">${totalQty.toLocaleString()} Nos <small>(${sheetsNeeded} sheet × ${bq} part qty × ${sq} strip per part qty)</small></span>
+                ${getReviewPartPlanBadges(partName, idx)}
+            </div>
+        `;
+    }).join("");
+
+    const imgUrl = mo.image_url || mo.layout_record?.image_url;
+    if (thumbWrap && thumbImg && imgUrl) {
+        thumbImg.src = imgUrl;
+        thumbWrap.style.display = "flex";
+    } else if (thumbWrap) {
+        thumbWrap.style.display = "none";
+    }
+
+    banner.style.display = "flex";
+}
+
+function renderReviewLayoutEndbits(mo) {
+    const banner = document.getElementById("reviewLayoutEndbitsBanner");
+    const list = document.getElementById("reviewLayoutEndbitsList");
+    const countBadge = document.getElementById("reviewEndbitsSummaryBadge");
+    if (!banner || !list) return;
+
+    let ebList = mo.endbits;
+    if ((!ebList || !ebList.length) && mo.constraints_status && mo.constraints_status.endbits) {
+        ebList = mo.constraints_status.endbits;
+    }
+    if ((!ebList || !ebList.length) && mo.layout_record?.endbits) {
+        ebList = mo.layout_record.endbits;
+    }
+
+    if (!ebList || !Array.isArray(ebList) || ebList.length === 0) {
+        banner.style.display = "none";
+        list.innerHTML = "";
+        return;
+    }
+
+    const sheetsNeeded = parseInt(mo.sheets_required) || 1;
+    if (countBadge) {
+        countBadge.textContent = `${ebList.length} Offcut Specification${ebList.length > 1 ? 's' : ''}`;
+    }
+
+    let cardsHtml = "";
+    ebList.forEach((eb, idx) => {
+        const ebName = eb.name || `End bit - ${idx + 1}`;
+        const qtyPerSheet = parseFloat(eb.qty_per_sheet) || parseFloat(eb.qty) || 1;
+        const producedQty = eb.total_qty || Math.round(qtyPerSheet * sheetsNeeded) || 1;
+        const gradeVal = eb.grade || mo.grade || "HR";
+
+        cardsHtml += `
+            <div class="endbit-mini-card neat-endbit-card">
+                <div class="reb-clean-field">
+                    <span class="reb-clean-label">End Bit Name</span>
+                    <strong class="reb-clean-val reb-name-val"><i class="fa-solid fa-scissors" style="color: #0284c7; margin-right: 5px;"></i>${escapeHtml(ebName)}</strong>
+                </div>
+                <div class="reb-clean-row">
+                    <div class="reb-clean-field">
+                        <span class="reb-clean-label">No. of End Bits Produced</span>
+                        <strong class="reb-clean-val">${producedQty} Nos</strong>
+                    </div>
+                    <div class="reb-clean-field" style="text-align: right;">
+                        <span class="reb-clean-label">Grade</span>
+                        <span class="reb-grade-pill">${escapeHtml(gradeVal)}</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    list.innerHTML = cardsHtml;
+    banner.style.display = "block";
+}
+
 async function openReviewModal(moNumber) {
     try {
         const res = await fetch(`/api/mo/${encodeURIComponent(moNumber)}`);
@@ -2282,6 +2605,24 @@ async function openReviewModal(moNumber) {
         activeReviewMo = await res.json();
         renderReviewModal(activeReviewMo);
         document.getElementById("reviewModal").style.display = "flex";
+
+        // Gather all parts from activeReviewMo (parts or layout_parts)
+        const allParts = [];
+        if (activeReviewMo.parts && Array.isArray(activeReviewMo.parts)) {
+            activeReviewMo.parts.forEach(p => {
+                const pNo = p.part_no || p.child_part_no;
+                if (pNo && !allParts.includes(pNo)) allParts.push(pNo);
+            });
+        }
+        if (activeReviewMo.layout_parts && Array.isArray(activeReviewMo.layout_parts)) {
+            activeReviewMo.layout_parts.forEach(p => {
+                const pNo = p.part_no || p.child_part_no;
+                if (pNo && !allParts.includes(pNo)) allParts.push(pNo);
+            });
+        }
+        if (activeReviewMo.part_no && !allParts.includes(activeReviewMo.part_no)) {
+            allParts.unshift(activeReviewMo.part_no);
+        }
 
         // Fetch ERP & Stock intelligence for the reviewed MO
         fetchAndDisplayIntelligence(
@@ -2292,7 +2633,8 @@ async function openReviewModal(moNumber) {
             activeReviewMo.length,
             activeReviewMo.width,
             activeReviewMo.sheets_required || 1,
-            true
+            true,
+            allParts
         );
     } catch (err) {
         console.error("Failed to load MO details:", err);
@@ -2302,12 +2644,24 @@ async function openReviewModal(moNumber) {
 function closeReviewModal() {
     activeReviewMo = null;
     activePurchaseAiDecision = null;
+    reviewIntelData = null;
     const pCard = document.getElementById("purchaseAiCard");
     if (pCard) pCard.style.display = "none";
     const erpInput = document.getElementById("erpMoNumberInput");
     if (erpInput) erpInput.value = "";
+    const revKpi = document.getElementById("reviewMoKpiContainer");
+    if (revKpi) { revKpi.innerHTML = ""; revKpi.style.display = "none"; }
+    const revCs = document.getElementById("reviewConstraintNotice");
+    if (revCs) revCs.style.display = "none";
+    const revLp = document.getElementById("reviewLayoutPartsBanner");
+    if (revLp) revLp.style.display = "none";
+    const revEb = document.getElementById("reviewLayoutEndbitsBanner");
+    if (revEb) revEb.style.display = "none";
+    const revIntel = document.getElementById("reviewErpIntelCard");
+    if (revIntel) revIntel.style.display = "none";
     document.getElementById("reviewModal").style.display = "none";
 }
+
 
 function renderReviewModal(mo) {
     document.getElementById("reviewMoTitle").textContent = `${mo.mo_number} — ${mo.part_no}`;
@@ -2406,8 +2760,15 @@ function renderReviewModal(mo) {
         ` : ''}
     `;
 
-    // Render End Bits Section in Review Modal
-    renderReviewEndbits(mo);
+    // Render Constraints & Safety Status
+    renderReviewConstraints(mo);
+
+    // Render Layout Parts & Drawing Preview
+    renderReviewLayoutParts(mo);
+
+    // Render End Bits Section in Review Modal (Banner style matching Image 2)
+    renderReviewLayoutEndbits(mo);
+    renderReviewParts(mo);
 
     // Render Document Attachment if any
     const docSec = document.getElementById("reviewDocSection");
@@ -2893,14 +3254,13 @@ async function quickApproveWithPurchaseAi() {
 
 // ERP, Stock & MRP Intelligence Functions
 let currentIntelData = null;
+let reviewIntelData = null;
 
 async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, length, width, sheetsNeeded, isReview = false, allLayoutParts = []) {
     if (!partNo) return;
     const cardId = isReview ? "reviewErpIntelCard" : "erpIntelligenceCard";
     const card = document.getElementById(cardId);
-    if (isReview && card) {
-        card.style.display = "block";
-    } else if (card) {
+    if (card) {
         card.style.display = "none";
     }
 
@@ -2930,6 +3290,12 @@ async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, len
         if (!isReview) {
             currentIntelData = intel;
             recalculateTargetQtyFromLayout();
+        } else {
+            reviewIntelData = intel;
+            if (activeReviewMo) {
+                renderReviewLayoutParts(activeReviewMo);
+                renderReviewLayoutEndbits(activeReviewMo);
+            }
         }
 
         renderIntelligenceCard(intel, isReview);
@@ -2938,8 +3304,8 @@ async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, len
     }
 }
 
-function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan) {
-    const container = document.getElementById("moKpiContainer");
+function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan, isReview = false) {
+    const container = document.getElementById(isReview ? "reviewMoKpiContainer" : "moKpiContainer");
     if (!container) return;
 
     const rmValStr = (rmOnHand !== null && rmOnHand !== undefined)
@@ -2967,14 +3333,36 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
         : "- Nos";
     const remSubStr = "MRP Bal - MO Produced";
 
+    const targetPartNo = isReview 
+        ? (activeReviewMo?.part_no || plan?.part_no || "") 
+        : (document.getElementById("partNoInput")?.value || plan?.part_no || "");
+    const layoutRec = isReview ? (activeReviewMo?.layout_record || activeReviewMo) : getSelectedLayoutRecord();
+    let partSizeRaw = plan?.part_size || plan?.cut_blank || layoutRec?.cut_blank || layoutRec?.part1?.cut_blank || (isReview ? (activeReviewMo?.part_size || activeReviewMo?.cut_blank) : "");
+    const formattedPartSize = formatPartSize(partSizeRaw);
+
     container.innerHTML = `
-        <div class="mo-kpi-row" id="moKpiRow">
+        ${targetPartNo ? `
+        <div class="part-kpi-header" style="margin-bottom: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <span class="part-kpi-badge primary">
+                    <i class="fa-solid fa-star"></i>
+                    Primary Part: <strong>${escapeHtml(targetPartNo)}</strong>
+                </span>
+                ${formattedPartSize ? `
+                <span class="part-kpi-size-badge">
+                    <i class="fa-solid fa-ruler-combined"></i>
+                    Part Size: <strong>${escapeHtml(formattedPartSize)}</strong>
+                </span>` : ''}
+            </div>
+        </div>
+        ` : ''}
+        <div class="mo-kpi-row" id="${isReview ? 'reviewMoKpiRow' : 'moKpiRow'}">
             <div class="mo-kpi-card kpi-rm-stock">
                 <div class="mo-kpi-icon"><i class="fa-solid fa-layer-group"></i></div>
                 <div class="mo-kpi-content">
                     <span class="mo-kpi-label">RM Sheets (On Hand)</span>
-                    <div class="mo-kpi-value" id="kpiRmOnHand">${rmValStr}</div>
-                    <small class="mo-kpi-subtext" id="kpiRmSubtext" title="${escapeHtml(rmSubStr)}">${escapeHtml(rmSubStr)}</small>
+                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRmOnHand' : 'kpiRmOnHand'}">${rmValStr}</div>
+                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRmSubtext' : 'kpiRmSubtext'}" title="${escapeHtml(rmSubStr)}">${escapeHtml(rmSubStr)}</small>
                 </div>
             </div>
 
@@ -2982,8 +3370,8 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
                 <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
                 <div class="mo-kpi-content">
                     <span class="mo-kpi-label">MRP Monthly Target</span>
-                    <div class="mo-kpi-value" id="kpiMrpTarget">${mrpValStr}</div>
-                    <small class="mo-kpi-subtext" id="kpiMrpSubtext" title="${escapeHtml(mrpSubStr)}">${escapeHtml(mrpSubStr)}</small>
+                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMrpTarget' : 'kpiMrpTarget'}">${mrpValStr}</div>
+                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMrpSubtext' : 'kpiMrpSubtext'}" title="${escapeHtml(mrpSubStr)}">${escapeHtml(mrpSubStr)}</small>
                 </div>
             </div>
 
@@ -2991,8 +3379,8 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
                 <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
                 <div class="mo-kpi-content">
                     <span class="mo-kpi-label">Parts Produced</span>
-                    <div class="mo-kpi-value" id="kpiMoProduced">${partsValStr}</div>
-                    <small class="mo-kpi-subtext" id="kpiMoProducedSubtext" title="${moCount} MO${moCount === 1 ? '' : 's'} produced (${partsCount} parts in ${plan?.target_month || 'month'})">${escapeHtml(moSubStr)}</small>
+                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMoProduced' : 'kpiMoProduced'}">${partsValStr}</div>
+                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMoProducedSubtext' : 'kpiMoProducedSubtext'}" title="${moCount} MO${moCount === 1 ? '' : 's'} produced (${partsCount} parts in ${plan?.target_month || 'month'})">${escapeHtml(moSubStr)}</small>
                 </div>
             </div>
 
@@ -3000,13 +3388,14 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
                 <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
                 <div class="mo-kpi-content">
                     <span class="mo-kpi-label">Remaining Quantity</span>
-                    <div class="mo-kpi-value" id="kpiRemainingQty">${remValStr}</div>
-                    <small class="mo-kpi-subtext" id="kpiRemainingSubtext" title="${escapeHtml(remSubStr)}">${escapeHtml(remSubStr)}</small>
+                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRemainingQty' : 'kpiRemainingQty'}">${remValStr}</div>
+                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRemainingSubtext' : 'kpiRemainingSubtext'}" title="${escapeHtml(remSubStr)}">${escapeHtml(remSubStr)}</small>
                 </div>
             </div>
         </div>
     `;
 }
+
 
 function renderIntelligenceCard(intel, isReview = false) {
     const prefix = isReview ? "review" : "";
@@ -3074,138 +3463,44 @@ function renderIntelligenceCard(intel, isReview = false) {
         moCountEl.textContent = `${prevMos.total_found || 0} MOs`;
     }
 
-    // 5. Update Key Planning Indicators in Create MO Modal (RM Sheets On Hand, MRP Monthly Target, Remaining Quantity)
-    if (!isReview) {
-        const plan = intel.planning_summary || {};
-        const isMulti = plan.is_multi_part && plan.parts && plan.parts.length > 1;
+    // 5. Update Key Planning Indicators in Create MO Modal and Review Modal (RM Sheets On Hand, MRP Monthly Target, Remaining Quantity)
+    const plan = intel.planning_summary || {};
+    const isMulti = plan.is_multi_part && plan.parts && plan.parts.length > 1;
 
-        const rmOnHand = (plan.rm_onhand_sheets !== undefined && plan.rm_onhand_sheets !== null)
-            ? plan.rm_onhand_sheets
-            : (rm ? rm.onhand_stock : null);
+    const rmOnHand = (plan.rm_onhand_sheets !== undefined && plan.rm_onhand_sheets !== null)
+        ? plan.rm_onhand_sheets
+        : (rm ? rm.onhand_stock : null);
 
-        const mrpTarget = (plan.mrp_monthly_target !== undefined && plan.mrp_monthly_target !== null)
-            ? plan.mrp_monthly_target
-            : (mrp && mrp.monthly_total !== undefined && mrp.monthly_total !== null ? mrp.monthly_total : null);
+    const mrpTarget = (plan.mrp_monthly_target !== undefined && plan.mrp_monthly_target !== null)
+        ? plan.mrp_monthly_target
+        : (mrp && mrp.monthly_total !== undefined && mrp.monthly_total !== null ? mrp.monthly_total : null);
 
-        const partsProduced = plan.parts_produced || 0;
-        const remainingQty = (plan.remaining_quantity !== undefined && plan.remaining_quantity !== null)
-            ? plan.remaining_quantity
-            : (mrpTarget !== null ? Math.max(0, mrpTarget - partsProduced) : null);
+    const partsProduced = plan.parts_produced || 0;
+    const remainingQty = (plan.remaining_quantity !== undefined && plan.remaining_quantity !== null)
+        ? plan.remaining_quantity
+        : (mrpTarget !== null ? Math.max(0, mrpTarget - partsProduced) : null);
 
-        const container = document.getElementById("moKpiContainer");
+    const container = document.getElementById(isReview ? "reviewMoKpiContainer" : "moKpiContainer");
 
-        if (isMulti && container) {
-            // Render RM stock card on top, then separate 3-card sections for each and every part
-            const rmValStr = (rmOnHand !== null && rmOnHand !== undefined) ? `${rmOnHand} Sheets` : "0 Sheets";
-            const rmSubStr = rm?.item_code ? `${rm.item_code} (Main Store)` : "Main Store inventory";
-
-            let html = `
-                <div class="mo-kpi-row rm-top-row">
-                    <div class="mo-kpi-card kpi-rm-stock">
-                        <div class="mo-kpi-icon"><i class="fa-solid fa-layer-group"></i></div>
-                        <div class="mo-kpi-content">
-                            <span class="mo-kpi-label">RM Sheets (On Hand)</span>
-                            <div class="mo-kpi-value" id="kpiRmOnHand">${rmValStr}</div>
-                            <small class="mo-kpi-subtext" id="kpiRmSubtext" title="${escapeHtml(rmSubStr)}">${escapeHtml(rmSubStr)}</small>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Build layout parts list to accurately label Primary Part, Part 2, Part 3, etc.
-            const layoutRec = getSelectedLayoutRecord();
-            const layoutPartsList = [];
-            if (layoutRec) {
-                if (layoutRec.part1) layoutPartsList.push({ label: "Primary Part", ...layoutRec.part1, is_primary: true });
-                else if (layoutRec.part_no) layoutPartsList.push({ label: "Primary Part", part_no: layoutRec.part_no, is_primary: true });
-                [layoutRec.part2, layoutRec.part3, layoutRec.part4].forEach((child, cIdx) => {
-                    if (child?.part_no) {
-                        layoutPartsList.push({ label: `Part ${cIdx + 2}`, ...child, is_primary: false });
-                    }
-                });
-            }
-
-            plan.parts.forEach((p, idx) => {
-                const layoutItem = layoutPartsList[idx];
-                const partLabel = layoutItem?.label || p.part_label || (idx === 0 ? "Primary Part" : `Part ${idx + 1}`);
-                const partNo = layoutItem?.part_no || p.child_part_no || p.part_no || `Part ${idx + 1}`;
-                const isPrimary = idx === 0 || !!layoutItem?.is_primary;
-                const badgeClass = isPrimary ? "primary" : "secondary";
-                const badgeIcon = isPrimary ? "fa-star" : "fa-puzzle-piece";
-
-                let qtyPerSheet = null;
-                if (layoutItem) {
-                    qtyPerSheet = parseFloat(layoutItem.total_blank_qty_sheet);
-                    if (!qtyPerSheet || isNaN(qtyPerSheet)) {
-                        const bq = parseFloat(layoutItem.blank_qty) || 1;
-                        const sq = parseFloat(layoutItem.strip_qty) || 1;
-                        qtyPerSheet = bq * sq;
-                    }
-                } else if (p.part_qty) {
-                    qtyPerSheet = p.part_qty;
-                }
-
-                const pMrp = (p.mrp_monthly_target !== null && p.mrp_monthly_target !== undefined)
-                    ? `${Number(p.mrp_monthly_target).toLocaleString()} Nos`
-                    : "N/A";
-                const pMrpSub = p.child_part_no ? `${p.child_part_no} (Balance)` : "Balance demand";
-
-                const pMoCount = p.monthly_mo_count || 0;
-                const pPartsProd = Number(p.parts_produced || 0).toLocaleString();
-                const pPartsVal = `${pPartsProd} Nos`;
-                const pMoSub = `${pMoCount} MO${pMoCount === 1 ? '' : 's'} produced`;
-
-                const pRem = (p.remaining_quantity !== null && p.remaining_quantity !== undefined)
-                    ? `${Number(p.remaining_quantity).toLocaleString()} Nos`
-                    : "- Nos";
-                const pRemSub = "MRP Bal - MO Produced";
-
-                html += `
-                    <div class="part-kpi-section">
-                        <div class="part-kpi-header">
-                            <span class="part-kpi-badge ${badgeClass}">
-                                <i class="fa-solid ${badgeIcon}"></i>
-                                ${escapeHtml(partLabel)}: <strong>${escapeHtml(partNo)}</strong>
-                                ${p.part_qty ? `<small style="font-weight: normal; margin-left: 4px;">(${p.part_qty} per sheet)</small>` : ''}
-                            </span>
-                        </div>
-                        <div class="mo-kpi-row part-cards-row">
-                            <div class="mo-kpi-card kpi-mrp-qty">
-                                <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
-                                <div class="mo-kpi-content">
-                                    <span class="mo-kpi-label">MRP Monthly Target</span>
-                                    <div class="mo-kpi-value">${pMrp}</div>
-                                    <small class="mo-kpi-subtext" title="${escapeHtml(pMrpSub)}">${escapeHtml(pMrpSub)}</small>
-                                </div>
-                            </div>
-
-                            <div class="mo-kpi-card kpi-mo-produced">
-                                <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
-                                <div class="mo-kpi-content">
-                                    <span class="mo-kpi-label">Parts Produced</span>
-                                    <div class="mo-kpi-value">${pPartsVal}</div>
-                                    <small class="mo-kpi-subtext" title="${pMoCount} MO${pMoCount === 1 ? '' : 's'} produced in ${plan.target_month || 'this month'} (${pPartsProd} parts)">${escapeHtml(pMoSub)}</small>
-                                </div>
-                            </div>
-
-                            <div class="mo-kpi-card kpi-remaining-qty">
-                                <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
-                                <div class="mo-kpi-content">
-                                    <span class="mo-kpi-label">Remaining Quantity</span>
-                                    <div class="mo-kpi-value">${pRem}</div>
-                                    <small class="mo-kpi-subtext" title="${escapeHtml(pRemSub)}">${escapeHtml(pRemSub)}</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            });
-
-            container.innerHTML = html;
-        } else {
-            renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan);
+    if (isReview) {
+        if (container) {
+            container.style.display = "none";
+            container.innerHTML = "";
         }
+        const revCard = document.getElementById("reviewErpIntelCard");
+        if (revCard) revCard.style.display = "none";
+        if (activeReviewMo) {
+            renderReviewLayoutParts(activeReviewMo);
+            renderReviewLayoutEndbits(activeReviewMo);
+        }
+    } else {
+        if (container) {
+            container.style.display = "block";
+            renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan, false);
+        }
+        recalculateTargetQtyFromLayout();
     }
+
 
     // Populate Previous MOs Table
     const tableBody = document.getElementById(isReview ? "reviewMoHistoryTableBody" : "moHistoryTableBody");
@@ -5900,9 +6195,105 @@ async function openCutOptimizerForModal() {
         bWid = 300;
     }
 
-    currentCutOptPartsList = [];
+    // Check for multiple parts in non-standard layout container
+    const nonStdRows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
+    const nonStdPartsList = [];
+    if (nonStdRows && nonStdRows.length > 0) {
+        nonStdRows.forEach((r, idx) => {
+            const rowId = r.dataset.rowId || (idx + 1);
+            let pNo = r.querySelector(".nonstd-part-no")?.value?.trim() || "";
+            let pL = parseFloat(r.querySelector(".nonstd-cut-len")?.value) || 0;
+            let pW = parseFloat(r.querySelector(".nonstd-cut-wid")?.value) || 0;
+            const rThick = parseFloat(r.querySelector(".nonstd-thickness")?.value) || thickVal || 0;
+
+            const sizeVal = r.querySelector(".nonstd-part-size")?.value?.trim() || "";
+            if ((!pL || !pW) && sizeVal) {
+                const d = parseDimString(sizeVal, rThick);
+                if (d.l > 0 && d.w > 0) {
+                    pL = d.l;
+                    pW = d.w;
+                }
+            }
+            // Fallback for Row 1 if empty: use primary part dimensions bLen, bWid!
+            if ((!pL || !pW) && idx === 0 && bLen > 0 && bWid > 0) {
+                pL = bLen;
+                pW = bWid;
+                if (!pNo) pNo = partNo;
+            }
+
+            const qty = Math.max(1, parseInt(r.querySelector(".nonstd-part-qty")?.value) || 1);
+            if (pL > 0 && pW > 0) {
+                nonStdPartsList.push({
+                    row_id: rowId,
+                    part_no: pNo || (idx === 0 ? partNo : `Part-${idx + 1}`),
+                    length: Math.max(pL, pW),
+                    width: Math.min(pL, pW),
+                    qty: qty
+                });
+            }
+        });
+    }
+
+    // CRITICAL: Ensure the Base Part from the modal is combined with the added parts!
+    if (nonStdPartsList.length > 0 && bLen > 0 && bWid > 0 && partNo && partNo !== "Part") {
+        const cleanBase = (partNo || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+        const basePartAlreadyIncluded = nonStdPartsList.some(p => {
+            const cleanP = (p.part_no || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+            return cleanP && cleanBase && (cleanP.includes(cleanBase) || cleanBase.includes(cleanP));
+        });
+        if (!basePartAlreadyIncluded) {
+            const baseQty = Math.max(1, parseInt(document.getElementById("targetQtyManual")?.value || document.getElementById("targetQty")?.value || 1, 10));
+            nonStdPartsList.unshift({
+                row_id: 0,
+                part_no: partNo,
+                length: Math.max(bLen, bWid),
+                width: Math.min(bLen, bWid),
+                qty: baseQty
+            });
+        }
+    }
+
+    // Support multi-part layouts from standard layout record as well
+    if (nonStdPartsList.length <= 1 && layoutRec) {
+        const lrParts = [];
+        [layoutRec.part1, layoutRec.part2, layoutRec.part3, layoutRec.part4].forEach((child, cIdx) => {
+            if (child && child.part_no) {
+                let cL = 0, cW = 0;
+                if (child.blank_size?.length && child.blank_size?.width) {
+                    cL = parseFloat(child.blank_size.length);
+                    cW = parseFloat(child.blank_size.width);
+                } else if (child.cut_blank) {
+                    const d = parseDimString(child.cut_blank, thickVal);
+                    cL = d.l; cW = d.w;
+                }
+                const bq = parseFloat(child.blank_qty) || 1;
+                const sq = parseFloat(child.strip_qty) || 1;
+                const cQty = Math.max(1, Math.round(bq * sq));
+                if (cL > 0 && cW > 0) {
+                    lrParts.push({
+                        row_id: cIdx + 1,
+                        part_no: child.part_no,
+                        length: Math.max(cL, cW),
+                        width: Math.min(cL, cW),
+                        qty: cQty
+                    });
+                }
+            }
+        });
+        if (lrParts.length > 1) {
+            nonStdPartsList.length = 0;
+            nonStdPartsList.push(...lrParts);
+        }
+    }
+
+    if (nonStdPartsList.length > 0) {
+        currentCutOptPartsList = nonStdPartsList;
+    } else {
+        currentCutOptPartsList = [];
+    }
+
     const multiSec = document.getElementById("optMultiPartsSection");
-    if (multiSec) multiSec.style.display = "none";
+    const multiCountEl = document.getElementById("optMultiPartsCount");
 
     // Show modal immediately so user sees responsive feedback
     const modal = document.getElementById("cutOptimizerModal");
@@ -5918,16 +6309,35 @@ async function openCutOptimizerForModal() {
 
     if (slEl) slEl.value = Math.max(sLen, sWid);
     if (swEl) swEl.value = Math.min(sLen, sWid);
-    if (blEl) {
-        blEl.value = Math.max(bLen, bWid);
-        blEl.disabled = false;
-    }
-    if (bwEl) {
-        bwEl.value = Math.min(bLen, bWid);
-        bwEl.disabled = false;
-    }
-    if (plEl) plEl.value = partNo;
     if (kfEl) kfEl.value = 0;
+
+    if (currentCutOptPartsList.length > 1) {
+        // Multi-Part Batch Mode
+        if (multiSec) multiSec.style.display = "block";
+        if (multiCountEl) multiCountEl.textContent = currentCutOptPartsList.length;
+        renderOptMultiPartBadges(currentCutOptPartsList);
+
+        if (plEl) plEl.value = `${currentCutOptPartsList.length} Parts Batch`;
+        if (blEl) {
+            blEl.value = currentCutOptPartsList[0].length;
+            blEl.disabled = true;
+        }
+        if (bwEl) {
+            bwEl.value = currentCutOptPartsList[0].width;
+            bwEl.disabled = true;
+        }
+    } else {
+        if (multiSec) multiSec.style.display = "none";
+        if (blEl) {
+            blEl.value = Math.max(bLen, bWid);
+            blEl.disabled = false;
+        }
+        if (bwEl) {
+            bwEl.value = Math.min(bLen, bWid);
+            bwEl.disabled = false;
+        }
+        if (plEl) plEl.value = partNo;
+    }
 
     // Run optimization
     await run2DCutOptimization();
@@ -6471,6 +6881,10 @@ async function applyCutOptimizerResults() {
         const yieldInput = document.getElementById("yieldPctInput");
         if (yieldInput) {
             yieldInput.value = `${yieldVal}%`;
+        }
+        const nonStdYieldEl = document.getElementById("nonStdTotalYieldDisplay");
+        if (nonStdYieldEl) {
+            nonStdYieldEl.textContent = `${yieldVal}%`;
         }
 
         // Automatically mark layout as Non-Standard (custom OptiCutter 2D nesting)
@@ -7026,4 +7440,663 @@ window.startNotificationsPolling = startNotificationsPolling;
 
 
 
+
+
+
+// =========================================================================
+// NON-STANDARD MULTI-PART MANUFACTURING & MANUAL ADDING LOGIC
+// (Matches End Bit MO Creation Workflow: Part #, Size, Qty, Yield, Agent Capacity)
+// =========================================================================
+
+let nonStdPartRowCounter = 0;
+let nonStdSearchDebounceTimer = null;
+
+function addNonStdPartRow(defaultPart = null) {
+    nonStdPartRowCounter++;
+    const rowId = nonStdPartRowCounter;
+    const container = document.getElementById("nonStdPartsContainer");
+    if (!container) return;
+
+    const row = document.createElement("div");
+    row.className = "eb-part-card-row";
+    row.id = `nonStdPartRow_${rowId}`;
+    row.dataset.rowId = rowId;
+
+    row.innerHTML = `
+        <div class="form-group relative">
+            <label>Part Number <span class="required">*</span></label>
+            <div class="part-search-input-wrap">
+                <i class="fa-solid fa-shapes"></i>
+                <input type="text" class="nonstd-part-no" id="nonStdPartNo_${rowId}" placeholder="Search or type part #..." autocomplete="off" required oninput="onNonStdPartRowSearch(this, ${rowId})">
+                <div class="part-dropdown-results eb-row-dropdown" id="nonStdDropdown_${rowId}" style="display: none;"></div>
+            </div>
+            <input type="hidden" class="nonstd-base-part" id="nonStdBasePart_${rowId}" value="">
+        </div>
+        <div class="form-group">
+            <label>Part Size (T*L*W) <span class="required">*</span></label>
+            <input type="text" class="nonstd-part-size" id="nonStdPartSize_${rowId}" placeholder="e.g. 2*300*150" required oninput="onNonStdPartRowSizeInput(this, ${rowId})">
+            <input type="hidden" class="nonstd-cut-len" id="nonStdCutLen_${rowId}" value="">
+            <input type="hidden" class="nonstd-cut-wid" id="nonStdCutWid_${rowId}" value="">
+            <input type="hidden" class="nonstd-thickness" id="nonStdThick_${rowId}" value="">
+        </div>
+        <div class="form-group">
+            <label>No. of Parts <span class="required">*</span></label>
+            <input type="number" min="1" step="1" value="1" class="nonstd-part-qty" id="nonStdPartQty_${rowId}" required oninput="onNonStdQtyChange(${rowId})">
+        </div>
+        <div class="form-group">
+            <label><i class="fa-solid fa-chart-pie"></i> Yield %</label>
+            <input type="text" readonly class="nonstd-part-yield" id="nonStdPartYield_${rowId}" placeholder="Auto" style="font-weight: 700; color: #059669; background: #fff !important;">
+        </div>
+        <div style="display: flex; align-items: flex-end;">
+            <button type="button" class="btn-remove-eb-part" onclick="removeNonStdPartRow(${rowId})" title="Remove this part">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+        <div class="eb-agent-feedback-bar" id="nonStdAgentFeedback_${rowId}" style="grid-column: 1 / -1; display: none; margin-top: 4px;"></div>
+    `;
+
+    container.appendChild(row);
+
+    if (defaultPart) {
+        onSelectNonStdRowPart(rowId, defaultPart);
+    }
+
+    updateNonStdRemoveButtonsVisibility();
+    checkRowNonStdCapacity(rowId, false);
+    recalculateAllNonStdTotals();
+}
+
+function removeNonStdPartRow(rowId) {
+    const row = document.getElementById(`nonStdPartRow_${rowId}`);
+    if (row) {
+        row.remove();
+        updateNonStdRemoveButtonsVisibility();
+        recalculateAllNonStdTotals();
+    }
+}
+
+function updateNonStdRemoveButtonsVisibility() {
+    const rows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
+    rows.forEach(r => {
+        const btn = r.querySelector(".btn-remove-eb-part");
+        if (btn) {
+            btn.style.display = rows.length > 1 ? "inline-flex" : "none";
+        }
+    });
+}
+
+function onNonStdPartRowSearch(inputEl, rowId) {
+    clearTimeout(nonStdSearchDebounceTimer);
+    const dropdown = document.getElementById(`nonStdDropdown_${rowId}`);
+    if (!dropdown) return;
+
+    const trimmed = (inputEl.value || "").trim();
+
+    // Sync first row with primary partNoInput
+    const allRows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
+    if (allRows.length > 0 && allRows[0].id === `nonStdPartRow_${rowId}`) {
+        const pMain = document.getElementById("partNoInput");
+        if (pMain) pMain.value = trimmed;
+    }
+
+    if (trimmed.length < 1) {
+        dropdown.style.display = "none";
+        dropdown.innerHTML = "";
+        recalculateAllNonStdTotals();
+        return;
+    }
+
+    nonStdSearchDebounceTimer = setTimeout(async () => {
+        try {
+            const thick = document.getElementById("thicknessInput")?.value || "";
+            const grade = document.getElementById("gradeInput")?.value || "";
+            let results = [];
+            const res = await fetch(`/api/parts/search-blank?query=${encodeURIComponent(trimmed)}&thickness=${encodeURIComponent(thick)}&grade=${encodeURIComponent(grade)}`);
+            if (res.ok) {
+                results = await res.json();
+            }
+            if (!results || results.length === 0) {
+                const res2 = await fetch(`/api/search?q=${encodeURIComponent(trimmed)}`);
+                if (res2.ok) {
+                    const r2 = await res2.json();
+                    results = (r2 || []).map(item => ({
+                        part_no: item.part_no,
+                        base_part: item.base_part,
+                        grade: grade || 'YS'
+                    }));
+                }
+            }
+            renderNonStdRowDropdown(results, rowId);
+        } catch (e) {
+            console.error("Non-std part search error:", e);
+        }
+    }, 200);
+}
+
+function renderNonStdRowDropdown(parts, rowId) {
+    const dropdown = document.getElementById(`nonStdDropdown_${rowId}`);
+    if (!dropdown) return;
+
+    if (!parts || parts.length === 0) {
+        dropdown.innerHTML = `<div class="part-dropdown-empty" style="padding: 8px 12px; color: #64748b; font-size: 0.82rem;"><i class="fa-solid fa-circle-question"></i> No master part found. Continue typing custom part #.</div>`;
+        dropdown.style.display = "block";
+        return;
+    }
+
+    dropdown.innerHTML = parts.slice(0, 10).map(p => {
+        const blankStr = (p.cut_blank || (p.blank_length && p.blank_width ? `${p.thickness || ''}*${p.blank_length}*${p.blank_width}` : "")).replace(/^\*/, '');
+        return `
+            <div class="part-dropdown-item" style="padding: 8px 12px; cursor: pointer; border-bottom: 1px solid #f1f5f9;" onclick='onSelectNonStdRowPart(${rowId}, ${JSON.stringify(p).replace(/'/g, "&#39;")})'>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <strong style="color: #1e293b; font-size: 0.85rem;"><i class="fa-solid fa-shapes" style="color: #0284c7; margin-right: 5px;"></i>${escapeHtml(p.part_no)}</strong>
+                    <small style="color: #64748b;">${escapeHtml(p.base_part || '')}</small>
+                </div>
+                <div style="display: flex; justify-content: space-between; font-size: 0.74rem; color: #64748b; margin-top: 2px;">
+                    <span>Size: <strong>${escapeHtml(blankStr || 'Enter size')}</strong></span>
+                    <span>Grade: ${escapeHtml(p.grade || 'YS')}</span>
+                </div>
+            </div>
+        `;
+    }).join("");
+    dropdown.style.display = "block";
+}
+
+function onSelectNonStdRowPart(rowId, part) {
+    const pInput = document.getElementById(`nonStdPartNo_${rowId}`);
+    if (pInput) pInput.value = part.part_no;
+
+    const bInput = document.getElementById(`nonStdBasePart_${rowId}`);
+    if (bInput) bInput.value = part.base_part || (part.part_no ? part.part_no.split(" - ")[0] : "");
+
+    const sizeInput = document.getElementById(`nonStdPartSize_${rowId}`);
+    const cutLenInput = document.getElementById(`nonStdCutLen_${rowId}`);
+    const cutWidInput = document.getElementById(`nonStdCutWid_${rowId}`);
+    const thickInput = document.getElementById(`nonStdThick_${rowId}`);
+
+    const sheetThick = parseFloat(document.getElementById("thicknessInput")?.value) || 2.0;
+    const tVal = part.thickness || sheetThick;
+    const lVal = part.blank_length || part.cut_length || "";
+    const wVal = part.blank_width || part.cut_width || "";
+
+    if (cutLenInput && lVal) cutLenInput.value = lVal;
+    if (cutWidInput && wVal) cutWidInput.value = wVal;
+    if (thickInput) thickInput.value = tVal;
+    if (sizeInput && lVal && wVal) {
+        sizeInput.value = `${tVal}*${lVal}*${wVal}`;
+    } else if (sizeInput && part.size) {
+        sizeInput.value = part.size;
+        onNonStdPartRowSizeInput(sizeInput, rowId);
+    }
+
+    if (part.qty && document.getElementById(`nonStdPartQty_${rowId}`)) {
+        document.getElementById(`nonStdPartQty_${rowId}`).value = part.qty;
+    }
+
+    const dropdown = document.getElementById(`nonStdDropdown_${rowId}`);
+    if (dropdown) dropdown.style.display = "none";
+
+    // Sync first row with primary fields
+    const allRows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
+    if (allRows.length > 0 && allRows[0].id === `nonStdPartRow_${rowId}`) {
+        const pMain = document.getElementById("partNoInput");
+        if (pMain) pMain.value = part.part_no;
+        const bMain = document.getElementById("basePartInput");
+        if (bMain) bMain.value = bInput?.value || "";
+        const gMain = document.getElementById("gradeInput");
+        if (gMain && (!gMain.value || gMain.value === "YS") && part.grade) {
+            gMain.value = part.grade;
+        }
+    }
+
+    checkRowNonStdCapacity(rowId, false);
+    recalculateAllNonStdTotals();
+}
+
+function onNonStdPartRowSizeInput(inputEl, rowId) {
+    const thickInput = document.getElementById(`nonStdThick_${rowId}`);
+    const sheetThick = parseFloat(document.getElementById("thicknessInput")?.value) || parseFloat(thickInput?.value) || 2.0;
+    const d = parseDimString(inputEl.value, sheetThick);
+    const cutLenInput = document.getElementById(`nonStdCutLen_${rowId}`);
+    const cutWidInput = document.getElementById(`nonStdCutWid_${rowId}`);
+
+    if (d.t > 0 && thickInput) thickInput.value = d.t;
+    if (d.l > 0 && cutLenInput) cutLenInput.value = d.l;
+    if (d.w > 0 && cutWidInput) cutWidInput.value = d.w;
+
+    checkRowNonStdCapacity(rowId, false);
+    recalculateAllNonStdTotals();
+}
+
+function onNonStdQtyChange(rowId) {
+    checkRowNonStdCapacity(rowId, false);
+    recalculateAllNonStdTotals();
+}
+
+function capNonStdPartQty(rowId, maxQty) {
+    const qtyInput = document.getElementById(`nonStdPartQty_${rowId}`);
+    if (qtyInput) {
+        qtyInput.value = maxQty;
+    }
+    checkRowNonStdCapacity(rowId, false);
+    recalculateAllNonStdTotals();
+}
+
+function checkRowNonStdCapacity(rowId, autoApply = false) {
+    const feedbackEl = document.getElementById(`nonStdAgentFeedback_${rowId}`);
+    const sizeInput = document.getElementById(`nonStdPartSize_${rowId}`);
+    const qtyInput = document.getElementById(`nonStdPartQty_${rowId}`);
+    const yieldInput = document.getElementById(`nonStdPartYield_${rowId}`);
+
+    const sheetsRequiredInput = document.getElementById("sheetsRequired");
+    const sheetsCount = Math.max(1, parseFloat(sheetsRequiredInput?.value) || 1);
+
+    let sheetLen = parseFloat(document.getElementById("lengthInput")?.value) || 0;
+    let sheetWid = parseFloat(document.getElementById("widthInput")?.value) || 0;
+    const sheetSizeStr = document.getElementById("sheetSizeInput")?.value || "";
+    const sheetThick = parseFloat(document.getElementById("thicknessInput")?.value) || 2.0;
+
+    if ((sheetLen <= 0 || sheetWid <= 0) && sheetSizeStr) {
+        const sd = parseDimString(sheetSizeStr, sheetThick);
+        if (sd.l > 0 && sd.w > 0) {
+            sheetLen = sd.l;
+            sheetWid = sd.w;
+        }
+    }
+
+    let cutLen = parseFloat(document.getElementById(`nonStdCutLen_${rowId}`)?.value) || 0;
+    let cutWid = parseFloat(document.getElementById(`nonStdCutWid_${rowId}`)?.value) || 0;
+
+    if ((cutLen === 0 || cutWid === 0) && sizeInput && sizeInput.value) {
+        const rowThick = parseFloat(document.getElementById(`nonStdThick_${rowId}`)?.value) || sheetThick;
+        const d = parseDimString(sizeInput.value, rowThick);
+        if (d.l > 0) cutLen = d.l;
+        if (d.w > 0) cutWid = d.w;
+    }
+
+    if (!feedbackEl) return { fits: true, exceeds: false, maxParts: 0, partsPerSheet: 0, hasShortage: false };
+
+    if (sheetLen <= 0 || sheetWid <= 0 || cutLen <= 0 || cutWid <= 0) {
+        feedbackEl.style.display = "none";
+        feedbackEl.innerHTML = "";
+        if (sizeInput) {
+            sizeInput.style.borderColor = "";
+            sizeInput.style.backgroundColor = "";
+        }
+        if (qtyInput) {
+            qtyInput.style.borderColor = "";
+            qtyInput.style.backgroundColor = "";
+        }
+        if (yieldInput) yieldInput.value = "Auto";
+        return { fits: true, exceeds: false, maxParts: 0, partsPerSheet: 0, hasShortage: false };
+    }
+
+    const sMax = Math.max(sheetLen, sheetWid);
+    const sMin = Math.min(sheetLen, sheetWid);
+    const bMax = Math.max(cutLen, cutWid);
+    const bMin = Math.min(cutLen, cutWid);
+
+    // 1. Boundary Check
+    if (bMax > sMax || bMin > sMin) {
+        feedbackEl.style.display = "block";
+        feedbackEl.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #fef2f2; border: 1.5px solid #f87171; border-radius: 6px; padding: 6px 12px; font-size: 0.78rem; color: #991b1b;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-triangle-exclamation" style="color: #dc2626; font-size: 0.95rem;"></i>
+                    <span><strong>Exceeds Sheet Size:</strong> Blank (${bMax} × ${bMin} mm) exceeds sheet (${sMax} × ${sMin} mm). <strong>0 parts producible.</strong></span>
+                </div>
+                <span style="font-weight: 700; color: #dc2626; font-size: 0.75rem; background: #fee2e2; padding: 2px 8px; border-radius: 4px;">Boundary Error</span>
+            </div>
+        `;
+        if (sizeInput) {
+            sizeInput.style.borderColor = "#ef4444";
+            sizeInput.style.backgroundColor = "#fff5f5";
+        }
+        if (qtyInput) {
+            qtyInput.style.borderColor = "#ef4444";
+            qtyInput.style.backgroundColor = "#fff5f5";
+        }
+        if (yieldInput) {
+            yieldInput.value = "0%";
+            yieldInput.style.color = "#dc2626";
+        }
+        return { fits: false, exceeds: true, maxParts: 0, partsPerSheet: 0, hasShortage: true };
+    }
+
+    // Blank fits within sheet
+    if (sizeInput) {
+        sizeInput.style.borderColor = "#10b981";
+        sizeInput.style.backgroundColor = "#f0fdf4";
+    }
+
+    const opt1 = Math.floor(sMax / bMax) * Math.floor(sMin / bMin);
+    const opt2 = Math.floor(sMax / bMin) * Math.floor(sMin / bMax);
+    const partsPerSheet = Math.max(opt1, opt2, 1);
+    const totalMaxParts = partsPerSheet * sheetsCount;
+    const totalSheetArea = sheetLen * sheetWid * sheetsCount;
+    const maxCapacityYield = Math.min(100, Math.round(((totalMaxParts * cutLen * cutWid) / totalSheetArea) * 1000) / 10);
+
+    let enteredQty = Math.max(1, parseInt(qtyInput?.value) || 1);
+
+    if (autoApply) {
+        enteredQty = totalMaxParts;
+        if (qtyInput) {
+            qtyInput.value = totalMaxParts;
+            qtyInput.style.borderColor = "";
+            qtyInput.style.backgroundColor = "";
+        }
+        if (yieldInput) {
+            yieldInput.value = `${maxCapacityYield}%`;
+            yieldInput.style.color = "#059669";
+        }
+    }
+
+    const actualRowYield = Math.min(100, Math.round(((enteredQty * cutLen * cutWid) / totalSheetArea) * 1000) / 10);
+    if (!autoApply && yieldInput) {
+        yieldInput.value = `${actualRowYield}%`;
+        yieldInput.style.color = "#059669";
+    }
+
+    const hasCapacityShortage = enteredQty > totalMaxParts;
+    feedbackEl.style.display = "block";
+
+    if (hasCapacityShortage) {
+        if (qtyInput) {
+            qtyInput.style.borderColor = "#f59e0b";
+            qtyInput.style.backgroundColor = "#fffbeb";
+        }
+        feedbackEl.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 6px; padding: 6px 12px; font-size: 0.78rem; color: #92400e;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-circle-exclamation" style="color: #d97706; font-size: 0.95rem;"></i>
+                    <span>Requested <strong>${enteredQty} parts</strong> exceeds sheet capacity (Max: <strong>${totalMaxParts} parts</strong> @ ${partsPerSheet} blanks/sheet).</span>
+                </div>
+                <button type="button" class="btn btn-sm" onclick="capNonStdPartQty(${rowId}, ${totalMaxParts})" style="background: #d97706; color: #fff; font-weight: 700; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; border: none; cursor: pointer;">
+                    Cap to ${totalMaxParts} Parts
+                </button>
+            </div>
+        `;
+    } else {
+        if (qtyInput) {
+            qtyInput.style.borderColor = "";
+            qtyInput.style.backgroundColor = "";
+        }
+        feedbackEl.innerHTML = `
+            <div style="display: flex; align-items: center; justify-content: space-between; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 5px 12px; font-size: 0.78rem; color: #166534;">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-circle-check" style="color: #16a34a;"></i>
+                    <span>Fits <strong>${partsPerSheet} blanks/sheet</strong> • Total Max: <strong>${totalMaxParts} parts</strong> from ${sheetsCount} sheet(s) (${actualRowYield}% yield).</span>
+                </div>
+            </div>
+        `;
+    }
+
+    return {
+        fits: true,
+        exceeds: false,
+        maxParts: totalMaxParts,
+        partsPerSheet: partsPerSheet,
+        hasShortage: hasCapacityShortage
+    };
+}
+
+function runNonStdCapacityAgentForAllRows() {
+    const rows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
+    if (!rows || rows.length === 0) return;
+    let anyExceeded = false;
+    rows.forEach(r => {
+        const rowId = r.dataset.rowId;
+        const res = checkRowNonStdCapacity(rowId, true);
+        if (res.exceeds) anyExceeded = true;
+    });
+    recalculateAllNonStdTotals();
+    if (anyExceeded) {
+        alert("⚠️ Notice: One or more part blanks exceed the sheet dimensions and cannot be cut from this sheet.");
+    }
+}
+
+function recalculateAllNonStdTotals() {
+    const sheetsRequiredInput = document.getElementById("sheetsRequired");
+    let sheetsCount = Math.max(1, parseFloat(sheetsRequiredInput?.value) || 1);
+
+    let sheetLen = parseFloat(document.getElementById("lengthInput")?.value) || 0;
+    let sheetWid = parseFloat(document.getElementById("widthInput")?.value) || 0;
+    const sheetSizeStr = document.getElementById("sheetSizeInput")?.value || "";
+    const sheetThick = parseFloat(document.getElementById("thicknessInput")?.value) || 2.0;
+
+    if ((sheetLen <= 0 || sheetWid <= 0) && sheetSizeStr) {
+        const sd = parseDimString(sheetSizeStr, sheetThick);
+        if (sd.l > 0 && sd.w > 0) {
+            sheetLen = sd.l;
+            sheetWid = sd.w;
+        }
+    }
+
+    const totalSheetArea = (sheetLen > 0 && sheetWid > 0) ? (sheetLen * sheetWid * sheetsCount) : 0;
+
+    const rows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
+    const partsList = [];
+    let grandTotalParts = 0;
+    let grandTotalCutArea = 0;
+    let anyBoundaryError = false;
+
+    rows.forEach((row, idx) => {
+        const rowId = row.dataset.rowId;
+        const pNo = document.getElementById(`nonStdPartNo_${rowId}`)?.value?.trim() || "";
+        const bPart = document.getElementById(`nonStdBasePart_${rowId}`)?.value?.trim() || (pNo ? pNo.split(" - ")[0] : "");
+        const pSize = document.getElementById(`nonStdPartSize_${rowId}`)?.value?.trim() || "";
+        let cutLen = parseFloat(document.getElementById(`nonStdCutLen_${rowId}`)?.value) || 0;
+        let cutWid = parseFloat(document.getElementById(`nonStdCutWid_${rowId}`)?.value) || 0;
+        const thick = parseFloat(document.getElementById(`nonStdThick_${rowId}`)?.value) || sheetThick;
+
+        if ((cutLen === 0 || cutWid === 0) && pSize) {
+            const d = parseDimString(pSize, thick);
+            if (d.l > 0) cutLen = d.l;
+            if (d.w > 0) cutWid = d.w;
+        }
+
+        const qty = Math.max(1, parseInt(document.getElementById(`nonStdPartQty_${rowId}`)?.value) || 1);
+        const capRes = checkRowNonStdCapacity(rowId, false);
+        if (capRes.exceeds) anyBoundaryError = true;
+
+        const yieldVal = document.getElementById(`nonStdPartYield_${rowId}`)?.value || "";
+
+        if (pNo) {
+            partsList.push({
+                part_no: pNo,
+                base_part: bPart,
+                part_size: pSize,
+                cut_length: cutLen,
+                cut_width: cutWid,
+                thickness: thick,
+                no_of_parts: qty,
+                target_qty: qty,
+                yield_pct: yieldVal,
+                is_primary: idx === 0
+            });
+            grandTotalParts += qty;
+            if (cutLen > 0 && cutWid > 0) {
+                grandTotalCutArea += (cutLen * cutWid * qty);
+            }
+        }
+    });
+
+    // Save serialized JSON
+    const hiddenJson = document.getElementById("nonStdPartsJson");
+    if (hiddenJson) {
+        hiddenJson.value = JSON.stringify(partsList);
+    }
+
+    // Combined Yield
+    let combinedYieldPct = 0;
+    if (totalSheetArea > 0 && grandTotalCutArea > 0) {
+        combinedYieldPct = Math.min(99.0, Math.round((grandTotalCutArea / totalSheetArea) * 1000) / 10);
+    }
+
+    const totalOutputDisplay = document.getElementById("nonStdTotalOutputDisplay");
+    const totalYieldDisplay = document.getElementById("nonStdTotalYieldDisplay");
+
+    if (totalOutputDisplay) {
+        totalOutputDisplay.textContent = `${grandTotalParts} Units`;
+    }
+    if (totalYieldDisplay) {
+        totalYieldDisplay.textContent = `${combinedYieldPct}%`;
+    }
+
+    // Sync primary outputs with overall MO fields
+    const targetQtyInput = document.getElementById("targetQty");
+    if (targetQtyInput && grandTotalParts > 0) {
+        targetQtyInput.value = grandTotalParts;
+    }
+    const manualQtyInput = document.getElementById("targetQtyManual");
+    if (manualQtyInput && grandTotalParts > 0) {
+        manualQtyInput.value = grandTotalParts;
+    }
+    const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
+    if (autoQtyDisplay && grandTotalParts > 0) {
+        autoQtyDisplay.textContent = `${grandTotalParts} Units`;
+    }
+    const yieldInput = document.getElementById("yieldPctInput");
+    if (yieldInput && combinedYieldPct > 0) {
+        yieldInput.value = `${combinedYieldPct}%`;
+    }
+
+    // Sync Row 1 with primary part fields if present
+    if (partsList.length > 0) {
+        const pMain = document.getElementById("partNoInput");
+        if (pMain && (!pMain.value || pMain.value === "Custom Part")) {
+            pMain.value = partsList[0].part_no;
+        }
+        const bMain = document.getElementById("basePartInput");
+        if (bMain && (!bMain.value || bMain.value === "Custom Base")) {
+            bMain.value = partsList[0].base_part;
+        }
+    }
+}
+
+function initNonStdPartsRows() {
+    const container = document.getElementById("nonStdPartsContainer");
+    if (!container) return;
+    if (container.children.length === 0) {
+        const curPartNo = document.getElementById("partNoInput")?.value?.trim() || "";
+        const curBasePart = document.getElementById("basePartInput")?.value?.trim() || "";
+        const curQty = parseInt(document.getElementById("targetQtyManual")?.value || document.getElementById("targetQty")?.value || 1, 10);
+        const thickVal = parseFloat(document.getElementById("thicknessInput")?.value) || 2.0;
+
+        let initL = 0;
+        let initW = 0;
+        let initT = thickVal;
+        let initSize = "";
+
+        const lr = typeof getSelectedLayoutRecord === "function" ? getSelectedLayoutRecord() : null;
+        if (lr) {
+            const p1 = lr.part1 || lr;
+            const cb = p1.cut_blank || lr.cut_blank || "";
+            if (cb) {
+                const d = parseDimString(cb, thickVal);
+                if (d.l > 0 && d.w > 0) {
+                    initL = d.l; initW = d.w; initT = d.t || initT;
+                }
+            } else if (p1.blank_size?.length && p1.blank_size?.width) {
+                initL = parseFloat(p1.blank_size.length);
+                initW = parseFloat(p1.blank_size.width);
+                initT = parseFloat(p1.blank_size.thickness) || initT;
+            }
+        }
+
+        if ((!initL || !initW) && currentIntelData?.planning_summary?.parts?.length > 0) {
+            const ip = currentIntelData.planning_summary.parts[0];
+            if (ip.cut_blank) {
+                const d = parseDimString(ip.cut_blank, thickVal);
+                if (d.l > 0 && d.w > 0) {
+                    initL = d.l; initW = d.w; initT = d.t || initT;
+                }
+            }
+        }
+
+        if (initL > 0 && initW > 0) {
+            initSize = `${initT}*${initL}*${initW}`;
+        }
+
+        if (curPartNo) {
+            addNonStdPartRow({
+                part_no: curPartNo,
+                base_part: curBasePart,
+                size: initSize,
+                blank_length: initL || "",
+                blank_width: initW || "",
+                thickness: initT,
+                qty: curQty
+            });
+        } else {
+            addNonStdPartRow();
+        }
+    }
+}
+
+function renderReviewParts(mo) {
+    const sec = document.getElementById("reviewPartsSection");
+    const grid = document.getElementById("reviewPartsGrid");
+    const countBadge = document.getElementById("reviewPartsCountBadge");
+    if (!sec || !grid) return;
+
+    let partsList = mo.parts || mo.parts_list;
+    if ((!partsList || !partsList.length) && mo.constraints_status && mo.constraints_status.parts) {
+        partsList = mo.constraints_status.parts;
+    }
+    if (typeof partsList === "string") {
+        try { partsList = JSON.parse(partsList); } catch(e) { partsList = []; }
+    }
+
+    if (!partsList || !Array.isArray(partsList) || partsList.length <= 1) {
+        sec.style.display = "none";
+        grid.innerHTML = "";
+        return;
+    }
+
+    if (countBadge) countBadge.textContent = `${partsList.length} Parts Manufactured`;
+
+    grid.innerHTML = partsList.map((p, idx) => {
+        const sizeStr = p.part_size || `${p.thickness || mo.thickness || '-'}*${p.cut_length || p.blank_length || '-'}*${p.cut_width || p.blank_width || '-'}`;
+        const pQty = p.no_of_parts || p.target_qty || 1;
+        const isPrimary = p.is_primary || idx === 0;
+        return `
+            <div style="background: #ffffff; border: 1.5px solid ${isPrimary ? '#0284c7' : '#e2e8f0'}; border-radius: 8px; padding: 12px 14px; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px;">
+                    <div>
+                        <span style="font-size: 0.72rem; font-weight: 700; color: ${isPrimary ? '#0284c7' : '#64748b'}; text-transform: uppercase;">
+                            ${isPrimary ? '★ Primary Part' : `Nested Part #${idx + 1}`}
+                        </span>
+                        <div style="font-weight: 700; color: #1e293b; font-size: 0.92rem; margin-top: 2px;">
+                            ${escapeHtml(p.part_no || '')}
+                        </div>
+                    </div>
+                    <span style="background: #ecfdf5; color: #047857; font-weight: 700; font-size: 0.8rem; padding: 2px 8px; border-radius: 4px;">
+                        ${pQty} Units
+                    </span>
+                </div>
+                <div style="font-size: 0.76rem; color: #475569; display: flex; flex-direction: column; gap: 3px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;">
+                    <div><strong>Base Part:</strong> ${escapeHtml(p.base_part || '-')}</div>
+                    <div><strong>Blank Size:</strong> ${escapeHtml(sizeStr)} mm</div>
+                    ${p.yield_pct ? `<div><strong>Yield:</strong> <span style="color: #059669; font-weight: 700;">${escapeHtml(p.yield_pct)}</span></div>` : ''}
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    sec.style.display = "block";
+}
+
+// Window bindings
+window.addNonStdPartRow = addNonStdPartRow;
+window.removeNonStdPartRow = removeNonStdPartRow;
+window.onNonStdPartRowSearch = onNonStdPartRowSearch;
+window.onSelectNonStdRowPart = onSelectNonStdRowPart;
+window.onNonStdPartRowSizeInput = onNonStdPartRowSizeInput;
+window.onNonStdQtyChange = onNonStdQtyChange;
+window.capNonStdPartQty = capNonStdPartQty;
+window.checkRowNonStdCapacity = checkRowNonStdCapacity;
+window.runNonStdCapacityAgentForAllRows = runNonStdCapacityAgentForAllRows;
+window.recalculateAllNonStdTotals = recalculateAllNonStdTotals;
+window.initNonStdPartsRows = initNonStdPartsRows;
+window.renderReviewParts = renderReviewParts;
 

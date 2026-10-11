@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "id": "notif_1791700117027_42867f",
+    "target_role": "krysalis",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-3115",
+    "title": "New MO MO-2026-3115 Received",
+    "message": "New Material Order MO-2026-3115 (MB121017 - Item 11(X6C17014)) created by Shearing. Assigned to Consultants (Krysalis) Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-10-11T06:28:37.027510Z",
+    "read_by": [
+      "krysalis"
+    ],
+    "extra_data": {
+      "part_no": "MB121017 - Item 11(X6C17014)",
+      "stage": "KRYSALIS"
+    }
+  }
+]

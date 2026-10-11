@@ -683,6 +683,74 @@ def get_raw_material_sheets():
     results.sort(key=lambda x: x["item_code"])
     return jsonify(results)
 
+def resolve_part_size_info(p_code, rm_code=None):
+    if not p_code:
+        return ""
+    p_str = str(p_code).strip()
+    p_norm = normalize_key(p_str)
+
+    # 1. Match from ALL_RECORDS (prefer matching rm_code if given)
+    for r in ALL_RECORDS:
+        r_rm = (r.get("rm_erp") or "").strip().lower()
+        if rm_code and r_rm and rm_code.strip().lower() != r_rm:
+            continue
+        for pk in ["part1", "part2", "part3", "part4"]:
+            child = r.get(pk)
+            if child and isinstance(child, dict):
+                c_no = str(child.get("part_no") or "").strip()
+                if c_no and (c_no == p_str or normalize_key(c_no) == p_norm):
+                    cb = child.get("cut_blank") or r.get("cut_blank")
+                    if cb and cb.replace("*", "").strip():
+                        return cb
+        r_p = str(r.get("part_no") or "").strip()
+        if r_p and (r_p == p_str or normalize_key(r_p) == p_norm):
+            cb = r.get("cut_blank")
+            if cb and cb.replace("*", "").strip():
+                return cb
+
+    # 2. Match from ALL_RECORDS without rm_code constraint
+    for r in ALL_RECORDS:
+        for pk in ["part1", "part2", "part3", "part4"]:
+            child = r.get(pk)
+            if child and isinstance(child, dict):
+                c_no = str(child.get("part_no") or "").strip()
+                if c_no and (c_no == p_str or normalize_key(c_no) == p_norm):
+                    cb = child.get("cut_blank") or r.get("cut_blank")
+                    if cb and cb.replace("*", "").strip():
+                        return cb
+        r_p = str(r.get("part_no") or "").strip()
+        if r_p and (r_p == p_str or normalize_key(r_p) == p_norm):
+            cb = r.get("cut_blank")
+            if cb and cb.replace("*", "").strip():
+                return cb
+
+    # 3. Match from PARTS dictionary
+    if p_str in PARTS:
+        for rec in PARTS[p_str].get("records", []):
+            cb = rec.get("cut_blank") or ((rec.get("part1") or {}).get("cut_blank") if rec.get("part1") else "")
+            if cb and cb.replace("*", "").strip():
+                return cb
+
+    return ""
+
+
+def format_part_size_display(sz_str):
+    if not sz_str:
+        return ""
+    s = str(sz_str).strip()
+    parts = [x.strip() for x in s.split("*") if x.strip()]
+    if len(parts) >= 2:
+        clean_parts = []
+        for p in parts:
+            try:
+                num = float(p)
+                clean_parts.append(f"{int(num)}" if num == int(num) else f"{num}")
+            except Exception:
+                clean_parts.append(p)
+        return " × ".join(clean_parts) + " mm"
+    return s
+
+
 @app.route("/api/intelligence/part/<path:part_no>")
 def get_part_intelligence(part_no):
     """
@@ -697,11 +765,12 @@ def get_part_intelligence(part_no):
     sheets_needed = request.args.get("sheets", 1)
     month = request.args.get("month", "2026-09")
 
-    extra_parts = request.args.getlist("parts") or request.args.getlist("extra_parts")
-    if not extra_parts:
-        extra_str = request.args.get("extra_parts")
-        if extra_str:
-            extra_parts = [p.strip() for p in extra_str.split(",") if p.strip()]
+    raw_extra = request.args.getlist("parts") or request.args.getlist("extra_parts")
+    extra_parts = []
+    for ep in raw_extra:
+        for p in str(ep).split(","):
+            if p.strip() and p.strip() not in extra_parts:
+                extra_parts.append(p.strip())
 
     data = ERP_STOCK_SERVICE.get_part_comprehensive_intelligence(
         part_no=part_no,
@@ -714,7 +783,35 @@ def get_part_intelligence(part_no):
         target_month=month,
         extra_parts=extra_parts
     )
+
+    # Enrich each part with part_size and formatted_part_size
+    plan = data.get("planning_summary") or {}
+    parts_list = plan.get("parts") or []
+    for p in parts_list:
+        p_code = p.get("part_no") or p.get("child_part_no") or ""
+        cb = resolve_part_size_info(p_code, rm_code)
+        if not cb and p.get("child_part_no") and p.get("child_part_no") != p_code:
+            cb = resolve_part_size_info(p.get("child_part_no"), rm_code)
+        if not cb and p.get("parent_part_no") and p.get("child_part_no"):
+            cb = resolve_part_size_info(f"{p['parent_part_no']} - {p['child_part_no']}", rm_code)
+        if cb:
+            p["cut_blank"] = cb
+            p["part_size"] = format_part_size_display(cb)
+        elif not p.get("part_size"):
+            # Check if parent part has size
+            cb_parent = resolve_part_size_info(p.get("parent_part_no") or part_no, rm_code)
+            if cb_parent:
+                p["cut_blank"] = cb_parent
+                p["part_size"] = format_part_size_display(cb_parent)
+
+    primary_cb = resolve_part_size_info(part_no, rm_code)
+    if primary_cb:
+        plan["cut_blank"] = primary_cb
+        plan["part_size"] = format_part_size_display(primary_cb)
+
     return jsonify(data)
+
+
 
 
 @app.route("/api/intelligence/rm/<path:rm_code>")
@@ -845,6 +942,14 @@ def create_mo():
                 data["endbits"] = json.loads(endbits_str)
             except Exception:
                 data["endbits"] = []
+
+        # Handle multi-parts for non-standard layout (to increase yield)
+        parts_str = form.get("parts")
+        if parts_str:
+            try:
+                data["parts"] = json.loads(parts_str) if isinstance(parts_str, str) else parts_str
+            except Exception:
+                data["parts"] = []
 
         # Handle uploaded document file for non-standard layouts
         if "layout_doc" in request.files:
