@@ -13,8 +13,9 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/mo_style.css?v=102">
+    <link rel="stylesheet" href="/static/mo_style.css?v=112">
     <link rel="stylesheet" href="/static/mo_chat_widget.css?v=1">
+    <link rel="stylesheet" href="/static/mo_create_v2.css?v=1">
 
 </head>
 <body>
@@ -64,8 +65,21 @@
                                 <i class="fa-solid fa-bell" style="color: #0284c7;"></i> Notifications
                                 <span class="notif-unread-count" id="notifUnreadCount">0 Unread</span>
                             </div>
-                            <button type="button" class="btn-mark-all-read" onclick="markAllNotificationsAsRead(event)" title="Mark all as read">
-                                <i class="fa-solid fa-check-double"></i> Mark all read
+                            <div class="notif-header-actions">
+                                <button type="button" class="btn-mark-all-read" onclick="markAllNotificationsAsRead(event)" title="Mark all unread as done">
+                                    <i class="fa-solid fa-check-double"></i> Mark all read
+                                </button>
+                                <button type="button" class="btn-clear-all-notifs" onclick="clearAllNotifications(event)" title="Clear all notifications">
+                                    <i class="fa-regular fa-trash-can"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="notif-tabs-bar">
+                            <button type="button" class="notif-tab-btn active" id="notifTabBtnUnread" onclick="switchNotifTab('unread', event)">
+                                <i class="fa-solid fa-envelope-open-text" style="font-size: 0.7rem;"></i> Unread (<span id="notifTabUnreadNum">0</span>)
+                            </button>
+                            <button type="button" class="notif-tab-btn" id="notifTabBtnAll" onclick="switchNotifTab('all', event)">
+                                <i class="fa-solid fa-clock-rotate-left" style="font-size: 0.7rem;"></i> All History (<span id="notifTabAllNum">0</span>)
                             </button>
                         </div>
                         <div class="notif-panel-body" id="notifPanelList">
@@ -135,6 +149,13 @@
                     </button>
                     <button class="btn btn-primary" id="bannerActionBtn" onclick="openCreateModal()">
                         <i class="fa-solid fa-plus"></i> New MO
+                    </button>
+                    <!-- ERP Master Data Actions -->
+                    <button class="btn btn-ghost" id="bannerAddRmBtn" style="display: none;" onclick="openAddRmModal()">
+                        <i class="fa-solid fa-layer-group"></i> Add New RM
+                    </button>
+                    <button class="btn btn-primary" id="bannerAddPartBtn" style="display: none;" onclick="openAddPartModal()">
+                        <i class="fa-solid fa-puzzle-piece"></i> Add New Part
                     </button>
                 </div>
             </div>
@@ -312,6 +333,13 @@
                         <i class="fa-solid fa-magnifying-glass"></i>
                         <input type="text" id="dbSearchInput" placeholder="Search..." oninput="handleDbSearch(this.value)">
                     </div>
+                    <!-- ERP Master Data Buttons for Live Tables -->
+                    <button class="btn btn-primary btn-sm" id="tableAddRmBtn" style="display: none;" onclick="openAddRmModal()">
+                        <i class="fa-solid fa-plus"></i> Add RM Sheet
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="tableAddPartBtn" style="display: none;" onclick="openAddPartModal()">
+                        <i class="fa-solid fa-plus"></i> Add Part Master
+                    </button>
                     <button class="btn btn-icon" onclick="reloadCurrentDbTable()" title="Refresh">
                         <i class="fa-solid fa-rotate"></i>
                     </button>
@@ -429,12 +457,13 @@
                                 <th>End Bit Name</th>
                                 <th>No. of End Bits Produced</th>
                                 <th>Grade</th>
+                                <th>Weight (kg)</th>
                                 <th>Source MO #</th>
                                 <th class="shearing-action-th" style="display: none;">Action</th>
                             </tr>
                         </thead>
                         <tbody id="endbitsTableBody">
-                            <tr><td colspan="5" class="loading-cell"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading end bits store...</td></tr>
+                            <tr><td colspan="6" class="loading-cell"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading end bits store...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -603,48 +632,116 @@
                     <!-- Hidden MO Number (auto-generated in background) -->
                     <input type="hidden" id="moNumber" name="mo_number">
 
-                    <!-- 1. Part Lookup with Live Database Search -->
-                    <div class="form-group relative">
-                        <label for="partNoInput">Part Number <span class="required">* (Searches Master Database)</span></label>
-                        <div class="part-search-input-wrap">
-                            <i class="fa-solid fa-barcode"></i>
-                            <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)">
-                            <div class="part-dropdown-results" id="partDropdownResults" style="display: none;"></div>
+                    <!-- 1. Part Lookup & Side-by-side Technical Specs Row -->
+                    <div class="part-entry-row" style="display: flex; gap: 12px; align-items: flex-start; margin-bottom: 12px;">
+                        <!-- Part Number with Autocomplete Search Dropdown -->
+                        <div class="form-group relative" style="flex: 2.2; min-width: 240px; margin-bottom: 0;">
+                            <label for="partNoInput" style="font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 4px; display: block;">
+                                Part Number <span class="required" style="color: #ef4444;">* (Master Search)</span>
+                            </label>
+                            <div class="part-search-input-wrap">
+                                <i class="fa-solid fa-barcode"></i>
+                                <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)">
+                                <div class="part-dropdown-results" id="partDropdownResults" style="display: none;"></div>
+                            </div>
+                            <input type="hidden" id="basePartInput" name="base_part">
                         </div>
-                    </div>
 
-                    <!-- 2. Auto-filled Technical Specifications Box -->
-                    <div class="tech-spec-grid" id="techSpecGrid">
-                        <div class="spec-field">
-                            <span class="spec-label" id="basePartLabel">Base Part:</span>
-                            <input type="text" id="basePartInput" name="base_part" readonly placeholder="Auto-populated">
+                        <!-- Side-by-side: Grade -->
+                        <div class="form-group" style="flex: 0.8; min-width: 80px; margin-bottom: 0;">
+                            <label for="gradeInput" style="font-weight: 700; font-size: 0.82rem; color: #475569; margin-bottom: 4px; display: block;">
+                                Grade:
+                            </label>
+                            <input type="text" id="gradeInput" name="grade" readonly placeholder="Auto" style="font-weight: 700; color: #0284c7; background: #f8fafc; text-align: center; height: 38px;">
                         </div>
-                        <div class="spec-field">
-                            <span class="spec-label">RM ERP Code <span class="required">* (Required)</span>:</span>
-                            <select id="rmErpSelect" name="rm_erp" required onchange="onRmErpChanged(this.value)">
-                                <option value="">-- Select RM ERP Code --</option>
-                                <option value="__custom__">⚙️ Custom RM / Layout Code...</option>
-                            </select>
-                        </div>
-                        <div class="spec-field">
-                            <span class="spec-label">Grade:</span>
-                            <input type="text" id="gradeInput" name="grade" readonly placeholder="Auto-populated">
-                        </div>
-                        <div class="spec-field">
-                            <span class="spec-label">Sheet Size (T*L*W):</span>
-                            <input type="text" id="sheetSizeInput" readonly placeholder="Auto-populated">
+
+                        <!-- Side-by-side: Part Blank Size (T * L * W) -->
+                        <div class="form-group" style="flex: 1.6; min-width: 170px; margin-bottom: 0;">
+                            <label for="sheetSizeInput" style="font-weight: 700; font-size: 0.82rem; color: #475569; margin-bottom: 4px; display: block;">
+                                Size (T × L × W):
+                            </label>
+                            <input type="text" id="sheetSizeInput" readonly placeholder="Auto-populated" style="background: #f8fafc; font-weight: 600; text-align: center; height: 38px;">
                             <input type="hidden" id="thicknessInput" name="thickness">
                             <input type="hidden" id="lengthInput" name="length">
                             <input type="hidden" id="widthInput" name="width">
                         </div>
-                        <div class="spec-field" style="position: relative;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span class="spec-label"><i class="fa-solid fa-chart-pie"></i> Yield %:</span>
-                                <button type="button" id="btnLaunchOptimizerMo" class="btn-launch-optimizer-mini" onclick="openCutOptimizerForModal()" title="Calculate yield & 2D cut pattern with OptiCutter engine" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 1px 7px; font-size: 0.72rem; font-weight: 700; cursor: pointer;">
+
+                        <!-- Side-by-side: Strip / Blank Qty -->
+                        <div class="form-group" style="flex: 1.1; min-width: 120px; margin-bottom: 0;">
+                            <label for="stripPerBlankInput" style="font-weight: 700; font-size: 0.82rem; color: #475569; margin-bottom: 4px; display: block;">
+                                Strip / Blank Qty:
+                            </label>
+                            <input type="text" id="stripPerBlankInput" readonly placeholder="Auto" style="font-weight: 700; color: #0369a1; background: #f0f9ff; border: 1.5px solid #bae6fd; text-align: center; height: 38px;">
+                        </div>
+
+                        <!-- Side-by-side: Offtake -->
+                        <div class="form-group" style="flex: 0.9; min-width: 90px; margin-bottom: 0;">
+                            <label for="offtakeInput" style="font-weight: 700; font-size: 0.82rem; color: #475569; margin-bottom: 4px; display: block;">
+                                Offtake:
+                            </label>
+                            <input type="text" id="offtakeInput" readonly placeholder="Auto" style="font-weight: 700; color: #0284c7; background: #f0fdf4; border: 1.5px solid #86efac; text-align: center; height: 38px;">
+                        </div>
+                    </div>
+
+                    <!-- AI RM Advisor: Smart End-Bit & RM Selection Guide (Placed UP right where RM is selected) -->
+                    <div id="rmAgentSuggestionBox" class="rm-agent-suggestion-box" style="display: none;">
+                        <div class="rm-agent-header">
+                            <div class="rm-agent-title">
+                                <span class="rm-agent-robot-icon"><i class="fa-solid fa-robot"></i></span>
+                                <div>
+                                    <strong><i class="fa-solid fa-wand-magic-sparkles" style="color: #0284c7;"></i> AI RM Advisor — End-Bit &amp; RM Selection Guide</strong>
+                                    <p id="rmAgentVerdictText">Scanning in-store endbits for this part size, then evaluating fresh RM sheets...</p>
+                                </div>
+                            </div>
+                            <span class="rm-agent-badge" id="rmAgentCountBadge">Analyzing...</span>
+                        </div>
+                        <div id="rmAgentCardsList" class="rm-agent-cards-list">
+                            <!-- Populated dynamically by agent -->
+                        </div>
+                    </div>
+
+                    <!-- 2. RM Selection, Live Stock, Sheets & 2D Optimizer Row -->
+                    <div class="rm-entry-row" style="display: flex; gap: 12px; align-items: flex-end; margin-bottom: 14px; background: #f8fafc; padding: 12px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                        <!-- Select RM Sheet Dropdown (filtered by Grade + Thickness) -->
+                        <div class="form-group" style="flex: 2.2; min-width: 220px; margin-bottom: 0;">
+                            <label for="rmErpSelect" style="font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 4px; display: block;">
+                                Select RM Sheet <span class="required" style="color: #ef4444;">* (Grade + Thickness)</span>
+                            </label>
+                            <select id="rmErpSelect" name="rm_erp" required onchange="onRmErpChanged(this.value)" style="width: 100%; height: 38px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-weight: 600; font-size: 0.85rem; padding: 0 10px; background: #fff;">
+                                <option value="">-- Select RM ERP Code --</option>
+                                <option value="__custom__">⚙️ Custom RM / Layout Code...</option>
+                            </select>
+                        </div>
+
+                        <!-- Available Store Stock Box (auto-populated) -->
+                        <div class="form-group" style="flex: 1.2; min-width: 140px; margin-bottom: 0;">
+                            <label style="font-weight: 700; font-size: 0.82rem; color: #475569; margin-bottom: 4px; display: block;">
+                                Available Store Stock:
+                            </label>
+                            <div id="rmStockBox" style="height: 38px; display: flex; align-items: center; justify-content: center; gap: 6px; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 6px; font-weight: 700; font-size: 0.88rem; color: #059669; padding: 0 10px; white-space: nowrap;">
+                                <i class="fa-solid fa-boxes-stacked"></i> <span id="rmStockBoxVal">- Sheets</span>
+                            </div>
+                        </div>
+
+                        <!-- No. of Sheets Input -->
+                        <div class="form-group" style="flex: 0.9; min-width: 100px; margin-bottom: 0;">
+                            <label for="sheetsRequired" style="font-weight: 700; font-size: 0.82rem; color: #1e293b; margin-bottom: 4px; display: block;">
+                                No. of Sheets <span class="required" style="color: #ef4444;">*</span>
+                            </label>
+                            <input type="number" step="1" min="1" id="sheetsRequired" name="sheets_required" value="1" required oninput="onSheetsRequiredInput()" style="height: 38px; font-weight: 700; font-size: 1rem; text-align: center; border: 1.5px solid #cbd5e1; border-radius: 6px; background: #fff;">
+                        </div>
+
+                        <!-- Yield % and ⚡ 2D Cut Optimizer Button -->
+                        <div class="form-group" style="flex: 1.3; min-width: 165px; margin-bottom: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                <label style="font-weight: 700; font-size: 0.82rem; color: #475569; margin: 0;">
+                                    <i class="fa-solid fa-chart-pie" style="color: #059669;"></i> Yield %:
+                                </label>
+                                <button type="button" id="btnLaunchOptimizerMo" class="btn-launch-optimizer-mini" onclick="openCutOptimizerForModal()" title="Calculate yield & 2D cut pattern with OptiCutter engine" style="background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; border-radius: 4px; padding: 2px 7px; font-size: 0.72rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
                                     <i class="fa-solid fa-wand-magic-sparkles"></i> ⚡ 2D Cut Optimizer
                                 </button>
                             </div>
-                            <input type="text" id="yieldPctInput" name="yield_pct" readonly placeholder="Auto-populated" style="font-weight: 700; color: #059669;">
+                            <input type="text" id="yieldPctInput" name="yield_pct" readonly placeholder="Auto" style="height: 38px; font-weight: 700; color: #059669; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px; text-align: center; font-size: 0.95rem;">
                         </div>
                     </div>
 
@@ -674,76 +771,131 @@
                         </div>
                     </div>
 
-                    <!-- 3. Key Planning & Stock Indicators (RM Sheets On Hand, MRP Count, Remaining Quantity) -->
-                    <div id="moKpiContainer">
-                        <div class="mo-kpi-row" id="moKpiRow">
-                            <div class="mo-kpi-card kpi-rm-stock">
-                                <div class="mo-kpi-icon"><i class="fa-solid fa-layer-group"></i></div>
-                                <div class="mo-kpi-content">
-                                    <span class="mo-kpi-label">RM Sheets (On Hand)</span>
-                                    <div class="mo-kpi-value" id="kpiRmOnHand">- Sheets</div>
-                                    <small class="mo-kpi-subtext" id="kpiRmSubtext">Select RM &amp; part</small>
-                                </div>
+                    <!-- 3 Cards for Primary Part: MRP Quantity, Current Stock, Qty to Produce (Live from 7-table Supabase DB) -->
+                    <div class="part-mrp-kpi-row" id="partMrpKpiRow" style="display: flex; gap: 12px; margin-bottom: 14px;">
+                        <!-- 1. MRP Quantity -->
+                        <div class="mrp-kpi-card" style="flex: 1; background: #f5f3ff; border: 1.5px solid #ddd6fe; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 6px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                                <i class="fa-solid fa-calendar-days"></i>
                             </div>
-
-                            <div class="mo-kpi-card kpi-mrp-qty">
-                                <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
-                                <div class="mo-kpi-content">
-                                    <span class="mo-kpi-label">MRP Monthly Target</span>
-                                    <div class="mo-kpi-value" id="kpiMrpTarget">- Nos</div>
-                                    <small class="mo-kpi-subtext" id="kpiMrpSubtext" title="Balance demand">Balance demand</small>
-                                </div>
+                            <div>
+                                <span style="font-size: 0.7rem; font-weight: 700; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.5px; display: block;">MRP Quantity</span>
+                                <div id="mrpMonthlyQtyVal" style="font-size: 1.05rem; font-weight: 800; color: #5b21b6; line-height: 1.2;">- Nos</div>
+                                <small id="mrpMonthlyQtySub" style="font-size: 0.68rem; color: #8b5cf6;">Schedule Target</small>
                             </div>
+                        </div>
 
-                            <div class="mo-kpi-card kpi-mo-produced">
-                                <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
-                                <div class="mo-kpi-content">
-                                    <span class="mo-kpi-label">Parts Produced</span>
-                                    <div class="mo-kpi-value" id="kpiMoProduced">- Nos</div>
-                                    <small class="mo-kpi-subtext" id="kpiMoProducedSubtext" title="Already produced in month">0 MOs produced</small>
-                                </div>
+                        <!-- 2. Current Stock -->
+                        <div class="mrp-kpi-card" style="flex: 1; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 6px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                                <i class="fa-solid fa-boxes-stacked"></i>
                             </div>
+                            <div>
+                                <span style="font-size: 0.7rem; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Current Stock</span>
+                                <div id="mrpCurrentStockVal" style="font-size: 1.05rem; font-weight: 800; color: #065f46; line-height: 1.2;">- Nos</div>
+                                <small id="mrpCurrentStockSub" style="font-size: 0.68rem; color: #10b981;">In-House Stock</small>
+                            </div>
+                        </div>
 
-                            <div class="mo-kpi-card kpi-remaining-qty">
-                                <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
-                                <div class="mo-kpi-content">
-                                    <span class="mo-kpi-label">Remaining Quantity</span>
-                                    <div class="mo-kpi-value" id="kpiRemainingQty">- Nos</div>
-                                    <small class="mo-kpi-subtext" id="kpiRemainingSubtext" title="MRP Bal - MO Produced">MRP Bal - MO Produced</small>
+                        <!-- 3. Qty to Produce -->
+                        <div class="mrp-kpi-card" style="flex: 1; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 6px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                                <i class="fa-solid fa-industry"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <span style="font-size: 0.7rem; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Qty to Produce</span>
+                                <div id="mrpQtyToProduceVal" style="font-size: 1.05rem; font-weight: 800; color: #92400e; line-height: 1.2;">- Nos</div>
+                                <div id="mrpStockHintBox" style="display: none; align-items: center; gap: 4px; background: #ecfdf5; border: 1px solid #86efac; color: #065f46; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-top: 2px;" title="Current in-house stock covers full monthly demand. Remaining qty to produce is 0.">
+                                    <i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Stock: <span id="mrpStockHintVal">0</span> Nos
                                 </div>
+                                <small id="mrpQtyToProduceSub" style="font-size: 0.68rem; color: #f59e0b;">Net Requirement</small>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 4. Quantity Row: Sheets Required & Current Plan (Auto-Fetched for Standard, Manual Entry for Non-Standard) -->
-                    <div class="form-row">
-                        <div class="form-group flex-1">
-                            <label for="sheetsRequired">Sheets Required <span class="required">*</span></label>
-                            <input type="number" step="1" min="1" id="sheetsRequired" name="sheets_required" value="1" required oninput="recalculateTargetQtyFromLayout()">
-                        </div>
-                        <div class="form-group flex-1" id="currentPlanGroup">
-                            <label id="currentPlanLabel">
-                                Current Plan 
-                                <span class="badge-auto" id="currentPlanBadge"><i class="fa-solid fa-calculator"></i> Auto-Fetched</span>
-                            </label>
-                            <!-- Auto-calculated display box for Standard Layouts -->
-                            <div class="auto-qty-display-box" id="autoQtyDisplayBox">
-                                <span class="auto-qty-val" id="autoTargetQtyDisplay">- Units</span>
-                                <small class="auto-qty-hint" id="autoQtyHint">Select part &amp; layout</small>
+                    <!-- 3. Add Parts to Cut on this Sheet Section (Combo / Multi-Part Layout) -->
+                    <div class="add-parts-section-box" id="addPartsSectionBox" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 12px 14px; margin-bottom: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <label style="font-weight: 700; font-size: 0.88rem; color: #1e293b; margin: 0; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-shapes" style="color: #0284c7;"></i>
+                                    Parts to Cut on this Sheet
+                                </label>
+                                <span class="badge-yield-boost" id="addPartsCountBadge" style="background: #e0f2fe; color: #0284c7; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
+                                    1 Part
+                                </span>
                             </div>
-                            <!-- Manual entry input box for Non-Standard Layouts -->
-                            <div class="manual-qty-input-box" id="manualQtyInputBox" style="display: none;">
-                                <input type="number" step="1" min="1" id="targetQtyManual" placeholder="Enter target units/plan manually..." style="width: 100%; padding: 10px 12px; font-size: 1.05rem; font-weight: 700; color: #b45309; background: #fffdf5; border: 1.5px solid #f59e0b; border-radius: 8px;" oninput="onManualTargetQtyInput(this.value)">
-                                <small style="margin-top: 4px; display: block; font-size: 0.76rem; color: #92400e;">
-                                    <i class="fa-solid fa-pen"></i> Non-Standard Layout: Enter total units / cutting plan target manually.
-                                </small>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button type="button" class="btn btn-sm" id="btnOpenAiPartSuggestions" onclick="openAiPartSuggestionsModal()" style="font-size: 0.78rem; padding: 4px 11px; border: 1.5px solid #7c3aed; color: #7c3aed; background: #f5f3ff; font-weight: 700; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; transition: all 0.2s;" title="AI Agent suggests high-yield & low-stock parts that fit on this sheet">
+                                    <i class="fa-solid fa-wand-magic-sparkles" style="color: #8b5cf6;"></i>
+                                    <span>AI Co-Production Advisor</span>
+                                </button>
+                                <button type="button" class="btn btn-secondary btn-sm" id="btnAddNewPartRow" onclick="addModalAdditionalPartRow()" style="font-size: 0.8rem; padding: 4px 12px; border: 1.5px solid #0284c7; color: #0284c7; background: #f0f9ff; font-weight: 700; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                    <i class="fa-solid fa-plus"></i> Add Part
+                                </button>
                             </div>
-                            <!-- Hidden input so target_qty is always submitted with form -->
-                            <input type="hidden" id="targetQty" name="target_qty" value="1">
                         </div>
+                        <small style="display: block; font-size: 0.76rem; color: #64748b; margin-bottom: 8px;">
+                            Combine multiple parts to manufacture on this same sheet. All added parts will be nested and shown in 2D OptiCutter.
+                        </small>
+
+                        <!-- Inline AI Suggestions Banner (Auto-populated with top candidates prioritizing Yield & MRP Demand) -->
+                        <div id="inlineAiPartSuggestionsBanner" style="display: none; background: linear-gradient(135deg, #fbfbfe 0%, #f0fdf4 100%); border: 1.5px dashed #a7f3d0; border-radius: 8px; padding: 10px 12px; margin-bottom: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 6px;">
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-size: 0.78rem; font-weight: 700; color: #065f46; display: flex; align-items: center; gap: 5px;">
+                                        <i class="fa-solid fa-wand-magic-sparkles" style="color: #059669;"></i>
+                                        AI Suggested Companion Parts (Same Grade &amp; Thickness)
+                                    </span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                                    <!-- Quick Inline Filter Chips -->
+                                    <button type="button" class="btn btn-sm inline-ai-chip active" id="chipAiAll" onclick="setAiAdvisorFilterMode('all', this)" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 700; border-radius: 12px; border: 1px solid #059669; background: #059669; color: #fff; cursor: pointer;">
+                                        🏆 Best Match
+                                    </button>
+                                    <button type="button" class="btn btn-sm inline-ai-chip" id="chipAiMoreQty" onclick="setAiAdvisorFilterMode('more_qty', this)" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 12px; border: 1px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer;" title="Show parts with highest pending quantity to produce">
+                                        📈 More Qty to Produce
+                                    </button>
+                                    <button type="button" class="btn btn-sm inline-ai-chip" id="chipAiLessQty" onclick="setAiAdvisorFilterMode('less_qty', this)" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 12px; border: 1px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer;" title="Show parts with smaller quantity to produce (scrap fillers / small batches)">
+                                        📉 Less Qty to Produce
+                                    </button>
+                                    <button type="button" class="btn btn-sm inline-ai-chip" id="chipAiMaxYield" onclick="setAiAdvisorFilterMode('max_yield', this)" style="padding: 2px 8px; font-size: 0.7rem; font-weight: 600; border-radius: 12px; border: 1px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer;" title="Show parts maximizing composite sheet yield %">
+                                        ⚡ Highest Yield
+                                    </button>
+                                    <button type="button" onclick="openAiPartSuggestionsModal()" style="background: none; border: none; color: #047857; font-size: 0.72rem; font-weight: 700; cursor: pointer; text-decoration: underline; display: flex; align-items: center; gap: 3px; margin-left: 4px;">
+                                        Detailed View &rarr;
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="inlineAiSuggestionsCards" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px;">
+                                <!-- Dynamic cards populated by mo_app.js -->
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Added Parts Rows -->
+                        <div id="modalAdditionalPartsList" style="display: flex; flex-direction: column; gap: 8px;"></div>
                     </div>
 
-                    <!-- Layout Parts & Off-Take Breakdown Card -->
+                    <!-- 4. Current Production Plan: Total Parts Output (Auto-Fetched from Selected Layout) -->
+                    <div class="form-group" id="currentPlanGroup" style="margin-bottom: 14px;">
+                        <label id="currentPlanLabel" style="display: flex; justify-content: space-between; align-items: center; font-weight: 700; margin-bottom: 6px;">
+                            <span><i class="fa-solid fa-calculator" style="color: #0284c7;"></i> Total Parts Output / Current Plan</span>
+                            <span class="badge-auto" id="currentPlanBadge"><i class="fa-solid fa-wand-magic-sparkles"></i> Auto-Calculated</span>
+                        </label>
+                        <!-- Auto-calculated display box for Standard & Non-Standard Layouts -->
+                        <div class="auto-qty-display-box" id="autoQtyDisplayBox">
+                            <span class="auto-qty-val" id="autoTargetQtyDisplay">- Units</span>
+                            <small class="auto-qty-hint" id="autoQtyHint">Select part &amp; layout</small>
+                        </div>
+                        <!-- Manual entry input box kept hidden as Current Plan is auto-calculated -->
+                        <div class="manual-qty-input-box" id="manualQtyInputBox" style="display: none !important;">
+                            <input type="number" step="1" min="1" id="targetQtyManual" placeholder="Enter target units/plan manually..." style="width: 100%; padding: 10px 12px; font-size: 1.05rem; font-weight: 700; color: #b45309; background: #fffdf5; border: 1.5px solid #f59e0b; border-radius: 8px;" oninput="onManualTargetQtyInput(this.value)">
+                        </div>
+                        <!-- Hidden input so target_qty is always submitted with form -->
+                        <input type="hidden" id="targetQty" name="target_qty" value="1">
+                    </div>
+
+                    <!-- Layout Parts & Off-Take Breakdown Card (Includes Visual Layout Drawing Preview!) -->
                     <div class="layout-parts-banner" id="layoutPartsBanner" style="display: none;">
                         <div class="layout-parts-header">
                             <div class="layout-parts-title">
@@ -881,23 +1033,6 @@
                         <input type="hidden" id="constraintsStatus" name="constraints_status" value="">
                     </div>
 
-                    <!-- AI RM Advisor: Smart In-Stock Substitution Suggestions (Triggered when RM stock is short) -->
-                    <div id="rmAgentSuggestionBox" class="rm-agent-suggestion-box" style="display: none;">
-                        <div class="rm-agent-header">
-                            <div class="rm-agent-title">
-                                <span class="rm-agent-robot-icon"><i class="fa-solid fa-robot"></i></span>
-                                <div>
-                                    <strong><i class="fa-solid fa-wand-magic-sparkles" style="color: #0284c7;"></i> AI RM Advisor — In-Stock Substitution Recommendations</strong>
-                                    <p id="rmAgentVerdictText">Analyzing store inventory and verified CAD layouts for alternatives...</p>
-                                </div>
-                            </div>
-                            <span class="rm-agent-badge" id="rmAgentCountBadge">0 Alternatives</span>
-                        </div>
-                        <div id="rmAgentCardsList" class="rm-agent-cards-list">
-                            <!-- Populated dynamically by agent -->
-                        </div>
-                    </div>
-
                     <!-- Live Workflow Route Preview Banner -->
                     <div class="workflow-route-preview" id="routePreviewBanner">
                         <div class="route-icon"><i class="fa-solid fa-bolt"></i></div>
@@ -942,34 +1077,19 @@
                 <!-- Rejection Alert Banner (dynamically rendered when MO is REJECTED) -->
                 <div id="rejectionAlertContainer"></div>
 
-                <!-- MO Summary Grid -->
-                <div class="review-details-grid" id="reviewDetailsGrid"></div>
+                <!-- 1. First Line: RM ERP Code, RM Grade, Yield %, and No. of Sheets -->
+                <div class="review-rm-summary-bar" id="reviewRmSummaryBar"></div>
+
+                <!-- 2. Part Details: Part Number, Size, No. of Parts, No. of Blanks, Yield % -->
+                <div class="review-part-details-card" id="reviewPartDetailsContainer" style="display: none;"></div>
 
                 <!-- Automated Constraint Verification & Safety Checks Banner -->
                 <div id="reviewConstraintNotice" style="margin-bottom: 18px; display: none;"></div>
 
-                <!-- Key Planning & Stock Indicators (RM Sheets On Hand, MRP Count, Remaining Quantity with Part Sizes) -->
-                <div id="reviewMoKpiContainer" style="display: none;"></div>
+                <!-- 3. Key Planning & Stock Indicators (4 KPI Cards: RM Sheets On Hand, MRP Count, Parts Produced, Remaining Quantity) -->
+                <div id="reviewMoKpiContainer" style="display: none; margin-bottom: 18px;"></div>
 
-                <!-- Selected Layout Parts & Off-Take Banner in Review Modal -->
-                <div class="layout-parts-banner" id="reviewLayoutPartsBanner" style="display: none; margin-bottom: 16px;">
-                    <div class="layout-parts-header">
-                        <div class="layout-parts-title">
-                            <i class="fa-solid fa-shapes"></i>
-                            <span>Selected Layout Parts &amp; Off-Take</span>
-                        </div>
-                        <span class="layout-plan-badge" id="reviewLayoutPlanBadge">Plan</span>
-                    </div>
-                    <div class="layout-parts-body">
-                        <div class="layout-parts-list" id="reviewLayoutPartsList"></div>
-                        <div class="layout-thumb-wrap" id="reviewLayoutThumbWrap" style="display: none;">
-                            <img id="reviewLayoutThumbImg" src="" alt="Layout Drawing Preview" onclick="window.open(this.src, '_blank')">
-                            <small><i class="fa-solid fa-arrow-up-right-from-square"></i> Layout Drawing</small>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- End Bits (Offcuts) Generated from Sheet in Review Modal -->
+                <!-- 4. End Bits (Offcuts) Generated from Sheet in Review Modal -->
                 <div class="layout-endbits-banner" id="reviewLayoutEndbitsBanner" style="display: none; margin-bottom: 20px;">
                     <div class="layout-endbits-header">
                         <div class="layout-endbits-title">
@@ -980,6 +1100,10 @@
                     </div>
                     <div class="layout-endbits-body" id="reviewLayoutEndbitsList"></div>
                 </div>
+
+                <!-- Hidden legacy containers for safety -->
+                <div class="review-details-grid" id="reviewDetailsGrid" style="display: none;"></div>
+                <div class="layout-parts-banner" id="reviewLayoutPartsBanner" style="display: none;"></div>
 
                 <!-- Live ERP, Stock & MRP Intelligence in Review Modal -->
                 <div class="erp-intelligence-card" id="reviewErpIntelCard" style="display: none; margin-bottom: 20px;">
@@ -1480,7 +1604,7 @@
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
                         <div class="form-group">
                             <label for="manEbName">End Bit Name / Label <span class="required">*</span></label>
-                            <input type="text" id="manEbName" name="name" required placeholder="e.g. End bit - Guillotine #2 Offcut" value="End bit - Shop Floor Offcut">
+                            <input type="text" id="manEbName" name="name" required placeholder="e.g. hr - 3.8*140*2500" value="ys - 4.8*0*0">
                         </div>
                         <div class="form-group">
                             <label for="manEbId">End Bit ID (Tracking Code)</label>
@@ -1521,7 +1645,7 @@
                         </div>
                         <div class="form-group">
                             <label for="manEbGrade">Material Grade <span class="required">*</span></label>
-                            <input type="text" id="manEbGrade" name="grade" required value="YS" placeholder="e.g. YS, CR, HR">
+                            <input type="text" id="manEbGrade" name="grade" required value="YS" placeholder="e.g. YS, CR, HR" oninput="calculateManualEbWeight()">
                         </div>
                     </div>
 
@@ -1542,6 +1666,213 @@
                     <button type="button" class="btn btn-secondary" onclick="closeAddManualEndbitModal()">Cancel</button>
                     <button type="submit" class="btn btn-success" id="submitAddManualEbBtn" style="background: #10b981; border-color: #059669; color: #fff;">
                         <i class="fa-solid fa-floppy-disk"></i> Save End Bit to Store
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add New Raw Material (RM) Sheet (ERP Team Master Data) -->
+    <div class="mo-modal-backdrop" id="addRmModal" style="display: none;">
+        <div class="mo-modal-dialog" style="max-width: 640px;">
+            <div class="mo-modal-header" style="background: #ffffff; border-bottom: 1px solid var(--border-color); padding: 18px 24px;">
+                <div>
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-layer-group" style="color: #0284c7;"></i> Add Raw Material (RM) Sheet
+                    </h3>
+                    <p style="margin-top: 3px; font-size: 0.82rem; color: #64748b;">
+                        ERP Master Data: Record new coil/sheet inventory into Main Store live database
+                    </p>
+                </div>
+                <button type="button" class="btn-close-modal" onclick="closeAddRmModal()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="addRmForm" onsubmit="submitAddRmForm(event)">
+                <div class="mo-modal-body" style="padding: 20px 24px; gap: 14px;">
+                    <!-- RM Code & Grade -->
+                    <div style="display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="newRmGrade">Material Grade <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="text" id="newRmGrade" name="grade" required value="CRCA" placeholder="e.g. CRCA, HR, BSK, YS350" oninput="calculateRmCodeAndWeight()" style="height: 38px;">
+                        </div>
+                        <div class="form-group">
+                            <label for="newRmCode">RM ERP Code <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="text" id="newRmCode" name="rm_code" required placeholder="Auto-generated e.g. CRCA-2.0-2500-1250" style="height: 38px; font-weight: 700; color: #0284c7; background: #f0f9ff; border: 1.5px solid #bae6fd;">
+                        </div>
+                    </div>
+
+                    <!-- Sheet Dimensions (Thickness * Length * Width) -->
+                    <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                        <label style="font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 8px; display: block;">
+                            <i class="fa-solid fa-ruler-combined" style="color: #0284c7;"></i> Sheet Standard Dimensions (mm) <span class="required" style="color:#ef4444;">*</span>
+                        </label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Thickness (T) mm</span>
+                                <input type="number" step="0.05" min="0.1" id="newRmThickness" name="thickness" required value="2.0" oninput="calculateRmCodeAndWeight()" style="height: 38px; text-align: center;">
+                            </div>
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Length (L) mm</span>
+                                <input type="number" step="1" min="10" id="newRmLength" name="length" required value="2500" oninput="calculateRmCodeAndWeight()" style="height: 38px; text-align: center;">
+                            </div>
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Width (W) mm</span>
+                                <input type="number" step="1" min="10" id="newRmWidth" name="width" required value="1250" oninput="calculateRmCodeAndWeight()" style="height: 38px; text-align: center;">
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.82rem; color: #0284c7;">
+                            <span>Size: <strong id="newRmDimPreview">2.0 × 2500 × 1250 mm</strong></span>
+                            <span id="newRmWeightPreview" style="color: #059669; font-weight: 700;">Calculated Unit Weight: ~49.06 kg</span>
+                        </div>
+                    </div>
+
+                    <!-- Available Stock & Weight Per Sheet -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="newRmSheets">Opening Stock (Available Sheets) <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="number" step="1" min="0" id="newRmSheets" name="available_sheets" required value="50" oninput="calculateRmCodeAndWeight()" style="height: 38px; font-weight: 700; text-align: center;">
+                        </div>
+                        <div class="form-group">
+                            <label for="newRmUnitWeight">Weight per Sheet (kg) <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="number" step="0.001" min="0.001" id="newRmUnitWeight" name="weight_per_sheet" required value="49.06" oninput="calculateRmCodeAndWeight(true)" style="height: 38px; font-weight: 700; text-align: center; color: #065f46; background: #f0fdf4; border: 1.5px solid #86efac;">
+                        </div>
+                    </div>
+
+                    <!-- Total Stock Weight Banner -->
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 6px; padding: 10px 14px;">
+                        <span style="font-size: 0.82rem; font-weight: 700; color: #065f46;">
+                            <i class="fa-solid fa-weight-hanging" style="color: #059669;"></i> Total Opening Stock Weight:
+                        </span>
+                        <strong id="newRmTotalStockWeight" style="font-size: 1.05rem; color: #047857;">~2,453.00 kg</strong>
+                    </div>
+                </div>
+
+                <div class="mo-modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #fafafa;">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddRmModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitAddRmBtn" style="background: #0284c7; border-color: #0369a1; color: #fff;">
+                        <i class="fa-solid fa-floppy-disk"></i> Save RM Sheet to Store
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add New Part to Master Catalog (ERP Team Master Data) -->
+    <div class="mo-modal-backdrop" id="addPartModal" style="display: none;">
+        <div class="mo-modal-dialog" style="max-width: 680px;">
+            <div class="mo-modal-header" style="background: #ffffff; border-bottom: 1px solid var(--border-color); padding: 18px 24px;">
+                <div>
+                    <h3 style="display: flex; align-items: center; gap: 8px;">
+                        <i class="fa-solid fa-puzzle-piece" style="color: #7c3aed;"></i> Add New Part to Master Catalog
+                    </h3>
+                    <p style="margin-top: 3px; font-size: 0.82rem; color: #64748b;">
+                        ERP Master Data: Register component specifications, blank dimensions, yield offtake, and standard RM
+                    </p>
+                </div>
+                <button type="button" class="btn-close-modal" onclick="closeAddPartModal()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <form id="addPartForm" onsubmit="submitAddPartForm(event)">
+                <div class="mo-modal-body" style="padding: 20px 24px; gap: 14px;">
+                    <!-- Part Number & Base Part -->
+                    <div style="display: grid; grid-template-columns: 1.3fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="newPartNo">Part Number <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="text" id="newPartNo" name="part_no" required placeholder="e.g. F4N25413 or MBA01008 - Item 1" oninput="onNewPartNoInput(this.value)" style="height: 38px; font-weight: 700; color: #1e293b;">
+                        </div>
+                        <div class="form-group">
+                            <label for="newBasePart">Base Part Model</label>
+                            <input type="text" id="newBasePart" name="base_part" placeholder="Auto e.g. F4N25413" style="height: 38px; font-weight: 600; color: #64748b; background: #f8fafc;">
+                        </div>
+                    </div>
+
+                    <!-- Part Description & Material Grade -->
+                    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="newPartDesc">Component Name / Description</label>
+                            <input type="text" id="newPartDesc" name="part_desc" placeholder="e.g. BODY GUIDE or BRACKET REAR" style="height: 38px;">
+                        </div>
+                        <div class="form-group">
+                            <label for="newPartGrade">Material Grade <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="text" id="newPartGrade" name="grade" required value="BSK" placeholder="e.g. BSK, HR, CRCA, YS" oninput="calculatePartWeight(); populateStandardRmDropdownForPartModal();" style="height: 38px; font-weight: 700; color: #0284c7;">
+                        </div>
+                    </div>
+
+                    <!-- Blank Cut Dimensions (Thickness * Blank Length * Blank Width) -->
+                    <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                        <label style="font-weight: 700; font-size: 0.85rem; color: #1e293b; margin-bottom: 8px; display: block;">
+                            <i class="fa-solid fa-ruler-combined" style="color: #7c3aed;"></i> Cut Blank Dimensions (mm) <span class="required" style="color:#ef4444;">*</span>
+                        </label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Thickness (T) mm</span>
+                                <input type="number" step="0.05" min="0.1" id="newPartThickness" name="thickness" required value="5.8" oninput="calculatePartWeight(); populateStandardRmDropdownForPartModal();" style="height: 38px; text-align: center; font-weight: 600;">
+                            </div>
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Blank Length (L) mm</span>
+                                <input type="number" step="0.1" min="1" id="newPartLength" name="length" required value="200" oninput="calculatePartWeight()" style="height: 38px; text-align: center; font-weight: 600;">
+                            </div>
+                            <div class="form-group">
+                                <span style="font-size: 0.78rem; color: #475569; font-weight: 600;">Blank Width (W) mm</span>
+                                <input type="number" step="0.1" min="1" id="newPartWidth" name="width" required value="151" oninput="calculatePartWeight()" style="height: 38px; text-align: center; font-weight: 600;">
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.82rem; color: #7c3aed;">
+                            <span>Blank Spec: <strong id="newPartDimPreview">5.8 × 200 × 151 mm</strong></span>
+                            <span id="newPartWeightPreview" style="color: #059669; font-weight: 700;">Calculated Blank Weight: ~1.37 kg</span>
+                        </div>
+                    </div>
+
+                    <!-- Yield Offtake, Strip/Blank Qty & Unit Weight -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+                        <div class="form-group">
+                            <label for="newPartOfftake">Part Offtake <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="number" step="1" min="1" id="newPartOfftake" name="offtake" required value="2" title="Total parts produced per sheet/blank" style="height: 38px; font-weight: 700; text-align: center; color: #0284c7; background: #f0fdf4; border: 1.5px solid #86efac;">
+                        </div>
+                        <div class="form-group">
+                            <label for="newPartStripQty">Strip / Blank Qty <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="number" step="1" min="1" id="newPartStripQty" name="strip_per_blank_qty" required value="1" style="height: 38px; font-weight: 700; text-align: center; color: #0369a1; background: #f0f9ff; border: 1.5px solid #bae6fd;">
+                        </div>
+                        <div class="form-group">
+                            <label for="newPartWeight">Part Weight (kg)</label>
+                            <input type="number" step="0.001" min="0.001" id="newPartWeight" name="weight" value="1.37" style="height: 38px; font-weight: 700; text-align: center; background: #fff;">
+                        </div>
+                    </div>
+
+                    <!-- Standard Raw Material (Filtered Dropdown) -->
+                    <div class="form-group">
+                        <label for="newPartStandardRm">Standard RM Sheet (Optional Reference)</label>
+                        <select id="newPartStandardRm" name="standard_rm" style="height: 38px; font-weight: 600; border-radius: 6px; border: 1.5px solid #cbd5e1; width: 100%; padding: 0 10px; background: #fff;">
+                            <option value="">-- Select Standard RM Sheet --</option>
+                        </select>
+                    </div>
+
+                    <!-- Initial MRP Demand Schedule (Optional) -->
+                    <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 10px 14px;">
+                        <label style="font-weight: 700; font-size: 0.82rem; color: #b45309; margin-bottom: 6px; display: block;">
+                            <i class="fa-solid fa-calendar-days"></i> Initial MRP Schedule &amp; Stock (Optional)
+                        </label>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <span style="font-size: 0.75rem; color: #92400e; font-weight: 600;">Monthly Demand Target (Nos)</span>
+                                <input type="number" step="1" min="0" id="newPartMonthlySched" name="monthly_schedule" placeholder="e.g. 150" style="height: 36px; text-align: center; font-weight: 700; color: #6d28d9; background: #fff;">
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <span style="font-size: 0.75rem; color: #92400e; font-weight: 600;">Current In-House Stock (Nos)</span>
+                                <input type="number" step="1" min="0" id="newPartCurrentStock" name="current_stock" placeholder="e.g. 20" style="height: 36px; text-align: center; font-weight: 700; color: #059669; background: #fff;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mo-modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #fafafa;">
+                    <button type="button" class="btn btn-secondary" onclick="closeAddPartModal()">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="submitAddPartBtn" style="background: #7c3aed; border-color: #6d28d9; color: #fff;">
+                        <i class="fa-solid fa-floppy-disk"></i> Save Part Master
                     </button>
                 </div>
             </form>
@@ -1721,12 +2052,110 @@
         </div>
     </div>
 
+    <!-- Modal: AI Part Co-Production & Yield Optimizer Agent -->
+    <div class="mo-modal-backdrop" id="modalAiPartSuggestions" style="display: none; z-index: 2050;">
+        <div class="mo-modal-dialog" style="max-width: 980px; width: 95%; max-height: 94vh; display: flex; flex-direction: column; border-radius: 12px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);">
+            <!-- Modal Header -->
+            <div class="mo-modal-header" style="background: linear-gradient(135deg, #1e1b4b 0%, #312e81 100%); color: #fff; padding: 16px 24px; border-bottom: 1px solid #4338ca; border-top-left-radius: 12px; border-top-right-radius: 12px;">
+                <div style="flex: 1;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                        <span style="background: #7c3aed; color: #fff; padding: 3px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">AI Autonomous Agent</span>
+                        <span style="background: rgba(255,255,255,0.15); color: #e0e7ff; padding: 2px 8px; border-radius: 6px; font-size: 0.72rem; font-weight: 600;">
+                            <i class="fa-solid fa-microchip"></i> Gemini Engine
+                        </span>
+                        <h3 style="color: #fff; margin: 0; font-size: 1.15rem; font-weight: 700;">
+                            <i class="fa-solid fa-wand-magic-sparkles" style="color: #c084fc;"></i> AI Part Co-Production &amp; Yield Advisor
+                        </h3>
+                    </div>
+                    <p style="color: #c7d2fe; margin: 0; font-size: 0.8rem;">
+                        Recommends compatible parts to cut simultaneously on this sheet. <strong>Priority Rule: 1. Highest Yield %</strong> (minimizing scrap), <strong>2. Low Stock / Deficit</strong> (urgent MRP need).
+                    </p>
+                </div>
+                <button class="modal-close-btn" style="color: #cbd5e1; background: rgba(255,255,255,0.1); border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; cursor: pointer;" onclick="closeAiPartSuggestionsModal()">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="mo-modal-body" style="padding: 18px 22px; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 14px; background: #f8fafc;">
+                <!-- 1. Active Sheet Context Ribbon -->
+                <div style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                        <div>
+                            <span style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700; display: block;">Primary Part</span>
+                            <span id="aiAdvisorBasePartDisplay" style="font-weight: 700; color: #1e293b; font-size: 0.92rem;">-</span>
+                        </div>
+                        <div style="height: 24px; width: 1px; background: #e2e8f0;"></div>
+                        <div>
+                            <span style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700; display: block;">Grade &amp; Thickness</span>
+                            <span id="aiAdvisorGradeDisplay" style="font-weight: 700; color: #0284c7; font-size: 0.88rem;">-</span>
+                        </div>
+                        <div style="height: 24px; width: 1px; background: #e2e8f0;"></div>
+                        <div>
+                            <span style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700; display: block;">Sheet Size</span>
+                            <span id="aiAdvisorSheetSizeDisplay" style="font-weight: 700; color: #334155; font-size: 0.88rem;">-</span>
+                        </div>
+                    </div>
+                    <div>
+                        <span style="font-size: 0.7rem; color: #64748b; text-transform: uppercase; font-weight: 700; display: block;">Single-Part Baseline Yield</span>
+                        <span id="aiAdvisorBaselineYieldDisplay" style="font-weight: 800; color: #475569; font-size: 1.05rem;">-%</span>
+                    </div>
+                </div>
+
+                <!-- 2. AI Executive Synthesis Banner -->
+                <div id="aiAdvisorExecutiveBanner" style="background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%); border: 1.5px solid #ddd6fe; border-radius: 8px; padding: 12px 14px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
+                        <span style="font-size: 0.78rem; font-weight: 700; color: #6d28d9; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-brain" style="color: #8b5cf6;"></i> AI Co-Production Analysis &amp; Verdict
+                        </span>
+                        <span id="aiAdvisorEngineBadge" style="background: #ede9fe; color: #7c3aed; font-size: 0.68rem; font-weight: 700; padding: 2px 7px; border-radius: 4px;">
+                            Gemini 3.8 Flash
+                        </span>
+                    </div>
+                    <p id="aiAdvisorExecutiveText" style="margin: 0; font-size: 0.83rem; color: #4c1d95; line-height: 1.45;">
+                        Analyzing candidate parts sharing this grade and sheet thickness...
+                    </p>
+                </div>
+
+                <!-- 3. Filter Navigation Tabs -->
+                <div style="display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1.5px solid #e2e8f0; padding-bottom: 8px;">
+                    <button type="button" class="ai-filter-tab active" data-mode="all" onclick="setAiAdvisorFilterMode('all', this)" style="padding: 5px 12px; font-size: 0.78rem; font-weight: 700; border-radius: 6px; border: 1.5px solid #7c3aed; background: #7c3aed; color: #fff; cursor: pointer;">
+                        <i class="fa-solid fa-trophy"></i> Top Ranked (Yield + Demand)
+                    </button>
+                    <button type="button" class="ai-filter-tab" data-mode="more_qty" onclick="setAiAdvisorFilterMode('more_qty', this)" style="padding: 5px 12px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; border: 1.5px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer;" title="Parts with highest pending quantity to produce">
+                        <i class="fa-solid fa-arrow-up-right-dots" style="color: #dc2626;"></i> More Qty to Produce (High Demand)
+                    </button>
+                    <button type="button" class="ai-filter-tab" data-mode="less_qty" onclick="setAiAdvisorFilterMode('less_qty', this)" style="padding: 5px 12px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; border: 1.5px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer;" title="Parts with smaller quantity to produce (scrap fillers / small batches)">
+                        <i class="fa-solid fa-bullseye" style="color: #d97706;"></i> Less Qty to Produce (Scrap Fillers)
+                    </button>
+                    <button type="button" class="ai-filter-tab" data-mode="max_yield" onclick="setAiAdvisorFilterMode('max_yield', this)" style="padding: 5px 12px; font-size: 0.78rem; font-weight: 600; border-radius: 6px; border: 1.5px solid #cbd5e1; background: #fff; color: #334155; cursor: pointer;" title="Maximize combined sheet yield %">
+                        <i class="fa-solid fa-arrow-trend-up" style="color: #059669;"></i> Maximum Yield Boost
+                    </button>
+                </div>
+
+                <!-- 4. Recommendations Cards Grid -->
+                <div id="aiAdvisorCardsContainer" style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="mo-modal-footer" style="padding: 12px 24px; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #fafafa; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px;">
+                <div style="font-size: 0.78rem; color: #64748b;">
+                    <i class="fa-solid fa-circle-info" style="color: #0284c7;"></i> Added parts automatically populate into <strong>2D OptiCutter Nesting</strong> for joint cutting.
+                </div>
+                <button type="button" class="btn btn-secondary" onclick="closeAiPartSuggestionsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- PDF Generation Libraries (jsPDF + AutoTable) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=108"></script>
+    <script src="/static/mo_app.js?v=117"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
+    <script src="/static/mo_create_v2.js?v=1"></script>
 </body>
 
 </html>

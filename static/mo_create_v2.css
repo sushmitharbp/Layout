@@ -1,0 +1,298 @@
+/* ============================================================================
+   SheetLayout AI — Clean v2 Create Material Order Modal Styles
+   ============================================================================ */
+
+.v2-modal-container {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 6px 0;
+}
+
+/* Section Containers */
+.v2-section-box {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+}
+
+.v2-section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #334155;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.v2-section-title i {
+    color: #0284c7;
+    font-size: 0.95rem;
+}
+
+/* RM Row */
+.v2-rm-row {
+    display: grid;
+    grid-template-columns: 1.6fr 1.2fr 0.8fr 1.2fr;
+    gap: 12px;
+    align-items: end;
+}
+
+.v2-stock-display-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #f0fdf4;
+    border: 1.5px solid #86efac;
+    border-radius: 8px;
+    padding: 9px 12px;
+    font-weight: 700;
+    color: #166534;
+    font-size: 0.95rem;
+    min-height: 42px;
+}
+
+.v2-stock-display-box.low-stock {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #991b1b;
+}
+
+/* Part Card & Row */
+.v2-part-card {
+    background: #f8fafc;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 12px;
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.v2-part-card:hover {
+    border-color: #94a3b8;
+}
+
+.v2-part-row {
+    display: grid;
+    grid-template-columns: 2fr 0.9fr 1.3fr 1fr auto;
+    gap: 10px;
+    align-items: end;
+    margin-bottom: 12px;
+}
+
+.v2-badge-box {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #1e293b;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+/* 3 Live Demand Cards */
+.v2-demand-cards-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.v2-demand-card {
+    background: #ffffff;
+    border-radius: 8px;
+    padding: 10px 12px;
+    border: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.v2-demand-card.mrp { border-left: 4px solid #3b82f6; }
+.v2-demand-card.stock { border-left: 4px solid #10b981; }
+.v2-demand-card.produce { border-left: 4px solid #f59e0b; }
+
+.v2-demand-card-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+}
+
+.v2-demand-card.mrp .v2-demand-card-icon { background: #eff6ff; color: #2563eb; }
+.v2-demand-card.stock .v2-demand-card-icon { background: #ecfdf5; color: #059669; }
+.v2-demand-card.produce .v2-demand-card-icon { background: #fffbeb; color: #d97706; }
+
+.v2-demand-card-info {
+    display: flex;
+    flex-direction: column;
+}
+
+.v2-demand-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.v2-demand-val {
+    font-size: 1.05rem;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+/* Part Search Dropdown */
+.v2-part-search-wrap {
+    position: relative;
+}
+
+.v2-part-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 1000;
+    margin-top: 4px;
+}
+
+.v2-part-dropdown-item {
+    padding: 9px 12px;
+    cursor: pointer;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.88rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.v2-part-dropdown-item:hover {
+    background: #f0fdfa;
+    color: #0d9488;
+}
+
+/* Add Part Button */
+.v2-btn-add-part {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 6px;
+    border: 1.5px dashed #0284c7;
+    background: #f0f9ff;
+    color: #0284c7;
+    font-weight: 700;
+    font-size: 0.84rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: fit-content;
+}
+
+.v2-btn-add-part:hover {
+    background: #e0f2fe;
+    border-color: #0369a1;
+}
+
+/* Opticutter Button & Results */
+.v2-opticutter-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #faf5ff;
+    border: 1.5px solid #d8b4fe;
+    border-radius: 8px;
+    padding: 10px 14px;
+}
+
+.v2-btn-opticutter {
+    background: linear-gradient(135deg, #9333ea, #7c3aed);
+    color: #ffffff;
+    border: none;
+    border-radius: 6px;
+    padding: 8px 16px;
+    font-weight: 700;
+    font-size: 0.88rem;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(147, 51, 234, 0.25);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: transform 0.1s;
+}
+
+.v2-btn-opticutter:hover {
+    transform: translateY(-1px);
+}
+
+.v2-opticutter-results {
+    background: #ffffff;
+    border: 1px solid #e9d5ff;
+    border-radius: 8px;
+    padding: 12px;
+    margin-top: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+}
+
+.v2-res-box {
+    text-align: center;
+    padding: 6px 8px;
+    background: #faf5ff;
+    border-radius: 6px;
+}
+
+.v2-res-label {
+    font-size: 0.72rem;
+    color: #6b21a8;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.v2-res-val {
+    font-size: 1.1rem;
+    font-weight: 800;
+    color: #581c87;
+}
+
+/* Workflow Stage Strip */
+.v2-workflow-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+}
+
+.v2-step-pill {
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+}
+
+.v2-step-pill.active { background: #dbeafe; color: #1e40af; font-weight: 700; }
+.v2-step-pill.pending { background: #f1f5f9; color: #64748b; }
+.v2-step-pill.done { background: #dcfce7; color: #15803d; font-weight: 700; }

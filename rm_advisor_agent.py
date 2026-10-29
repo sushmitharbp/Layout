@@ -40,6 +40,7 @@ except (ImportError, ModuleNotFoundError):
     HAS_LANGGRAPH = False
 
 load_dotenv()
+from cut_optimizer import calculate_max_guillotine_capacity
 
 
 def norm_key(s):
@@ -244,8 +245,8 @@ class RMAdvisorAgent:
         }
 
     def _edge_decide_shortage(self, state: RMAdvisorState) -> str:
-        """Conditional routing: route to alternative mining if stock is short."""
-        return "mine_alternatives" if state["has_shortage"] else "llm_reasoning"
+        """Route to candidate mining so in-store endbits and optimal RM are always evaluated."""
+        return "mine_alternatives"
 
     def _node_mine_alternatives(self, state: RMAdvisorState) -> Dict[str, Any]:
         """Node 2: Executes CAD layout, standard sheet nesting, and offcut salvage tools with strict grade and thickness checks."""
@@ -343,8 +344,8 @@ class RMAdvisorAgent:
 
             candidate_layouts.append({
                 "type": "engineered_layout",
-                "tier": 1,
-                "tier_label": "Verified CAD Layout",
+                "tier": 2,
+                "tier_label": "📄 Priority 2: Verified CAD Layout",
                 "rm_erp": rm_code,
                 "item_desc": item_desc,
                 "layout_name": r.get("layout_name", ""),
@@ -432,8 +433,8 @@ class RMAdvisorAgent:
                 rm_display = f"{s_canon} ({display_grade})"
                 candidate_sheets.append({
                     "type": "stock_sheet",
-                    "tier": 2,
-                    "tier_label": "Stock Available RM Sheet",
+                    "tier": 3,
+                    "tier_label": "📄 Priority 3: Stock RM Sheet",
                     "rm_erp": rm_display,
                     "item_code": code,
                     "item_desc": desc,
@@ -487,9 +488,11 @@ class RMAdvisorAgent:
             can_cut = False
             blanks_per_eb = 1
             if cut_len > 0 and cut_wid > 0:
-                n1 = math.floor(eb_l / cut_len) * math.floor(eb_w / cut_wid)
-                n2 = math.floor(eb_l / cut_wid) * math.floor(eb_w / cut_len)
-                blanks_per_eb = max(n1, n2)
+                blanks_per_eb = calculate_max_guillotine_capacity(eb_l, eb_w, cut_len, cut_wid)
+                if blanks_per_eb == 0:
+                    n1 = math.floor(eb_l / cut_len) * math.floor(eb_w / cut_wid)
+                    n2 = math.floor(eb_l / cut_wid) * math.floor(eb_w / cut_len)
+                    blanks_per_eb = max(n1, n2)
                 can_cut = blanks_per_eb >= 1
             else:
                 can_cut = (eb_l >= 200 and eb_w >= 50)
@@ -497,26 +500,29 @@ class RMAdvisorAgent:
             if can_cut:
                 total_producible = blanks_per_eb * avail
                 dim_str = eb.get("dimensions") or f"{eb_t}*{eb_l}*{eb_w}"
-                score = 500 + min(500, total_producible * 20)
+                score = 3000 + min(1000, total_producible * 25)
+                blank_fit_str = f" ({int(cut_len)}×{int(cut_wid)} mm)" if (cut_len > 0 and cut_wid > 0) else ""
                 reason = (
-                    f"Store Offcut [{eb.get('name', 'End bit')}] {eb.get('endbit_id')} ({dim_str} mm). "
-                    f"{avail} offcut(s) in store can harvest up to {total_producible} blanks with ZERO raw material sheets needed."
+                    f"Store Offcut [{eb.get('name', 'End bit')}] #{eb.get('endbit_id')} ({dim_str} mm, Grade {eb_grade or req_grade or grade_str}). "
+                    f"{avail} offcut(s) in store can harvest up to {total_producible} blank(s){blank_fit_str} with ZERO virgin raw material sheets needed."
                 )
 
                 candidate_endbits.append({
                     "type": "endbit_salvage",
-                    "tier": 3,
-                    "tier_label": "Store Offcut Salvage",
+                    "tier": 1,
+                    "tier_label": "✂️ Priority 1: In-Store End-Bit Offcut",
                     "endbit_id": eb.get("endbit_id"),
                     "endbit_name": eb.get("name", "End bit"),
                     "rm_erp": f"EndBit: {dim_str}",
-                    "item_desc": f"End Bit Offcut {eb.get('endbit_id')} ({dim_str} mm)",
+                    "item_desc": f"End Bit Offcut #{eb.get('endbit_id')} ({dim_str} mm)",
                     "thickness": eb_t,
                     "length": eb_l,
                     "width": eb_w,
+                    "grade": eb_grade or req_grade or grade_str,
                     "onhand_stock": avail,
                     "parts_producible": total_producible,
-                    "yield_pct": 92.0,
+                    "parts_per_sheet": blanks_per_eb,
+                    "yield_pct": 94.0,
                     "stock_sufficient": total_producible >= target_qty,
                     "score": score,
                     "reason": reason,
@@ -527,7 +533,9 @@ class RMAdvisorAgent:
                         "thickness": eb_t,
                         "length": eb_l,
                         "width": eb_w,
-                        "dim_str": dim_str
+                        "dim_str": dim_str,
+                        "grade": eb_grade or req_grade or grade_str,
+                        "parts_producible": total_producible
                     }
                 })
 
@@ -538,25 +546,30 @@ class RMAdvisorAgent:
         }
 
     def _node_rank_candidates(self, state: RMAdvisorState) -> Dict[str, Any]:
-        """Node 3: Aggregates and mathematically ranks candidate substitutions."""
-        all_alts = (
-            state.get("candidate_layouts", []) +
-            state.get("candidate_sheets", []) +
-            state.get("candidate_endbits", [])
-        )
-        # Strictly exclude raw material alternatives with 0 sheets
-        all_alts = [alt for alt in all_alts if float(alt.get("onhand_stock") or alt.get("available_qty") or 0.0) > 0]
-        all_alts.sort(key=lambda x: (1 if x["stock_sufficient"] else 0, x["score"]), reverse=True)
+        """Node 3: Aggregates and mathematically ranks candidate substitutions, strictly prioritizing End-Bits first."""
+        endbits = state.get("candidate_endbits", [])
+        layouts = state.get("candidate_layouts", [])
+        sheets = state.get("candidate_sheets", [])
 
+        # Filter strictly out items with 0 stock
+        endbits = [eb for eb in endbits if float(eb.get("onhand_stock") or 0.0) > 0]
+        endbits.sort(key=lambda x: (1 if x.get("stock_sufficient") else 0, x.get("score", 0)), reverse=True)
+
+        fresh_rms = layouts + sheets
+        fresh_rms = [alt for alt in fresh_rms if float(alt.get("onhand_stock") or 0.0) > 0]
+        fresh_rms.sort(key=lambda x: (1 if x.get("stock_sufficient") else 0, x.get("score", 0)), reverse=True)
+
+        # Endbits are strictly placed FIRST (Priority 1), followed by fresh RM Sheets / Layouts
+        all_alts = endbits + fresh_rms
         for idx, alt in enumerate(all_alts):
             alt["rank"] = idx + 1
 
         return {
-            "ranked_alternatives": all_alts[:6]
+            "ranked_alternatives": all_alts[:8]
         }
 
     def _node_llm_reasoning(self, state: RMAdvisorState) -> Dict[str, Any]:
-        """Node 4: Uses Gemini LLM to synthesize an executive manufacturing engineering verdict."""
+        """Node 4: Synthesizes an executive manufacturing verdict enforcing End-Bit priority first, then RM sheet."""
         has_shortage = state.get("has_shortage", False)
         current_rm = state.get("current_rm", "")
         current_onhand = state.get("current_onhand", 0.0)
@@ -564,30 +577,35 @@ class RMAdvisorAgent:
         ranked = state.get("ranked_alternatives", [])
         part_no = state.get("part_no", "")
         target_qty = state.get("target_qty", 1)
+        cut_len = float(state.get("cut_length") or 0.0)
+        cut_wid = float(state.get("cut_width") or 0.0)
+        t_val = float(state.get("thickness") or 0.0)
+        grade = state.get("grade") or "YS"
 
-        if not has_shortage:
-            verdict = f"RM Stock '{current_rm}' is fully sufficient ({int(current_onhand)} sheets available). Fast-track routing to ERP release recommended."
-            return {"llm_verdict": verdict, "llm_powered_by": "LangGraph Guardrail"}
+        cut_desc = f"{int(cut_len)}×{int(cut_wid)} mm" if (cut_len > 0 and cut_wid > 0) else "part blank"
+
+        endbits = [r for r in ranked if r.get("type") == "endbit_salvage"]
+        fresh_rms = [r for r in ranked if r.get("type") != "endbit_salvage"]
+        best_rm = fresh_rms[0] if fresh_rms else None
 
         gemini_key = os.getenv("GEMINI_API_KEY")
-        if gemini_key and ranked:
-            # Prepare compact prompt for Gemini
+        if gemini_key and (endbits or fresh_rms):
             top_recs_summary = []
-            for r in ranked[:3]:
+            for r in ranked[:4]:
                 top_recs_summary.append(
-                    f"- Option {r['rank']} ({r['tier_label']}): RM '{r['rm_erp']}' | Store Stock: {r['onhand_stock']} | Output: {r.get('parts_per_sheet', 1)} blanks/sheet | Yield: {r.get('yield_pct', 0)}% | Sufficient: {r['stock_sufficient']}"
+                    f"- Option {r['rank']} ({r['tier_label']}): '{r['rm_erp']}' | Store Stock: {r['onhand_stock']} | Output: {r.get('parts_producible') or r.get('parts_per_sheet', 1)} blanks | Sufficient: {r.get('stock_sufficient', False)}"
                 )
             recs_text = "\n".join(top_recs_summary)
 
             prompt = (
-                f"You are the Chief Manufacturing & Nesting Engineer at SheetLayout AI.\n"
-                f"Production Shortage Detected:\n"
-                f"• Part: {part_no} (Target Order Qty: {target_qty} units)\n"
-                f"• Requested RM: {current_rm} has ONLY {int(current_onhand)} sheets in store (Shortfall: {shortfall} sheets).\n\n"
-                f"Verified In-Stock Substitution Candidates:\n{recs_text}\n\n"
-                f"Task: In 1 or 2 concise, executive sentences, state the recommended production decision. "
-                f"STRICT RULE: Never recommend or suggest any raw material with 0 sheets in stock. Only recommend items with confirmed positive on-hand stock (> 0 sheets). "
-                f"Highlight which RM to switch to, the material yield, and the cost/scrap advantage. Be decisive and professional."
+                f"You are the Chief Manufacturing Engineer at SheetLayout AI.\n"
+                f"Production Evaluation:\n"
+                f"• Part: {part_no} (Target Order Qty: {target_qty} units, Blank Size: {cut_desc}, Grade {grade} {t_val:g}mm)\n"
+                f"• In-Store Options Found:\n{recs_text}\n\n"
+                f"Strict Manufacturing Decision Rules:\n"
+                f"1. If matching End-Bits/Offcuts exist in store: You MUST explicitly advise using the in-store End-Bit FIRST (mentioning offcut ID and capacity) to consume zero virgin sheets. Then advise moving to the fresh RM sheet for any balance or future batches.\n"
+                f"2. If NO matching End-Bits exist: Clearly declare that no store offcuts match this part size ({cut_desc}), and advise moving directly to the recommended in-stock fresh RM sheet.\n"
+                f"3. State your recommendation in 1-2 decisive, professional engineering sentences."
             )
 
             models_to_try = ["gemini-3.8-flash", "gemini-flash-lite-latest"]
@@ -604,7 +622,7 @@ class RMAdvisorAgent:
                         data=json.dumps(payload).encode("utf-8"),
                         headers={"Content-Type": "application/json"}
                     )
-                    with urllib.request.urlopen(req, timeout=10) as resp:
+                    with urllib.request.urlopen(req, timeout=8) as resp:
                         res_data = json.loads(resp.read().decode("utf-8"))
                         llm_text = res_data["candidates"][0]["content"]["parts"][0]["text"].strip()
                         if llm_text:
@@ -616,24 +634,42 @@ class RMAdvisorAgent:
                     continue
 
         # Deterministic fallback reasoning
-        in_stock_recs = [r for r in ranked if float(r.get("onhand_stock") or r.get("available_qty") or 0) > 0]
-        best = in_stock_recs[0] if in_stock_recs else None
-        if best and best["stock_sufficient"]:
-            verdict = (
-                f"Shortage Alert: Current RM '{current_rm}' is short by {shortfall} sheets. "
-                f"Recommended Action: Switch to '{best['rm_erp']}' ({int(best['onhand_stock'])} sheets in store) — {best['reason']}"
-            )
-        elif best:
-            verdict = (
-                f"Critical Shortage Alert: Current RM '{current_rm}' is depleted. "
-                f"Partial substitution available on '{best['rm_erp']}' ({int(best['onhand_stock'])} sheets), or route to Purchase clearance."
-            )
+        if endbits:
+            total_eb_blanks = sum(eb.get("parts_producible", 0) for eb in endbits)
+            top_eb = endbits[0]
+            top_eb_info = f"#{top_eb.get('endbit_id')} ({int(top_eb.get('length',0))}×{int(top_eb.get('width',0))} mm, Grade {top_eb.get('grade') or grade})"
+
+            if total_eb_blanks >= target_qty:
+                verdict = (
+                    f"✂️ Suggestion: Use In-Store End-Bit First. Found {len(endbits)} matching offcut(s) in store ({top_eb_info}) "
+                    f"capable of harvesting all {target_qty} required blanks ({cut_desc}) with ZERO virgin RM sheets! "
+                    f"Shear from offcut first. If more parts are needed later, move to fresh RM sheet '{best_rm['rm_erp'] if best_rm else current_rm}'."
+                )
+            else:
+                rem_blanks = target_qty - total_eb_blanks
+                verdict = (
+                    f"✂️ Suggestion: Use In-Store End-Bit First. Found {len(endbits)} matching offcut(s) ({top_eb_info}) "
+                    f"to produce {total_eb_blanks} of {target_qty} blanks ({cut_desc}) from scrap without virgin sheets. "
+                    f"Then move to fresh RM sheet '{best_rm['rm_erp'] if best_rm else current_rm}' for the remaining {rem_blanks} blanks."
+                )
         else:
-            verdict = f"Critical Shortage: Requested RM '{current_rm}' has only {int(current_onhand)} sheets (Shortfall: {shortfall} sheets), and no alternative in-stock raw material sheets are currently available in the store. Order must be routed to Purchase Clearance."
+            if best_rm:
+                verdict = (
+                    f"ℹ️ No store endbits fit part size ({cut_desc}, Grade {grade} {t_val:g}mm). "
+                    f"Moving directly to fresh Raw Material sheet selection: Recommended '{best_rm['rm_erp']}' "
+                    f"({int(best_rm.get('onhand_stock', 0))} sheets in store, {best_rm.get('yield_pct', 0)}% yield)."
+                )
+            elif current_rm:
+                verdict = (
+                    f"ℹ️ No store endbits fit part size ({cut_desc}). "
+                    f"Current RM '{current_rm}' has {int(current_onhand)} sheets available in store."
+                )
+            else:
+                verdict = f"ℹ️ No matching in-store endbits found for blank size ({cut_desc}). Please select a fresh RM sheet."
 
         return {
             "llm_verdict": verdict,
-            "llm_powered_by": "LangGraph Deterministic Fallback"
+            "llm_powered_by": "LangGraph RM Intelligence"
         }
 
     # =========================================================================
@@ -724,8 +760,14 @@ class RMAdvisorAgent:
         for idx, alt in enumerate(filtered_recs):
             alt["rank"] = idx + 1
 
+        endbits_list = [r for r in filtered_recs if r.get("type") == "endbit_salvage"]
+        fresh_rms_list = [r for r in filtered_recs if r.get("type") != "endbit_salvage"]
+
         return {
             "has_shortage": final_state["has_shortage"],
+            "has_endbits": len(endbits_list) > 0,
+            "endbits_count": len(endbits_list),
+            "fresh_rms_count": len(fresh_rms_list),
             "part_no": final_state["part_no"],
             "current_rm": final_state["current_rm"],
             "current_onhand": final_state["current_onhand"],
@@ -734,5 +776,7 @@ class RMAdvisorAgent:
             "agent_verdict": final_state["llm_verdict"],
             "powered_by": final_state["llm_powered_by"],
             "total_alternatives_found": len(filtered_recs),
-            "recommendations": filtered_recs
+            "recommendations": filtered_recs,
+            "endbits": endbits_list,
+            "fresh_rms": fresh_rms_list
         }

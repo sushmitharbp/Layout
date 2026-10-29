@@ -73,6 +73,7 @@ class NotificationEngine:
             "priority": priority or "normal",
             "created_at": now_iso,
             "read_by": [],
+            "dismissed_by": [],
             "extra_data": extra_data or {}
         }
 
@@ -81,9 +82,10 @@ class NotificationEngine:
         self._save_notifications(notifs)
         return record
 
-    def get_notifications_for_role(self, role, limit=50):
+    def get_notifications_for_role(self, role, limit=50, unread_only=False):
         """
         Fetches notifications intended for the given role, along with live unread counts.
+        Excludes notifications that the role has dismissed / cleared.
         """
         role_lower = (role or "").lower().strip()
         all_notifs = self._load_notifications()
@@ -92,6 +94,10 @@ class NotificationEngine:
         for n in all_notifs:
             tgt = (n.get("target_role") or "").lower()
             if tgt == role_lower or tgt == "all":
+                # If dismissed by this role, do not show
+                if role_lower in n.get("dismissed_by", []):
+                    continue
+
                 # For Purchase team, strictly only show notifications for MOs that come for Purchase approval (not endbits or direct-ERP)
                 if role_lower == "purchase":
                     extra = n.get("extra_data") or {}
@@ -99,6 +105,9 @@ class NotificationEngine:
                         continue
 
                 is_read = role_lower in n.get("read_by", [])
+                if unread_only and is_read:
+                    continue
+
                 filtered.append({
                     **n,
                     "is_read": is_read
@@ -144,8 +153,54 @@ class NotificationEngine:
             self._save_notifications(all_notifs)
         return True
 
+    def dismiss_notification(self, role, notif_id):
+        """
+        Dismisses a specific notification for the given role so it is marked done and removed.
+        """
+        if not notif_id:
+            return False
+        role_lower = (role or "").lower().strip()
+        all_notifs = self._load_notifications()
+        updated = False
+
+        for n in all_notifs:
+            if str(n.get("id")) == str(notif_id):
+                tag = role_lower if role_lower else (n.get("target_role") or "shearing").lower()
+                read_by = n.setdefault("read_by", [])
+                dismissed_by = n.setdefault("dismissed_by", [])
+                if tag not in read_by:
+                    read_by.append(tag)
+                    updated = True
+                if tag not in dismissed_by:
+                    dismissed_by.append(tag)
+                    updated = True
+                break
+
+        if updated:
+            self._save_notifications(all_notifs)
+        return True
+
     def clear_notifications_for_role(self, role):
         """
-        Marks all notifications as read for the role.
+        Marks all notifications as read and dismissed for the role, clearing their panel completely.
         """
-        return self.mark_as_read(role, notif_id=None)
+        role_lower = (role or "").lower().strip()
+        all_notifs = self._load_notifications()
+        updated = False
+
+        for n in all_notifs:
+            tgt = (n.get("target_role") or "").lower()
+            if not role_lower or tgt == role_lower or tgt == "all":
+                tag = role_lower if role_lower else tgt
+                read_by = n.setdefault("read_by", [])
+                dismissed_by = n.setdefault("dismissed_by", [])
+                if tag not in read_by:
+                    read_by.append(tag)
+                    updated = True
+                if tag not in dismissed_by:
+                    dismissed_by.append(tag)
+                    updated = True
+
+        if updated:
+            self._save_notifications(all_notifs)
+        return True

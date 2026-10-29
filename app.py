@@ -16,6 +16,11 @@ from flask import Flask, render_template, request, jsonify, send_from_directory,
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", "sheetlayout-super-secret-key-2026")
 
+# Register Clean v2 Database & Workflow API Blueprint
+from api_clean_v2 import api_v2_bp
+import db_clean as clean_db
+app.register_blueprint(api_v2_bp)
+
 # Load data store from Supabase database (with fallback to local data_store.json)
 from db_supabase import load_data_store
 
@@ -240,24 +245,48 @@ def search_parts():
     if not q:
         return jsonify([])
     
+    # 1. Prioritize clean 7-table Supabase DB
+    if clean_db.SUPABASE_URL and clean_db.SUPABASE_KEY:
+        try:
+            db_parts = clean_db.search_parts(query=q, limit=20)
+            results = []
+            for p in (db_parts or []):
+                results.append({
+                    "part_no": p.get("part_no"),
+                    "base_part": p.get("part_no", "").split(" - ")[0],
+                    "part_desc": p.get("part_desc", ""),
+                    "grade": p.get("grade", ""),
+                    "thickness": p.get("thickness", ""),
+                    "length": p.get("length", ""),
+                    "width": p.get("width", ""),
+                    "offtake": p.get("offtake", 1),
+                    "strip_per_blank_qty": p.get("strip_per_blank_qty", 1),
+                    "rm_count": 1,
+                    "standardized_rm": p.get("standard_rm")
+                })
+            return jsonify(results)
+        except Exception as e:
+            print("clean_db.search_parts error:", e)
+
     q_norm = normalize_key(q)
     results = []
     seen = set()
 
-    # Search in parts
-    for p_no in PARTS:
-        if q_norm in normalize_key(p_no):
-            if p_no not in seen:
-                seen.add(p_no)
-                records = PARTS[p_no]["records"]
-                results.append({
-                    "part_no": p_no,
-                    "base_part": PARTS[p_no]["base_part"],
-                    "rm_count": len(records),
-                    "standardized_rm": next((r["rm_erp"] for r in records if "standardized" in r["status"].lower()), records[0]["rm_erp"] if records else None)
-                })
-        if len(results) >= 10:
-            break
+    # Fallback to local store ONLY if Supabase is offline/not configured
+    if not (clean_db.SUPABASE_URL and clean_db.SUPABASE_KEY):
+        for p_no in PARTS:
+            if q_norm in normalize_key(p_no):
+                if p_no not in seen:
+                    seen.add(p_no)
+                    records = PARTS[p_no]["records"]
+                    results.append({
+                        "part_no": p_no,
+                        "base_part": PARTS[p_no]["base_part"],
+                        "rm_count": len(records),
+                        "standardized_rm": next((r["rm_erp"] for r in records if "standardized" in r["status"].lower()), records[0]["rm_erp"] if records else None)
+                    })
+            if len(results) >= 10:
+                break
             
     return jsonify(results)
 
@@ -293,17 +322,105 @@ def search_all_layouts():
 @app.route("/api/part/<path:part_no>")
 def get_part_details(part_no):
     part_clean = part_no.strip()
+
+    # 1. Prioritize clean 7-table Supabase DB
+    try:
+        db_part = clean_db.get_part(part_clean)
+        if db_part:
+            matching_rms = clean_db.get_rms_by_spec(grade=db_part.get("grade"), thickness=db_part.get("thickness"))
+            mrp_rec = clean_db.get_mrp_for_part(part_clean) or {}
+            records = []
+            for rm in matching_rms:
+                rm_grade = rm.get("grade") or db_part.get("grade") or "YS"
+                rm_thk = rm.get("thickness") if rm.get("thickness") is not None else db_part.get("thickness")
+                rm_len = rm.get("length") if rm.get("length") is not None else 2500.0
+                rm_wid = rm.get("width") if rm.get("width") is not None else 1250.0
+                records.append({
+                    "rm_erp": rm.get("rm_code"),
+                    "grade": rm_grade,
+                    "thickness": rm_thk,
+                    "length": rm_len,
+                    "width": rm_wid,
+                    "sheet_size": f"{rm_thk}*{rm_len}*{rm_wid}",
+                    "available_sheets": rm.get("available_sheets", 0),
+                    "weight_per_sheet": rm.get("weight_per_sheet", 0),
+                    "status": "Standardized" if rm.get("rm_code") == db_part.get("standard_rm") else "Active RM Store",
+                    "part_no": db_part.get("part_no"),
+                    "base_part": db_part.get("part_no", "").split(" - ")[0],
+                    "strip_qty": db_part.get("strip_per_blank_qty", 1),
+                    "blank_qty": db_part.get("offtake", 1),
+                    "part1": {
+                        "part_no": db_part.get("part_no"),
+                        "cut_blank": f"{db_part.get('thickness')}*{db_part.get('length')}*{db_part.get('width')}",
+                        "blank_qty": db_part.get("offtake", 1),
+                        "strip_qty": db_part.get("strip_per_blank_qty", 1),
+                        "strip_per_blank_qty": db_part.get("strip_per_blank_qty", 1),
+                        "blank_size": {
+                            "thickness": db_part.get("thickness"),
+                            "length": db_part.get("length"),
+                            "width": db_part.get("width")
+                        }
+                    },
+                    "per_sheet": {
+                        "yield_pct": 94.2
+                    }
+                })
+            return jsonify({
+                "base_part": db_part.get("part_no", "").split(" - ")[0],
+                "part_no": db_part.get("part_no"),
+                "part_desc": db_part.get("part_desc"),
+                "grade": db_part.get("grade"),
+                "thickness": db_part.get("thickness"),
+                "length": db_part.get("length"),
+                "width": db_part.get("width"),
+                "strip_per_blank_qty": db_part.get("strip_per_blank_qty", 1),
+                "standard_rm": db_part.get("standard_rm"),
+                "offtake": db_part.get("offtake", 1),
+                "records": records,
+                "matching_rms": matching_rms,
+                "mrp": {
+                    "monthly_schedule": mrp_rec.get("monthly_schedule", 0),
+                    "current_stock": mrp_rec.get("current_stock", 0),
+                    "qty_to_produce": mrp_rec.get("qty_to_produce", 0)
+                }
+            })
+    except Exception as e:
+        print("clean_db.get_part error:", e)
+
+    # Fallback to local store
+    target_part_data = None
     if part_clean in PARTS:
-        return jsonify(PARTS[part_clean])
-    
-    q_norm = normalize_key(part_clean)
-    if q_norm in NORM_PARTS:
-        return jsonify(PARTS[NORM_PARTS[q_norm]])
-    
-    # Try finding matches
-    matches = find_parts_by_query(part_clean)
-    if matches and matches[0] in PARTS:
-        return jsonify(PARTS[matches[0]])
+        target_part_data = dict(PARTS[part_clean])
+    else:
+        q_norm = normalize_key(part_clean)
+        if q_norm in NORM_PARTS:
+            target_part_data = dict(PARTS[NORM_PARTS[q_norm]])
+        else:
+            matches = find_parts_by_query(part_clean)
+            if matches and matches[0] in PARTS:
+                target_part_data = dict(PARTS[matches[0]])
+
+    if target_part_data:
+        mrp_rec = clean_db.get_mrp_for_part(part_clean)
+        if mrp_rec:
+            target_part_data["mrp"] = {
+                "monthly_schedule": mrp_rec.get("monthly_schedule", 0),
+                "current_stock": mrp_rec.get("current_stock", 0),
+                "qty_to_produce": mrp_rec.get("qty_to_produce", 0)
+            }
+        else:
+            try:
+                mrp_data = ERP_STOCK_SERVICE.get_mrp_monthly_schedule(part_clean) or {}
+                sched = mrp_data.get("monthly_total", 0) or mrp_data.get("monthly_schedule", 0) or 0
+                stk = mrp_data.get("inhouse_stock", 0) or mrp_data.get("current_stock", 0) or 0
+                target_part_data["mrp"] = {
+                    "monthly_schedule": sched,
+                    "current_stock": stk,
+                    "qty_to_produce": max(0, sched - stk) if sched else 0
+                }
+            except Exception:
+                target_part_data["mrp"] = {"monthly_schedule": 0, "current_stock": 0, "qty_to_produce": 0}
+        return jsonify(target_part_data)
         
     return jsonify({"error": "Part not found"}), 404
 
@@ -608,6 +725,8 @@ from production_planner_agent import ProductionPlannerAgent
 PRODUCTION_PLANNER_AGENT = ProductionPlannerAgent(DATA_STORE, ERP_STOCK_SERVICE, MO_ENGINE)
 from endbit_capacity_agent import EndbitCapacityAgent
 ENDBIT_CAPACITY_AGENT = EndbitCapacityAgent(DATA_STORE, MO_ENGINE)
+from part_coproduction_agent import PartCoProductionAgent
+CO_PRODUCTION_AGENT = PartCoProductionAgent(data_store=DATA_STORE, erp_service=ERP_STOCK_SERVICE)
 SHEET_AI.set_services(ERP_STOCK_SERVICE, MO_ENGINE, PRODUCTION_PLANNER_AGENT, ENDBIT_CAPACITY_AGENT)
 from cut_optimizer import CUT_OPTIMIZER_2D
 MO_UPLOAD_DIR = os.path.join(app.root_path, "static", "uploads", "mo_documents")
@@ -756,8 +875,137 @@ def get_part_intelligence(part_no):
     """
     Returns previous MOs, RM opening stock in Main Store,
     FG & WIP opening stock, and MRP monthly schedule for a part.
+    Prioritizes clean 7-table Supabase DB!
     """
+    part_clean = part_no.strip()
     rm_code = request.args.get("rm")
+    
+    raw_extra = request.args.getlist("parts") or request.args.getlist("extra_parts")
+    extra_parts = []
+    for ep in raw_extra:
+        for p in str(ep).split(","):
+            p_str = p.strip()
+            if p_str and p_str not in extra_parts:
+                extra_parts.append(p_str)
+
+    all_req_parts = [part_clean]
+    for ep in extra_parts:
+        if ep and ep != part_clean and ep not in all_req_parts:
+            all_req_parts.append(ep)
+
+    # 1. Prioritize clean 7-table Supabase DB (with fallback to ERP service for additional parts)
+    try:
+        db_part = clean_db.get_part(part_clean)
+        if db_part:
+            target_rm = rm_code or db_part.get("standard_rm")
+            rm_rec = clean_db.get_rm(target_rm) if target_rm else None
+            rm_sheets = rm_rec.get("available_sheets", 0) if rm_rec else 0
+
+            parts_planning_list = []
+            all_mos_list = []
+
+            for p_name in all_req_parts:
+                p_part = db_part if p_name == part_clean else (clean_db.get_part(p_name) or {})
+                p_mrp = clean_db.get_mrp_for_part(p_name) or {}
+                p_mos = clean_db.get_mos_for_part(p_name) or []
+
+                p_produced_erp = 0
+                if not p_mrp and ERP_STOCK_SERVICE:
+                    try:
+                        erp_intel = ERP_STOCK_SERVICE.get_part_comprehensive_intelligence(p_name) or {}
+                        p_plan = erp_intel.get("planning_summary") or {}
+                        if p_plan:
+                            p_mrp = {
+                                "monthly_schedule": p_plan.get("mrp_monthly_target", 0),
+                                "current_stock": p_plan.get("current_stock", 0),
+                                "qty_to_produce": p_plan.get("qty_to_produce", p_plan.get("remaining_quantity", 0)),
+                                "month_year": p_plan.get("target_month", "2026-10")
+                            }
+                            p_produced_erp = p_plan.get("parts_produced", 0)
+                        if not p_mos:
+                            p_mos = (erp_intel.get("previous_mos") or {}).get("records", [])
+                    except Exception:
+                        pass
+
+                all_mos_list.extend(p_mos)
+
+                p_mrp_target = p_mrp.get("monthly_schedule", 0)
+                p_cur_stock = p_mrp.get("current_stock", 0)
+                p_qty_to_prod = p_mrp.get("qty_to_produce", max(0, p_mrp_target - p_cur_stock))
+                
+                if p_mos and any("qty_produced" in m for m in p_mos):
+                    p_produced = sum(m.get("qty_produced", 0) for m in p_mos)
+                elif p_produced_erp:
+                    p_produced = p_produced_erp
+                else:
+                    p_produced = 0
+
+                p_remaining = max(0, p_qty_to_prod - p_produced) if p_qty_to_prod else max(0, p_mrp_target - p_produced)
+                p_size = (p_part.get("part_size") or p_part.get("cut_blank") or "") if p_part else ""
+                p_strip = p_part.get("strip_per_blank_qty") or p_part.get("strip_qty") or 1
+
+                parts_planning_list.append({
+                    "part_no": p_name,
+                    "child_part_no": p_name,
+                    "part_size": p_size,
+                    "strip_per_blank_qty": p_strip,
+                    "strip_qty": p_strip,
+                    "mrp_monthly_target": p_mrp_target,
+                    "current_stock": p_cur_stock,
+                    "qty_to_produce": p_qty_to_prod,
+                    "parts_produced": p_produced,
+                    "remaining_quantity": p_remaining,
+                    "monthly_mo_records": p_mos,
+                    "monthly_mo_count": len(p_mos),
+                    "target_month": p_mrp.get("month_year", "2026-10")
+                })
+
+            primary_plan = parts_planning_list[0] if parts_planning_list else {}
+            mrp_rec = clean_db.get_mrp_for_part(part_clean) or {}
+
+            return jsonify({
+                "part_no": part_clean,
+                "planning_summary": {
+                    "part_no": part_clean,
+                    "child_part_no": part_clean,
+                    "part_size": primary_plan.get("part_size", ""),
+                    "mrp_monthly_target": primary_plan.get("mrp_monthly_target", 0),
+                    "current_stock": primary_plan.get("current_stock", 0),
+                    "qty_to_produce": primary_plan.get("qty_to_produce", 0),
+                    "parts_produced": primary_plan.get("parts_produced", 0),
+                    "remaining_quantity": primary_plan.get("remaining_quantity", 0),
+                    "rm_sheets_on_hand": rm_sheets,
+                    "rm_onhand_sheets": rm_sheets,
+                    "target_month": mrp_rec.get("month_year", "2026-10"),
+                    "parts": parts_planning_list,
+                    "is_multi_part": len(parts_planning_list) > 1,
+                    "totals": {
+                        "mrp_monthly_target": sum(p["mrp_monthly_target"] for p in parts_planning_list),
+                        "parts_produced": sum(p["parts_produced"] for p in parts_planning_list),
+                        "remaining_quantity": sum(p["remaining_quantity"] for p in parts_planning_list),
+                        "parts_count": len(parts_planning_list)
+                    }
+                },
+                "rm_opening_stock": {
+                    "item_code": target_rm,
+                    "onhand_stock": rm_sheets,
+                    "uom": "NOS"
+                },
+                "mrp_demand": {
+                    "monthly_schedule": primary_plan.get("mrp_monthly_target", 0),
+                    "current_stock": primary_plan.get("current_stock", 0),
+                    "qty_to_produce": primary_plan.get("qty_to_produce", 0),
+                    "month_year": mrp_rec.get("month_year", "2026-10")
+                },
+                "previous_mos": all_mos_list,
+                "stock_feasibility": {
+                    "feasible": rm_sheets > 0,
+                    "available_sheets": rm_sheets
+                }
+            })
+    except Exception as e:
+        print("clean_db get_part_intelligence error:", e)
+
     grade = request.args.get("grade")
     thickness = request.args.get("thickness")
     length = request.args.get("length")
@@ -798,7 +1046,6 @@ def get_part_intelligence(part_no):
             p["cut_blank"] = cb
             p["part_size"] = format_part_size_display(cb)
         elif not p.get("part_size"):
-            # Check if parent part has size
             cb_parent = resolve_part_size_info(p.get("parent_part_no") or part_no, rm_code)
             if cb_parent:
                 p["cut_blank"] = cb_parent
@@ -816,7 +1063,20 @@ def get_part_intelligence(part_no):
 
 @app.route("/api/intelligence/rm/<path:rm_code>")
 def get_rm_intelligence(rm_code):
-    """Returns RM Opening stock in Main Store"""
+    """Returns RM Opening stock in Main Store prioritizing clean 7-table Supabase DB"""
+    try:
+        db_rm = clean_db.get_rm(rm_code)
+        if db_rm:
+            return jsonify({
+                "item_code": db_rm.get("rm_code"),
+                "onhand_stock": db_rm.get("available_sheets", 0),
+                "weight_per_sheet": db_rm.get("weight_per_sheet", 0),
+                "total_weight": db_rm.get("total_stock_weight", 0),
+                "uom": "NOS"
+            })
+    except Exception as e:
+        print("clean_db.get_rm error:", e)
+
     grade = request.args.get("grade")
     thickness = request.args.get("thickness")
     length = request.args.get("length")
@@ -832,6 +1092,71 @@ def get_rm_intelligence(rm_code):
     if not stock:
         return jsonify({"found": False, "rm_code": rm_code})
     return jsonify({"found": True, "stock": stock})
+
+
+@app.route("/api/intelligence/suggest-parts", methods=["GET", "POST"])
+def suggest_coproduction_parts():
+    """
+    AI Co-Production & Yield Optimization Agent endpoint.
+    Suggests companion parts to cut on the same sheet.
+    First priority: Highest Yield % / Yield Boost (OptiCutter 2D simulation)
+    Second priority: Low stock / Pending MRP demand
+    """
+    if request.method == "POST":
+        data = request.get_json(silent=True) or {}
+        base_part = data.get("base_part") or data.get("part_no")
+        sheet_length = data.get("sheet_length")
+        sheet_width = data.get("sheet_width")
+        grade = data.get("grade")
+        thickness = data.get("thickness")
+        base_blanks = data.get("base_blanks")
+        current_parts = data.get("current_parts") or []
+        filter_mode = data.get("filter_mode") or "all"
+    else:
+        base_part = request.args.get("base_part") or request.args.get("part_no")
+        sheet_length = request.args.get("sheet_length")
+        sheet_width = request.args.get("sheet_width")
+        grade = request.args.get("grade")
+        thickness = request.args.get("thickness")
+        base_blanks = request.args.get("base_blanks")
+        raw_parts = request.args.getlist("current_parts") or request.args.getlist("parts")
+        current_parts = []
+        for p in raw_parts:
+            for s in str(p).split(","):
+                if s.strip() and s.strip() not in current_parts:
+                    current_parts.append(s.strip())
+        filter_mode = request.args.get("filter_mode") or "all"
+
+    if not base_part:
+        return jsonify({"success": False, "error": "base_part is required", "recommendations": []})
+
+    try:
+        s_len = float(sheet_length) if sheet_length else 2500.0
+        s_wid = float(sheet_width) if sheet_width else 1250.0
+    except (ValueError, TypeError):
+        s_len, s_wid = 2500.0, 1250.0
+
+    try:
+        thk = float(thickness) if thickness is not None and str(thickness).strip() != "" else None
+    except (ValueError, TypeError):
+        thk = None
+
+    try:
+        b_blanks = int(base_blanks) if base_blanks else None
+    except (ValueError, TypeError):
+        b_blanks = None
+
+    result = CO_PRODUCTION_AGENT.suggest_parts(
+        base_part_no=base_part,
+        sheet_length=s_len,
+        sheet_width=s_wid,
+        grade=grade,
+        thickness=thk,
+        base_blanks_qty=b_blanks,
+        current_parts=current_parts,
+        filter_mode=filter_mode
+    )
+    return jsonify(result)
 
 
 @app.route("/api/mo/roles")
@@ -880,6 +1205,17 @@ def create_mo():
         except ValueError:
             yield_val = None
 
+        is_std = form.get("is_standard_layout", "true").lower() in ("true", "1", "yes")
+        rm_str_check = str(rm_erp_val or "").strip().upper()
+        layout_name_check = str(form.get("layout_name") or "").strip().upper()
+        if (
+            "CUSTOM" in rm_str_check or 
+            "CUSTOM" in layout_name_check or 
+            form.get("is_custom") in ("true", "1", "yes") or
+            rm_str_check == "__CUSTOM__"
+        ):
+            is_std = False
+
         data = {
             "mo_number": form.get("mo_number"),
             "part_no": form.get("part_no"),
@@ -888,7 +1224,7 @@ def create_mo():
             "grade": form.get("grade"),
             "layout_name": form.get("layout_name"),
             "yield_pct": yield_val,
-            "is_standard_layout": form.get("is_standard_layout", "true").lower() in ("true", "1", "yes"),
+            "is_standard_layout": is_std,
             "thickness": float(form.get("thickness", 0)) if form.get("thickness") else None,
             "length": float(form.get("length", 0)) if form.get("length") else None,
             "width": float(form.get("width", 0)) if form.get("width") else None,
@@ -1317,6 +1653,53 @@ def add_manual_endbit_endpoint():
     return jsonify(record), 201
 
 
+@app.route("/api/rm/create", methods=["POST"])
+def add_rm_endpoint():
+    """ERP team adds a new Raw Material sheet to store master"""
+    body = request.json or request.form.to_dict() or {}
+    role = request.headers.get("X-Role") or session.get("role") or ""
+    if role != "erp":
+        return jsonify({"error": "Unauthorized: Only the ERP Team can add new Raw Material sheets to Master Data."}), 403
+
+    res = clean_db.create_rm(body)
+    if not res.get("success"):
+        return jsonify({"error": res.get("error", "Failed to create RM sheet")}), 400
+    return jsonify(res), 201
+
+
+@app.route("/api/part/create", methods=["POST"])
+def add_part_endpoint():
+    """ERP team adds a new Part master to the engineering catalog"""
+    body = request.json or request.form.to_dict() or {}
+    role = request.headers.get("X-Role") or session.get("role") or ""
+    if role != "erp":
+        return jsonify({"error": "Unauthorized: Only the ERP Team can add new Part specifications to Master Data."}), 403
+
+    res = clean_db.create_part(body)
+    if not res.get("success"):
+        return jsonify({"error": res.get("error", "Failed to create Part")}), 400
+
+    # Live update in-memory PARTS and autocomplete dictionary so UI immediately finds it
+    part_no = (body.get("part_no") or "").strip()
+    if part_no:
+        PARTS[part_no] = {
+            "part_no": part_no,
+            "base_part": body.get("base_part") or part_no.split(" - ")[0],
+            "part_desc": body.get("part_desc", ""),
+            "grade": body.get("grade", "HR"),
+            "thickness": float(body.get("thickness", 0)),
+            "length": float(body.get("length", 0)),
+            "width": float(body.get("width", 0)),
+            "offtake": int(body.get("offtake", 1)),
+            "strip_per_blank_qty": int(body.get("strip_per_blank_qty", 1)),
+            "standard_rm": body.get("standard_rm") or None,
+            "records": []
+        }
+        NORM_PARTS[normalize_key(part_no)] = part_no
+
+    return jsonify(res), 201
+
+
 @app.route("/api/endbits/<endbit_id>")
 def get_endbit_detail(endbit_id):
     """Get single end bit with its parts creation history"""
@@ -1648,7 +2031,8 @@ def get_notifications_endpoint():
     """Returns real-time notifications for the active authenticated department"""
     role = request.headers.get("X-Role") or request.args.get("role") or session.get("role") or "shearing"
     limit = int(request.args.get("limit", 50))
-    res = MO_ENGINE.notification_engine.get_notifications_for_role(role, limit=limit)
+    unread_only = request.args.get("unread_only", "").lower() in ("true", "1", "yes")
+    res = MO_ENGINE.notification_engine.get_notifications_for_role(role, limit=limit, unread_only=unread_only)
     return jsonify(res)
 
 
@@ -1661,6 +2045,17 @@ def mark_notifications_read_endpoint():
     if notif_id in (None, "", "null", "undefined"):
         notif_id = None
     MO_ENGINE.notification_engine.mark_as_read(role, notif_id=notif_id)
+    return jsonify({"success": True})
+
+
+@app.route("/api/notifications/dismiss", methods=["POST"])
+def dismiss_notification_endpoint():
+    """Dismiss a specific notification so it is marked done and removed for current department"""
+    body = request.get_json(silent=True) or {}
+    role = request.headers.get("X-Role") or body.get("role") or session.get("role") or "shearing"
+    notif_id = body.get("notif_id")
+    if notif_id:
+        MO_ENGINE.notification_engine.dismiss_notification(role, notif_id=notif_id)
     return jsonify({"success": True})
 
 

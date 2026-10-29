@@ -1,20 +1,240 @@
 [
   {
-    "id": "notif_1791700117027_42867f",
-    "target_role": "krysalis",
+    "id": "notif_1793303432994_99f7d0",
+    "target_role": "shearing",
+    "type": "MO_APPROVED",
+    "mo_number": "MO-2026-7002",
+    "title": "\ud83c\udf89 MO MO-2026-7002 Released to Live ERP",
+    "message": "Material Order MO-2026-7002 (B5M18202_10) has been approved and released to live ERP (ERP MO: ERP-MO-2026-7002)! Production cutting can proceed.",
+    "sender_role": "erp",
+    "sender_name": "ERP Team",
+    "priority": "success",
+    "created_at": "2026-10-29T19:50:32.994155Z",
+    "read_by": [],
+    "dismissed_by": [],
+    "extra_data": {
+      "part_no": "B5M18202_10",
+      "erp_mo_number": "ERP-MO-2026-7002",
+      "stage": "COMPLETED"
+    }
+  },
+  {
+    "id": "notif_1793303385530_350672",
+    "target_role": "erp",
     "type": "MO_CREATED",
-    "mo_number": "MO-2026-3115",
-    "title": "New MO MO-2026-3115 Received",
-    "message": "New Material Order MO-2026-3115 (MB121017 - Item 11(X6C17014)) created by Shearing. Assigned to Consultants (Krysalis) Team for clearance.",
+    "mo_number": "MO-2026-7002",
+    "title": "New MO MO-2026-7002 Received",
+    "message": "New Material Order MO-2026-7002 (B5M18202_10) created by Shearing. Assigned to ERP Team for clearance.",
     "sender_role": "shearing",
     "sender_name": "Shearing (Production) Team",
     "priority": "normal",
-    "created_at": "2026-10-11T06:28:37.027510Z",
+    "created_at": "2026-10-29T19:49:45.530581Z",
+    "read_by": [],
+    "dismissed_by": [],
+    "extra_data": {
+      "part_no": "B5M18202_10",
+      "stage": "ERP"
+    }
+  },
+  {
+    "id": "notif_1793286386327_a6f85a",
+    "target_role": "krysalis",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-6549",
+    "title": "New MO MO-2026-6549 Received",
+    "message": "New Material Order MO-2026-6549 (B5M84802_01) created by Shearing. Assigned to Consultants (Krysalis) Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-10-29T15:06:26.327896Z",
+    "read_by": [],
+    "dismissed_by": [],
+    "extra_data": {
+      "part_no": "B5M84802_01",
+      "stage": "KRYSALIS"
+    }
+  },
+  {
+    "id": "notif_1793255885734_3d4ca7",
+    "target_role": "shearing",
+    "type": "MO_APPROVED",
+    "mo_number": "MO-TEST-999",
+    "title": "Test Done Notification",
+    "message": "This notification is to verify read and done state.",
+    "sender_role": "erp",
+    "sender_name": "ERP Team",
+    "priority": "success",
+    "created_at": "2026-10-29T06:38:05.734431Z",
     "read_by": [
-      "krysalis"
+      "shearing"
+    ],
+    "dismissed_by": [
+      "shearing"
+    ],
+    "extra_data": {}
+  },
+  {
+    "id": "notif_1793208125380_7e4deb",
+    "target_role": "shearing",
+    "type": "MO_APPROVED",
+    "mo_number": "MO-1793208075",
+    "title": "\ud83c\udf89 MO MO-1793208075 Released to Live ERP",
+    "message": "Material Order MO-1793208075 (F4N25413) has been approved and released to live ERP (ERP MO: ERP-2026-TEST)! Production cutting can proceed.",
+    "sender_role": "erp",
+    "sender_name": "ERP Team",
+    "priority": "success",
+    "created_at": "2026-10-28T17:22:05.380713Z",
+    "read_by": [
+      "shearing"
     ],
     "extra_data": {
-      "part_no": "MB121017 - Item 11(X6C17014)",
+      "part_no": "F4N25413",
+      "erp_mo_number": "ERP-2026-TEST",
+      "stage": "COMPLETED"
+    },
+    "dismissed_by": [
+      "shearing"
+    ]
+  },
+  {
+    "id": "notif_1793208076130_45e934",
+    "target_role": "erp",
+    "type": "MO_CREATED",
+    "mo_number": "MO-1793208075",
+    "title": "New MO MO-1793208075 Received",
+    "message": "New Material Order MO-1793208075 (F4N25413) created by Shearing. Assigned to ERP Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-10-28T17:21:16.130756Z",
+    "read_by": [],
+    "extra_data": {
+      "part_no": "F4N25413",
+      "stage": "ERP"
+    }
+  },
+  {
+    "id": "notif_1793182399395_3b09cc",
+    "target_role": "purchase",
+    "type": "MO_ROUTED",
+    "mo_number": "MO-2026-5374",
+    "title": "MO MO-2026-5374 Routed to Purchase",
+    "message": "Material Order MO-2026-5374 (MB908043_ITEM04) cleared by Krysalis. Raw material clearance required by Purchase.",
+    "sender_role": "krysalis",
+    "sender_name": "Consultants (Krysalis) Team",
+    "priority": "normal",
+    "created_at": "2026-10-28T10:13:19.395319Z",
+    "read_by": [],
+    "extra_data": {
+      "part_no": "MB908043_ITEM04",
+      "stage": "PURCHASE"
+    }
+  },
+  {
+    "id": "notif_1793182093473_651030",
+    "target_role": "krysalis",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-5374",
+    "title": "New MO MO-2026-5374 Received",
+    "message": "New Material Order MO-2026-5374 (MB908043_ITEM04) created by Shearing. Assigned to Consultants (Krysalis) Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-10-28T10:08:13.473851Z",
+    "read_by": [],
+    "extra_data": {
+      "part_no": "MB908043_ITEM04",
+      "stage": "KRYSALIS"
+    }
+  },
+  {
+    "id": "notif_1793174893246_686beb",
+    "target_role": "erp",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-1158",
+    "title": "New MO MO-2026-1158 Received",
+    "message": "New Material Order MO-2026-1158 (MB90C198_05) created by Shearing. Assigned to ERP Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-10-28T08:08:13.246594Z",
+    "read_by": [],
+    "extra_data": {
+      "part_no": "MB90C198_05",
+      "stage": "ERP"
+    }
+  },
+  {
+    "id": "notif_1793079440746_315b8f",
+    "target_role": "shearing",
+    "type": "MO_REJECTED",
+    "mo_number": "MO-2026-7370",
+    "title": "\u26a0\ufe0f MO MO-2026-7370 REJECTED by Purchase Team",
+    "message": "Material Order MO-2026-7370 (F2J02714 - Item 1) was rejected by Purchase Team. Reason: 'No sheet available'. Action required: Edit & Resubmit.",
+    "sender_role": "purchase",
+    "sender_name": "Purchase Team",
+    "priority": "urgent",
+    "created_at": "2026-10-27T05:37:20.746737Z",
+    "read_by": [
+      "shearing"
+    ],
+    "extra_data": {
+      "part_no": "F2J02714 - Item 1",
+      "reason": "No sheet available",
+      "stage": "PURCHASE"
+    }
+  },
+  {
+    "id": "notif_1793079439660_2d0187",
+    "target_role": "shearing",
+    "type": "MO_REJECTED",
+    "mo_number": "MO-2026-7370",
+    "title": "\u26a0\ufe0f MO MO-2026-7370 REJECTED by Purchase Team",
+    "message": "Material Order MO-2026-7370 (F2J02714 - Item 1) was rejected by Purchase Team. Reason: 'No sheet available'. Action required: Edit & Resubmit.",
+    "sender_role": "purchase",
+    "sender_name": "Purchase Team",
+    "priority": "urgent",
+    "created_at": "2026-10-27T05:37:19.660281Z",
+    "read_by": [
+      "shearing"
+    ],
+    "extra_data": {
+      "part_no": "F2J02714 - Item 1",
+      "reason": "No sheet available",
+      "stage": "PURCHASE"
+    }
+  },
+  {
+    "id": "notif_1793077799490_8c09a1",
+    "target_role": "purchase",
+    "type": "MO_ROUTED",
+    "mo_number": "MO-2026-7370",
+    "title": "MO MO-2026-7370 Routed to Purchase",
+    "message": "Material Order MO-2026-7370 (F2J02714 - Item 1) cleared by Krysalis. Raw material clearance required by Purchase.",
+    "sender_role": "krysalis",
+    "sender_name": "Consultants (Krysalis) Team",
+    "priority": "normal",
+    "created_at": "2026-10-27T05:09:59.490870Z",
+    "read_by": [],
+    "extra_data": {
+      "part_no": "F2J02714 - Item 1",
+      "stage": "PURCHASE"
+    }
+  },
+  {
+    "id": "notif_1793015187541_c2ec23",
+    "target_role": "krysalis",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-7370",
+    "title": "New MO MO-2026-7370 Received",
+    "message": "New Material Order MO-2026-7370 (F2J02714 - Item 1) created by Shearing. Assigned to Consultants (Krysalis) Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-10-26T11:46:27.541900Z",
+    "read_by": [],
+    "extra_data": {
+      "part_no": "F2J02714 - Item 1",
       "stage": "KRYSALIS"
     }
   }

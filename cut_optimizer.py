@@ -512,24 +512,23 @@ class CutListOptimizer2D:
             })
 
         # Strategy 3: Multi-Block 2D Guillotine Splits (OptiCutter Industrial Cutting)
-        if strategy_mode in ("auto", "hybrid"):
+        if strategy_mode in ("auto", "hybrid") and can_rotate:
+            # 3A: Vertical Guillotine Splits (cutting sheet along length into 2 blocks)
             for (l1, w1, r1), (l2, w2, r2) in [
                 ((b_len, b_wid, False), (b_wid, b_len, True)),
                 ((b_wid, b_len, True), (b_len, b_wid, False))
             ]:
                 nx1 = int(s_len // (l1 + kerf_val))
                 ny1 = int(s_wid // (w1 + kerf_val))
-                min_cols = 2 if nx1 >= 4 else 1
 
-                for k in range(min_cols, nx1):
+                for k in range(1, nx1):
                     x_split = round(k * (l1 + kerf_val), 1)
                     x_rem = s_len - x_split
-                    min_rem_cols = 2 if int(s_len // l2) >= 4 else 1
-                    if x_rem < (min_rem_cols * (l2 + kerf_val)):
+                    if x_rem < (l2 + kerf_val):
                         continue
                     nx2 = int(x_rem // (l2 + kerf_val))
                     ny2 = int(s_wid // (w2 + kerf_val))
-                    if nx2 < min_rem_cols or ny2 == 0:
+                    if nx2 <= 0 or ny2 <= 0:
                         continue
 
                     p1 = []
@@ -577,6 +576,74 @@ class CutListOptimizer2D:
                         "blocks": [
                             {"x": 0, "w": x_split, "cols": k, "rows": ny1, "bw": l1, "bh": w1, "rem_h": block1_rem_y},
                             {"x": x_split, "w": round(nx2 * (l2 + kerf_val), 1), "cols": nx2, "rows": ny2, "bw": l2, "bh": w2, "rem_h": block2_rem_y}
+                        ],
+                        "primary_parts": len(p1) if not r1 else 0,
+                        "can_rot_export": 1
+                    })
+
+            # 3B: Horizontal Guillotine Splits (cutting sheet along width into 2 blocks)
+            for (l1, w1, r1), (l2, w2, r2) in [
+                ((b_len, b_wid, False), (b_wid, b_len, True)),
+                ((b_wid, b_len, True), (b_len, b_wid, False))
+            ]:
+                nx1 = int(s_len // (l1 + kerf_val))
+                ny1 = int(s_wid // (w1 + kerf_val))
+
+                for k in range(1, ny1):
+                    y_split = round(k * (w1 + kerf_val), 1)
+                    y_rem = s_wid - y_split
+                    if y_rem < (w2 + kerf_val):
+                        continue
+                    nx2 = int(s_len // (l2 + kerf_val))
+                    ny2 = int(y_rem // (w2 + kerf_val))
+                    if nx2 <= 0 or ny2 <= 0:
+                        continue
+
+                    p1 = []
+                    for ix in range(nx1):
+                        for iy in range(k):
+                            p1.append({
+                                "x": round(ix * (l1 + kerf_val), 1),
+                                "y": round(iy * (w1 + kerf_val), 1),
+                                "w": round(l1, 1),
+                                "h": round(w1, 1),
+                                "rotated": r1,
+                                "part_no": part_no,
+                                "part_idx": 0,
+                                "color": PART_COLORS[0]["bg"],
+                                "border_color": PART_COLORS[0]["border"]
+                            })
+                    p2 = []
+                    for ix in range(nx2):
+                        for iy in range(ny2):
+                            p2.append({
+                                "x": round(ix * (l2 + kerf_val), 1),
+                                "y": round(y_split + iy * (w2 + kerf_val), 1),
+                                "w": round(l2, 1),
+                                "h": round(w2, 1),
+                                "rotated": r2,
+                                "part_no": part_no,
+                                "part_idx": 0,
+                                "color": PART_COLORS[0]["bg"],
+                                "border_color": PART_COLORS[0]["border"]
+                            })
+
+                    combined = p1 + p2
+                    block1_rem_x = round(s_len - nx1 * (l1 + kerf_val), 1)
+                    block2_rem_x = round(s_len - nx2 * (l2 + kerf_val), 1)
+                    total_used_y = round(y_split + ny2 * (w2 + kerf_val), 1)
+                    rem_y_tot = round(s_wid - total_used_y, 1)
+
+                    candidates.append({
+                        "name": f"Guillotine 2-Block (Horizontal Cut at {int(y_split)}mm)",
+                        "places": combined,
+                        "count": len(combined),
+                        "rem_x": min(block1_rem_x, block2_rem_x),
+                        "rem_y": rem_y_tot,
+                        "split_line": {"axis": "y", "val": y_split},
+                        "blocks": [
+                            {"y": 0, "h": y_split, "cols": nx1, "rows": k, "bw": l1, "bh": w1, "rem_w": block1_rem_x},
+                            {"y": y_split, "h": round(ny2 * (w2 + kerf_val), 1), "cols": nx2, "rows": ny2, "bw": l2, "bh": w2, "rem_w": block2_rem_x}
                         ],
                         "primary_parts": len(p1) if not r1 else 0,
                         "can_rot_export": 1
@@ -688,3 +755,68 @@ class CutListOptimizer2D:
 
 # Singleton instance
 CUT_OPTIMIZER_2D = CutListOptimizer2D()
+
+
+def calculate_max_guillotine_capacity(sheet_len: float, sheet_wid: float, blank_len: float, blank_wid: float, kerf: float = 0.0) -> int:
+    """
+    Computes true 2D guillotine cut capacity matching OptiCutter.
+    Evaluates uniform grids and multi-block guillotine split strategies (horizontal and vertical cuts).
+    """
+    s_l = max(float(sheet_len or 0), float(sheet_wid or 0))
+    s_w = min(float(sheet_len or 0), float(sheet_wid or 0))
+    b_l = max(float(blank_len or 0), float(blank_wid or 0))
+    b_w = min(float(blank_len or 0), float(blank_wid or 0))
+    if s_l <= 0 or s_w <= 0 or b_l <= 0 or b_w <= 0:
+        return 0
+    if b_l > s_l or b_w > s_w:
+        return 0
+
+    k = max(0.0, float(kerf or 0))
+    best = 0
+
+    # 1. Uniform 0 deg
+    best = max(best, int(s_l // (b_l + k)) * int(s_w // (b_w + k)))
+    # 2. Uniform 90 deg
+    best = max(best, int(s_l // (b_w + k)) * int(s_w // (b_l + k)))
+
+    pairs = [
+        ((b_l, b_w), (b_w, b_l)),
+        ((b_w, b_l), (b_l, b_w))
+    ]
+
+    # 3. Vertical splits (along s_l)
+    for (l1, w1), (l2, w2) in pairs:
+        nx1 = int(s_l // (l1 + k))
+        ny1 = int(s_w // (w1 + k))
+        for col in range(1, nx1):
+            rem_l = s_l - col * (l1 + k)
+            nx2 = int(rem_l // (l2 + k))
+            ny2 = int(s_w // (w2 + k))
+            if nx2 > 0 and ny2 > 0:
+                best = max(best, col * ny1 + nx2 * ny2)
+
+    # 4. Horizontal splits (along s_w)
+    for (l1, w1), (l2, w2) in pairs:
+        nx1 = int(s_l // (l1 + k))
+        ny1 = int(s_w // (w1 + k))
+        for row in range(1, ny1):
+            rem_w = s_w - row * (w1 + k)
+            nx2 = int(s_l // (l2 + k))
+            ny2 = int(rem_w // (w2 + k))
+            if nx2 > 0 and ny2 > 0:
+                best = max(best, nx1 * row + nx2 * ny2)
+
+    # 5. Also cross-check with CUT_OPTIMIZER_2D
+    opt_res = CUT_OPTIMIZER_2D.optimize_nesting(
+        sheet_length=s_l,
+        sheet_width=s_w,
+        blank_length=b_l,
+        blank_width=b_w,
+        can_rotate=True,
+        kerf=k
+    )
+    if opt_res and opt_res.get("success"):
+        best = max(best, opt_res.get("total_blanks", 0))
+
+    return int(best)
+

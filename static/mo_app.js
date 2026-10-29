@@ -136,6 +136,13 @@ function updateRoleUI() {
     const actionTh = document.querySelector(".shearing-action-th");
     if (actionTh) actionTh.style.display = isShearing ? "" : "none";
 
+    // ERP Master Data controls: reserved for ERP team
+    const isErp = (currentRole === "erp");
+    const bannerAddRm = document.getElementById("bannerAddRmBtn");
+    const bannerAddPart = document.getElementById("bannerAddPartBtn");
+    if (bannerAddRm) bannerAddRm.style.display = isErp ? "inline-flex" : "none";
+    if (bannerAddPart) bannerAddPart.style.display = isErp ? "inline-flex" : "none";
+
     if (window.allEndbits && window.allEndbits.length > 0) {
         renderEndbitsTable(window.allEndbits);
     }
@@ -871,6 +878,11 @@ function openCreateModal() {
     if (nonStdJson) nonStdJson.value = "[]";
     nonStdPartRowCounter = 0;
 
+    const modalAddList = document.getElementById("modalAdditionalPartsList");
+    if (modalAddList) modalAddList.innerHTML = "";
+    addModalPartCounter = 0;
+    updateModalAddPartsCountBadge();
+
     // Reset layout standardization UI to Standard by default
     const stdRadio = document.querySelector('input[name="is_standard_layout"][value="true"]');
     if (stdRadio) stdRadio.checked = true;
@@ -898,6 +910,18 @@ function openCreateModal() {
 
     const yieldInput = document.getElementById("yieldPctInput");
     if (yieldInput) yieldInput.value = "";
+    const stripEl = document.getElementById("stripPerBlankInput");
+    if (stripEl) stripEl.value = "";
+    const quickStockEl = document.getElementById("rmStockBoxVal");
+    if (quickStockEl) quickStockEl.textContent = "- Sheets";
+
+    // Reset 3 MRP Cards
+    const mrpQEl = document.getElementById("mrpMonthlyQtyVal");
+    const mrpSEl = document.getElementById("mrpCurrentStockVal");
+    const mrpPEl = document.getElementById("mrpQtyToProduceVal");
+    if (mrpQEl) mrpQEl.textContent = "- Nos";
+    if (mrpSEl) mrpSEl.textContent = "- Nos";
+    if (mrpPEl) mrpPEl.textContent = "- Nos";
 
     const rmSelect = document.getElementById("rmErpSelect");
     if (rmSelect) {
@@ -919,6 +943,12 @@ function openCreateModal() {
     }
     if (basePartLabel) {
         basePartLabel.innerHTML = 'Base Part:';
+    }
+
+    const stdCard = document.getElementById("radioCardStd");
+    if (stdCard) {
+        stdCard.classList.remove("disabled");
+        stdCard.title = "";
     }
 
     toggleLayoutType(true);
@@ -983,15 +1013,20 @@ function searchPartsForModal(query) {
                     if (results.length === 0) {
                         dropdown.innerHTML = `<div class="part-dropdown-item text-muted">No matching parts found.</div>`;
                     } else {
-                        dropdown.innerHTML = results.map(r => `
-                            <div class="part-dropdown-item" onclick="selectPartForModal('${escapeHtml(r.part_no)}')">
-                                <div>
-                                    <strong>${escapeHtml(r.part_no)}</strong>
-                                    <small class="text-muted"> (${r.rm_count} RM codes)</small>
+                        dropdown.innerHTML = results.map(r => {
+                            const sizeStr = (r.thickness && r.length && r.width) ? `${r.thickness}×${r.length}×${r.width} mm` : (r.thickness ? `${r.thickness}mm` : '');
+                            const offtakeStr = r.offtake !== undefined ? `Offtake: ${r.offtake}` : '';
+                            const badgeDetails = [r.grade, sizeStr, offtakeStr].filter(Boolean).join(" • ");
+                            return `
+                                <div class="part-dropdown-item" onclick="selectPartForModal('${escapeHtml(r.part_no)}')">
+                                    <div style="flex: 1;">
+                                        <strong>${escapeHtml(r.part_no)}</strong>
+                                        ${r.part_desc ? `<small class="text-muted" style="display: block; font-size: 0.75rem;">${escapeHtml(r.part_desc)}</small>` : ''}
+                                    </div>
+                                    <span class="badge" style="background: #f1f5f9; color: #0369a1; border: 1px solid #cbd5e1; font-weight: 600; font-size: 0.75rem;">${escapeHtml(badgeDetails || r.base_part)}</span>
                                 </div>
-                                <span class="badge">${escapeHtml(r.base_part)}</span>
-                            </div>
-                        `).join("");
+                            `;
+                        }).join("");
                     }
                     dropdown.style.display = "block";
                 }
@@ -1013,6 +1048,48 @@ async function selectPartForModal(partNo) {
         if (res.ok) {
             selectedPartData = await res.json();
             populatePartTechnicalFields(selectedPartData);
+
+            // Populate the 3 MRP Cards from clean 7-table Supabase DB
+            const mrp = selectedPartData.mrp || {};
+            const mrpQty = (mrp.monthly_schedule !== undefined && mrp.monthly_schedule !== null) ? Number(mrp.monthly_schedule) : null;
+            const curStock = (mrp.current_stock !== undefined && mrp.current_stock !== null) ? Number(mrp.current_stock) : null;
+
+            const mrpQtyEl = document.getElementById("mrpMonthlyQtyVal");
+            const curStockEl = document.getElementById("mrpCurrentStockVal");
+            const toProduceEl = document.getElementById("mrpQtyToProduceVal");
+            const hintBox = document.getElementById("mrpStockHintBox");
+            const hintVal = document.getElementById("mrpStockHintVal");
+            const toProduceSub = document.getElementById("mrpQtyToProduceSub");
+
+            if (mrpQtyEl) mrpQtyEl.textContent = mrpQty !== null ? `${mrpQty.toLocaleString()} Nos` : "- Nos";
+            if (curStockEl) curStockEl.textContent = curStock !== null ? `${curStock.toLocaleString()} Nos` : "- Nos";
+
+            if (mrpQty !== null && curStock !== null) {
+                if (curStock >= mrpQty) {
+                    // In-house stock is higher or equal, remaining qty to produce is 0 and show hint box
+                    if (toProduceEl) toProduceEl.textContent = "0 Nos";
+                    if (hintBox) {
+                        hintBox.style.display = "inline-flex";
+                        if (hintVal) hintVal.textContent = curStock.toLocaleString();
+                    }
+                    if (toProduceSub) toProduceSub.textContent = "Fully Covered by Stock";
+                } else {
+                    const remaining = mrpQty - curStock;
+                    if (toProduceEl) toProduceEl.textContent = `${remaining.toLocaleString()} Nos`;
+                    if (hintBox) hintBox.style.display = "none";
+                    if (toProduceSub) toProduceSub.textContent = `Net Requirement (${mrpQty.toLocaleString()} - ${curStock.toLocaleString()})`;
+                }
+            } else {
+                const toProduce = mrp.qty_to_produce !== undefined ? mrp.qty_to_produce : "-";
+                if (toProduceEl) toProduceEl.textContent = toProduce !== "-" ? `${Number(toProduce).toLocaleString()} Nos` : "- Nos";
+                if (hintBox) hintBox.style.display = "none";
+                if (toProduceSub) toProduceSub.textContent = "Net Requirement";
+            }
+
+            // Trigger AI Co-Production Agent suggestions (Yield 1st, Low Stock 2nd)
+            if (typeof fetchAiPartSuggestions === "function") {
+                fetchAiPartSuggestions("all");
+            }
         }
     } catch (err) {
         console.error("Failed to load part details:", err);
@@ -1023,6 +1100,11 @@ function populatePartTechnicalFields(partData) {
     if (!partData) return;
 
     document.getElementById("basePartInput").value = partData.base_part || "";
+
+    const offtakeInput = document.getElementById("offtakeInput");
+    if (offtakeInput) {
+        offtakeInput.value = `${partData.offtake || 1} Nos`;
+    }
 
     const rmSelect = document.getElementById("rmErpSelect");
     rmSelect.innerHTML = "";
@@ -1072,6 +1154,12 @@ function onRmErpChanged(rmCode) {
         document.getElementById("lengthInput").value = "";
         document.getElementById("widthInput").value = "";
         document.getElementById("sheetSizeInput").value = "";
+        const stripEl = document.getElementById("stripPerBlankInput");
+        if (stripEl) stripEl.value = "";
+        const offtakeEl = document.getElementById("offtakeInput");
+        if (offtakeEl) offtakeEl.value = "";
+        const quickStockEl = document.getElementById("rmStockBoxVal");
+        if (quickStockEl) quickStockEl.textContent = "- Sheets";
         const yieldInput = document.getElementById("yieldPctInput");
         if (yieldInput) yieldInput.value = "";
         updateAutomatedConstraints(null, null);
@@ -1107,6 +1195,11 @@ function onRmErpChanged(rmCode) {
         // Force Non-Standard layout for custom selection (locked)
         const nonStdRadio = document.querySelector('input[name="is_standard_layout"][value="false"]');
         if (nonStdRadio) nonStdRadio.checked = true;
+        const stdCard = document.getElementById("radioCardStd");
+        if (stdCard) {
+            stdCard.classList.add("disabled");
+            stdCard.title = "Custom layouts are strictly Non-Standard.";
+        }
         updateLayoutTypeUI(false);
         return;
     }
@@ -1138,8 +1231,28 @@ function onRmErpChanged(rmCode) {
     document.getElementById("lengthInput").value = record.length || "";
     document.getElementById("widthInput").value = record.width || "";
 
-    document.getElementById("sheetSizeInput").value = 
-        record.sheet_size || `${record.thickness || '-'} * ${record.length || '-'} * ${record.width || '-'}`;
+    // Blank / Part Size (T x L x W)
+    const p1CutBlank = record.part1?.cut_blank || record.cut_blank;
+    const partSizeStr = p1CutBlank ? p1CutBlank : `${record.thickness || '-'} * ${record.length || '-'} * ${record.width || '-'}`;
+    document.getElementById("sheetSizeInput").value = partSizeStr;
+
+    // Strip per blank quantity
+    const stripVal = record.part1?.strip_qty || record.strip_qty || record.part1?.strip_per_blank_qty || record.strip_per_blank_qty || 1;
+    const stripEl = document.getElementById("stripPerBlankInput");
+    if (stripEl) stripEl.value = `${stripVal} Nos`;
+
+    // Live RM Available Stock
+    if (rmCode && rmCode !== "__custom__") {
+        fetch(`/api/v2/rm-stock/${encodeURIComponent(rmCode)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.available_sheets !== undefined) {
+                    const qStock = document.getElementById("rmStockBoxVal");
+                    if (qStock) qStock.textContent = `${data.available_sheets} Sheets`;
+                }
+            })
+            .catch(() => {});
+    }
 
     const yieldInput = document.getElementById("yieldPctInput");
     if (yieldInput) {
@@ -1152,23 +1265,42 @@ function onRmErpChanged(rmCode) {
         }
     }
 
-    // Auto-detect if standard or non-standard from record status or custom flag
-    const isCustom = opt.dataset.isCustom === "true";
+    // Auto-detect if standard or non-standard: ALL custom layouts strictly come under Non-Standard
+    const isCustom = opt.dataset.isCustom === "true" ||
+                     opt.value === "__custom__" ||
+                     (record.status || "").toLowerCase().includes("custom") ||
+                     (record.layout_name || "").toLowerCase().includes("custom") ||
+                     (record.rm_erp || "").toLowerCase().includes("custom");
     let isStandard = false;
     if (!isCustom) {
         const statusLower = (record.status || "").toLowerCase();
-        isStandard = !statusLower.includes("non") && !statusLower.includes("not use");
+        isStandard = !statusLower.includes("non") && !statusLower.includes("not use") && !statusLower.includes("custom");
     }
     
     // Set radio buttons without allowing user to unlock (strictly auto-locked)
     const stdRadio = document.querySelector('input[name="is_standard_layout"][value="true"]');
     const nonStdRadio = document.querySelector('input[name="is_standard_layout"][value="false"]');
-    if (isStandard && stdRadio) {
-        stdRadio.checked = true;
-        updateLayoutTypeUI(true);
-    } else if (nonStdRadio) {
-        nonStdRadio.checked = true;
+    const stdCard = document.getElementById("radioCardStd");
+
+    if (isCustom) {
+        if (nonStdRadio) nonStdRadio.checked = true;
+        if (stdCard) {
+            stdCard.classList.add("disabled");
+            stdCard.title = "Custom layouts are strictly Non-Standard.";
+        }
         updateLayoutTypeUI(false);
+    } else {
+        if (stdCard) {
+            stdCard.classList.remove("disabled");
+            stdCard.title = "";
+        }
+        if (isStandard && stdRadio) {
+            stdRadio.checked = true;
+            updateLayoutTypeUI(true);
+        } else if (nonStdRadio) {
+            nonStdRadio.checked = true;
+            updateLayoutTypeUI(false);
+        }
     }
 
     // Auto-compute target quantity & populate layout parts
@@ -1275,18 +1407,10 @@ function selectCustomRmRecord(record) {
     const gradeInput = document.getElementById("gradeInput");
     if (gradeInput) gradeInput.value = gradeVal;
 
-    // 2. Sheet size auto fetched (T*L*W)
-    const sheetSizeInput = document.getElementById("sheetSizeInput");
-    if (sheetSizeInput) sheetSizeInput.value = record.sheet_size || "";
-
-    const thicknessInput = document.getElementById("thicknessInput");
-    if (thicknessInput) thicknessInput.value = record.thickness || "";
-
-    const lengthInput = document.getElementById("lengthInput");
-    if (lengthInput) lengthInput.value = record.length || "";
-
-    const widthInput = document.getElementById("widthInput");
-    if (widthInput) widthInput.value = record.width || "";
+    // CRITICAL: DO NOT overwrite base part size (#sheetSizeInput)!
+    // #sheetSizeInput represents the Base Part Blank Size (T x L x W), NOT the Raw Material sheet size!
+    // Store custom RM sheet dimensions in window._selectedCustomRmRecord:
+    window._selectedCustomRmRecord = record;
 
     const yieldInput = document.getElementById("yieldPctInput");
     if (yieldInput) yieldInput.value = "N/A";
@@ -1323,6 +1447,10 @@ function selectCustomRmRecord(record) {
             ...record,
             rm_erp: record.item_code,
             grade: gradeVal,
+            length: record.length || 2500,
+            width: record.width || 1250,
+            thickness: record.thickness || 2.0,
+            sheet_size: record.sheet_size || "",
             status: "Non-Standard"
         });
 
@@ -1342,45 +1470,15 @@ function selectCustomRmRecord(record) {
     // 5. Automatically locked to Non-Standard Layout
     const nonStdRadio = document.querySelector('input[name="is_standard_layout"][value="false"]');
     if (nonStdRadio) nonStdRadio.checked = true;
+    const stdCard = document.getElementById("radioCardStd");
+    if (stdCard) {
+        stdCard.classList.add("disabled");
+        stdCard.title = "Custom layouts are strictly Non-Standard.";
+    }
     updateLayoutTypeUI(false);
 
-    // 6. Target quantity & parts breakdown for custom RM
-    const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
-    const targetQtyInput = document.getElementById("targetQty");
-    const manualQtyInput = document.getElementById("targetQtyManual");
-    let planQty = sheetsNeeded;
-    if (manualQtyInput && manualQtyInput.value && parseInt(manualQtyInput.value, 10) > 0) {
-        planQty = parseInt(manualQtyInput.value, 10);
-    } else if (manualQtyInput) {
-        manualQtyInput.value = sheetsNeeded;
-    }
-    if (targetQtyInput) targetQtyInput.value = planQty;
-    const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
-    if (autoQtyDisplay) autoQtyDisplay.textContent = `${planQty} Units`;
-    const autoQtyHint = document.getElementById("autoQtyHint");
-    if (autoQtyHint) autoQtyHint.textContent = `1 Part per Sheet (${sheetsNeeded} sheets)`;
-
-    const partsBanner = document.getElementById("layoutPartsBanner");
-    const partsList = document.getElementById("layoutPartsList");
-    const thumbWrap = document.getElementById("layoutThumbWrap");
-    if (thumbWrap) thumbWrap.style.display = "none";
-
-    if (partsBanner && partsList) {
-        partsBanner.style.display = "flex";
-        const pNo = document.getElementById("partNoInput")?.value || "Custom Part";
-        const bPart = basePartInput?.value || "Custom Base";
-        partsList.innerHTML = `
-            <div class="layout-part-chip primary">
-                <span class="part-chip-name"><i class="fa-solid fa-shapes"></i> Custom Part: ${escapeHtml(pNo)} (Base: ${escapeHtml(bPart)})</span>
-                <span class="part-chip-qty">${sheetsNeeded} Nos <small>(${sheetsNeeded} sheet × 1 blank)</small></span>
-                <div class="part-chip-planning-row">
-                    <span class="chip-plan-badge" style="background:#2563eb; color:#fff;"><i class="fa-solid fa-layer-group"></i> Sheet: ${escapeHtml(record.sheet_size || '')}</span>
-                    <span class="chip-plan-badge chip-plan-mrp" title="Custom part has no pre-defined MRP"><i class="fa-solid fa-bullseye"></i> MRP: <strong>N/A</strong></span>
-                    <span class="chip-plan-badge chip-plan-rem" title="Remaining: N/A"><i class="fa-solid fa-hourglass-half"></i> Remaining: <strong>N/A</strong></span>
-                </div>
-            </div>
-        `;
-    }
+    // 6. Recalculate target quantity & render all parts breakdown
+    recalculateTargetQtyFromLayout();
 
     // 7. Intelligence & Stock Feasibility
     const onhand = parseFloat(record.onhand_stock) || 0;
@@ -1422,144 +1520,201 @@ function selectCustomRmRecord(record) {
     });
 }
 
+function onSheetsRequiredInput() {
+    recalculateTargetQtyFromLayout();
+}
+window.onSheetsRequiredInput = onSheetsRequiredInput;
+
 function recalculateTargetQtyFromLayout() {
+    const isStd = document.querySelector('input[name="is_standard_layout"]:checked')?.value === "true";
     const rmSelect = document.getElementById("rmErpSelect");
     const opt = rmSelect?.selectedOptions[0];
-    if (!opt || !opt.dataset.record) return;
-
-    const record = JSON.parse(opt.dataset.record);
-    const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
-
-    // Custom RM Layout handling
-    if (opt.dataset.isCustom === "true") {
-        const manualInput = document.getElementById("targetQtyManual");
-        const targetQtyInput = document.getElementById("targetQty");
-        let totalQty = sheetsNeeded;
-        if (manualInput && manualInput.value && parseInt(manualInput.value, 10) > 0) {
-            totalQty = parseInt(manualInput.value, 10);
-        } else if (manualInput) {
-            manualInput.value = totalQty;
-        }
-        if (targetQtyInput) targetQtyInput.value = totalQty;
-        const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
-        if (autoQtyDisplay) autoQtyDisplay.textContent = `${totalQty.toLocaleString()} Units`;
-        const autoQtyHint = document.getElementById("autoQtyHint");
-        if (autoQtyHint) autoQtyHint.textContent = `Custom Raw Material Sheet (${sheetsNeeded} sheets)`;
-
-        const banner = document.getElementById("layoutPartsBanner");
-        const partsList = document.getElementById("layoutPartsList");
-        const planBadge = document.getElementById("layoutPlanBadge");
-        const thumbWrap = document.getElementById("layoutThumbWrap");
-        if (thumbWrap) thumbWrap.style.display = "none";
-        if (planBadge) planBadge.textContent = "Custom RM Sheet";
-
-        if (banner && partsList) {
-            banner.style.display = "flex";
-            const pVal = document.getElementById("partNoInput")?.value || "Custom Part";
-            const bVal = document.getElementById("basePartInput")?.value || "Custom Base";
-            partsList.innerHTML = `
-                <div class="layout-part-chip primary">
-                    <span class="part-chip-name"><i class="fa-solid fa-shapes"></i> ${escapeHtml(pVal)} (Base: ${escapeHtml(bVal)})</span>
-                    <span class="part-chip-qty">${totalQty.toLocaleString()} Nos <small>(${sheetsNeeded} sheet × 1 blank)</small></span>
-                    <div class="part-chip-planning-row">
-                        <span class="chip-plan-badge" style="background:#2563eb; color:#fff;"><i class="fa-solid fa-layer-group"></i> Sheet: ${escapeHtml(record.sheet_size || '')}</span>
-                        <span class="chip-plan-badge chip-plan-mrp" title="No MRP Target"><i class="fa-solid fa-bullseye"></i> MRP: <strong>N/A</strong></span>
-                        <span class="chip-plan-badge chip-plan-rem" title="Remaining: N/A"><i class="fa-solid fa-hourglass-half"></i> Remaining: <strong>N/A</strong></span>
-                    </div>
-                </div>
-            `;
-        }
-        updateAutomatedConstraints(currentIntelData?.stock_feasibility, record);
-        return;
+    let record = opt && opt.dataset.record ? JSON.parse(opt.dataset.record) : null;
+    if (!record && window._selectedCustomRmRecord) {
+        record = window._selectedCustomRmRecord;
+    }
+    if (!record) {
+        record = {
+            part_no: document.getElementById("partNoInput")?.value || "Base Part",
+            base_part: document.getElementById("basePartInput")?.value || "",
+            sheet_size: "2500*1250",
+            status: isStd ? "Standardized" : "Non-Standard"
+        };
     }
 
-    // Helper to calculate quantities for a part:
-    // Quantity = sheet qty * part qty * strip per part qty
-    const getPartBreakdown = (partObj) => {
-        if (!partObj) return { partQty: 1, stripQty: 1, blanksPerSheet: 1, totalQty: sheetsNeeded };
-        const partQty = parseFloat(partObj.blank_qty) || 1;
-        const stripQty = parseFloat(partObj.strip_qty) || 1;
-        
-        let blanksPerSheet = parseFloat(partObj.total_blank_qty_sheet);
-        if (!blanksPerSheet || isNaN(blanksPerSheet) || blanksPerSheet <= 0) {
-            blanksPerSheet = parseFloat(partObj.total_blank_qty);
-        }
-        if (!blanksPerSheet || isNaN(blanksPerSheet) || blanksPerSheet <= 0) {
-            blanksPerSheet = partQty * stripQty;
-        }
-        
-        const totalQty = Math.round(sheetsNeeded * partQty * stripQty);
-        return {
-            partQty,
-            stripQty,
-            blanksPerSheet,
-            totalQty
-        };
-    };
+    const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
+    const allLayoutParts = [];
 
-    // Primary part quantities
-    const p1Info = getPartBreakdown(record.part1 || {
-        blank_qty: record.blank_qty,
-        strip_qty: record.strip_qty,
-        total_blank_qty_sheet: record.total_blank_qty_sheet
+    // 1. Primary / Base Part (Row 1)
+    const p1PartNo = document.getElementById("partNoInput")?.value?.trim() || record.part1?.part_no || record.part_no || "Base Part";
+    const p1BasePart = document.getElementById("basePartInput")?.value?.trim() || (p1PartNo ? p1PartNo.split(" - ")[0] : "");
+    const p1Size = document.getElementById("sheetSizeInput")?.value?.trim() || record.part1?.cut_blank || record.cut_blank || "";
+    const p1Strip = parseInt(document.getElementById("stripPerBlankInput")?.value) || 1;
+
+    let p1Blanks = 1;
+    if (currentCutOptResult?.parts_summary && currentCutOptResult.parts_summary.length > 0) {
+        const bpMatch = currentCutOptResult.parts_summary.find(p => p.is_base || (p.part_no && p1PartNo && p.part_no === p1PartNo)) || currentCutOptResult.parts_summary[0];
+        if (bpMatch && bpMatch.placed_qty !== undefined) {
+            p1Blanks = bpMatch.placed_qty;
+        }
+    } else if (window._basePartPlacedBlanks) {
+        p1Blanks = window._basePartPlacedBlanks;
+    } else if (record.part1?.blank_qty) {
+        p1Blanks = parseFloat(record.part1.blank_qty) || 1;
+    } else if (record.blank_qty) {
+        p1Blanks = parseFloat(record.blank_qty) || 1;
+    }
+
+    const p1TotalQty = Math.round(sheetsNeeded * p1Blanks * p1Strip);
+    allLayoutParts.push({
+        label: "Primary (Base Part)",
+        part_no: p1PartNo,
+        base_part: p1BasePart,
+        size: p1Size,
+        partQty: p1Blanks,
+        blanksPerSheet: p1Blanks,
+        stripQty: p1Strip,
+        totalQty: p1TotalQty,
+        is_base: true
     });
 
-    // Collect all valid parts in layout to calculate total sum across all parts
-    const allLayoutParts = [
-        { label: "Primary", ...p1Info, part_no: record.part1?.part_no || record.part_no }
-    ];
+    // 2. Additional Parts from Modal "Parts to Cut on this Sheet" (#modalAdditionalPartsList)
+    const modalAddRows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+    if (modalAddRows && modalAddRows.length > 0) {
+        modalAddRows.forEach((r, idx) => {
+            const rowPartNo = r.querySelector(".add-part-no")?.value?.trim() || `Part ${idx + 2}`;
+            const rowBasePart = rowPartNo.split(" - ")[0];
+            const rowSize = r.querySelector(".add-part-size")?.value?.trim() || "";
+            const rowStrip = parseInt(r.querySelector(".add-part-strip")?.value) || 1;
+            
+            let rowBlanks = 1;
+            if (currentCutOptResult?.parts_summary && currentCutOptResult.parts_summary.length > 0) {
+                const match = currentCutOptResult.parts_summary.find(p => p.part_no === rowPartNo || (p.row_id && p.row_id === (idx + 2)));
+                if (match && match.placed_qty !== undefined) {
+                    rowBlanks = match.placed_qty;
+                    const qInput = r.querySelector(".add-part-qty");
+                    if (qInput) qInput.value = rowBlanks;
+                    r.dataset.placedBlanks = rowBlanks;
+                } else if (r.dataset.placedBlanks) {
+                    rowBlanks = parseInt(r.dataset.placedBlanks, 10) || 1;
+                } else {
+                    rowBlanks = Math.max(1, parseInt(r.querySelector(".add-part-qty")?.value) || 1);
+                }
+            } else if (r.dataset.placedBlanks) {
+                rowBlanks = parseInt(r.dataset.placedBlanks, 10) || 1;
+            } else {
+                rowBlanks = Math.max(1, parseInt(r.querySelector(".add-part-qty")?.value) || 1);
+            }
 
-    [record.part2, record.part3, record.part4].forEach((child, cIdx) => {
-        if (child && child.part_no) {
-            const cInfo = getPartBreakdown(child);
+            const rowTotalQty = Math.round(sheetsNeeded * rowBlanks * rowStrip);
             allLayoutParts.push({
-                label: `Part ${cIdx + 2}`,
-                ...cInfo,
-                part_no: child.part_no
+                label: `Added Part ${idx + 1}`,
+                part_no: rowPartNo,
+                base_part: rowBasePart,
+                size: rowSize,
+                partQty: rowBlanks,
+                blanksPerSheet: rowBlanks,
+                stripQty: rowStrip,
+                totalQty: rowTotalQty,
+                is_base: false
             });
-        }
-    });
 
-    // Sum of all strips per blank quantity for all the parts (sheet qty * part qty * strip qty)
+            // Update live output badge on this added part card
+            let outBadge = r.querySelector(".add-part-output-badge");
+            if (!outBadge) {
+                outBadge = document.createElement("div");
+                outBadge.className = "add-part-output-badge";
+                outBadge.style.cssText = "margin-top: 6px; padding: 4px 10px; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; font-size: 0.76rem; color: #166534; display: flex; align-items: center; justify-content: space-between;";
+                r.appendChild(outBadge);
+            }
+            outBadge.innerHTML = `
+                <span><i class="fa-solid fa-shapes" style="color: #16a34a;"></i> <strong>${escapeHtml(rowPartNo)} Output:</strong> ${rowTotalQty.toLocaleString()} Nos</span>
+                <span style="font-weight: 700; color: #047857;">${rowBlanks} blanks/sheet × ${sheetsNeeded} sheet${sheetsNeeded > 1 ? 's' : ''}</span>
+            `;
+        });
+    }
+
+    // 3. Child parts 2, 3, 4 from Standard Layout record if not already added
+    if (isStd && record) {
+        [record.part2, record.part3, record.part4].forEach((child, cIdx) => {
+            if (child && child.part_no) {
+                const cleanChild = child.part_no.toUpperCase().replace(/[^A-Z0-9]/g, "");
+                const alreadyExists = allLayoutParts.some(p => {
+                    const cleanP = (p.part_no || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    return cleanP && cleanChild && cleanP === cleanChild;
+                });
+                if (!alreadyExists) {
+                    const cPartQty = parseFloat(child.blank_qty) || 1;
+                    const cStripQty = parseFloat(child.strip_qty) || 1;
+                    const cTotalQty = Math.round(sheetsNeeded * cPartQty * cStripQty);
+                    allLayoutParts.push({
+                        label: `Part ${cIdx + 2}`,
+                        part_no: child.part_no,
+                        base_part: child.part_no.split(" - ")[0],
+                        size: child.cut_blank || "",
+                        partQty: cPartQty,
+                        blanksPerSheet: cPartQty,
+                        stripQty: cStripQty,
+                        totalQty: cTotalQty,
+                        is_base: false
+                    });
+                }
+            }
+        });
+    }
+
+    // 4. Sum of all parts output
     const computedTargetQty = allLayoutParts.reduce((sum, p) => sum + p.totalQty, 0);
 
-    // Sync with targetQty hidden input & manual input if non-standard
-    const isStd = document.querySelector('input[name="is_standard_layout"]:checked')?.value === "true";
+    // Sync with targetQty hidden input & manual input
     const manualInput = document.getElementById("targetQtyManual");
     const targetQtyInput = document.getElementById("targetQty");
+    if (manualInput) manualInput.value = computedTargetQty;
+    if (targetQtyInput) targetQtyInput.value = computedTargetQty;
 
-    let effectivePlanQty = computedTargetQty;
-    if (isStd) {
-        effectivePlanQty = computedTargetQty;
-        if (manualInput) manualInput.value = computedTargetQty;
-        if (targetQtyInput) targetQtyInput.value = computedTargetQty;
-    } else {
-        if (manualInput && manualInput.value && parseInt(manualInput.value, 10) > 0) {
-            effectivePlanQty = parseInt(manualInput.value, 10);
-        } else {
-            effectivePlanQty = computedTargetQty;
-            if (manualInput) manualInput.value = computedTargetQty;
-        }
-        if (targetQtyInput) targetQtyInput.value = effectivePlanQty;
-    }
-
+    // 5. Update Current Plan Display Box
     const autoQtyVal = document.getElementById("autoTargetQtyDisplay");
     if (autoQtyVal) {
-        autoQtyVal.innerHTML = `${computedTargetQty.toLocaleString()} <small>Units</small>`;
+        if (allLayoutParts.length > 1) {
+            autoQtyVal.innerHTML = `
+                <div style="display: flex; align-items: baseline; gap: 8px;">
+                    <span>${computedTargetQty.toLocaleString()} Units</span>
+                    <span class="badge" style="background: #e0f2fe; color: #0284c7; font-size: 0.82rem; padding: 2px 10px; border-radius: 12px; font-weight: 700;">
+                        <i class="fa-solid fa-shapes"></i> ${allLayoutParts.length} Parts Total
+                    </span>
+                </div>
+            `;
+        } else {
+            autoQtyVal.innerHTML = `${computedTargetQty.toLocaleString()} Units`;
+        }
     }
+
+    // 6. Update Auto Qty Hint with itemized count for ALL parts
     const autoQtyHint = document.getElementById("autoQtyHint");
     if (autoQtyHint) {
         if (allLayoutParts.length > 1) {
-            const formulaStr = allLayoutParts.map((p, idx) => `P${idx + 1}: ${p.totalQty.toLocaleString()}`).join(" + ");
-            autoQtyHint.textContent = `Sum of ${allLayoutParts.length} parts: ${formulaStr} (${sheetsNeeded} sheet(s) × part qty × strip qty)`;
-            autoQtyHint.title = allLayoutParts.map((p, idx) => `${p.label} (${p.part_no || ''}): ${sheetsNeeded} sheet(s) × ${p.partQty} part qty × ${p.stripQty} strip qty = ${p.totalQty.toLocaleString()} units`).join("\n") + `\nTotal across all parts: ${computedTargetQty.toLocaleString()} units`;
+            const partsPillsHtml = allLayoutParts.map((p, idx) => `
+                <span style="display: inline-flex; align-items: center; gap: 5px; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 6px; padding: 3px 8px; font-size: 0.78rem;">
+                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: ${idx === 0 ? '#0284c7' : '#7c3aed'};"></span>
+                    <strong>${escapeHtml(p.part_no)}:</strong>
+                    <span style="color: #047857; font-weight: 800;">${p.totalQty.toLocaleString()} Nos</span>
+                    <small style="color: #64748b;">(${p.blanksPerSheet}/sheet × ${sheetsNeeded} sh)</small>
+                </span>
+            `).join("");
+            autoQtyHint.innerHTML = `
+                <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;">
+                    ${partsPillsHtml}
+                </div>
+                <div style="font-size: 0.74rem; color: #64748b; margin-top: 4px;">
+                    <i class="fa-solid fa-calculator"></i> Total Output: <strong>${computedTargetQty.toLocaleString()} Units</strong> across ${allLayoutParts.length} parts (${sheetsNeeded} sheet${sheetsNeeded > 1 ? 's' : ''} total)
+                </div>
+            `;
         } else {
-            autoQtyHint.textContent = `${sheetsNeeded} sheet(s) × ${p1Info.partQty} part qty × ${p1Info.stripQty} strip per part qty`;
-            autoQtyHint.title = `${sheetsNeeded} sheet(s) × ${p1Info.partQty} part qty × ${p1Info.stripQty} strip per part qty = ${computedTargetQty.toLocaleString()} units`;
+            autoQtyHint.textContent = `${sheetsNeeded} sheet(s) × ${allLayoutParts[0].blanksPerSheet} blanks/sheet = ${computedTargetQty.toLocaleString()} Units`;
         }
     }
 
-    // Populate Layout Parts & Off-take Banner
+    // 7. Update Layout Parts & Off-take Banner (ALWAYS VISIBLE for all parts!)
     const banner = document.getElementById("layoutPartsBanner");
     const partsList = document.getElementById("layoutPartsList");
     const planBadge = document.getElementById("layoutPlanBadge");
@@ -1569,78 +1724,39 @@ function recalculateTargetQtyFromLayout() {
     if (banner && partsList) {
         banner.style.display = "flex";
         if (planBadge) {
-            const yVal = record.per_sheet?.yield_pct ?? record.total_sheet?.yield_pct ?? record.yield_pct ?? record.material_yield_pct;
-            const yStr = (yVal !== undefined && yVal !== null && String(yVal).trim() !== "") ? ` • Yield: ${parseFloat(yVal) || yVal}%` : "";
-            planBadge.textContent = (record.cutting_plan || record.layout_name || (record.status || "Layout Plan")) + yStr;
+            const yVal = document.getElementById("yieldPctInput")?.value || record.per_sheet?.yield_pct || record.yield_pct;
+            const yStr = yVal && String(yVal).trim() !== "" && String(yVal).trim() !== "N/A" ? ` • Yield: ${String(yVal).replace('%', '')}%` : "";
+            planBadge.textContent = `${allLayoutParts.length} Part${allLayoutParts.length > 1 ? 's' : ''} on Sheet` + yStr;
         }
 
-        const getPartPlanBadges = (partStr, idx) => {
-            if (!currentIntelData?.planning_summary?.parts) return "";
-            const planParts = currentIntelData.planning_summary.parts;
-            let pPlan = planParts[idx];
-            if (!pPlan && partStr) {
-                const cleanTarget = (partStr || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-                pPlan = planParts.find(p => {
-                    const cleanP = (p.part_no || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-                    const cleanParent = (p.parent_part_no || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-                    return cleanTarget.includes(cleanP) || cleanP.includes(cleanTarget) || (cleanParent && cleanTarget.includes(cleanParent));
-                });
-            }
-            if (!pPlan) return "";
-            const mrpTxt = pPlan.mrp_monthly_target !== null && pPlan.mrp_monthly_target !== undefined ? `${Number(pPlan.mrp_monthly_target).toLocaleString()} Nos` : "N/A";
-            const moCount = pPlan.monthly_mo_count || 0;
-            const partsProd = Number(pPlan.parts_produced || 0).toLocaleString();
-            const moTxt = `${moCount} MO${moCount === 1 ? '' : 's'} (${partsProd} Parts)`;
-            const remTxt = pPlan.remaining_quantity !== null && pPlan.remaining_quantity !== undefined ? `${Number(pPlan.remaining_quantity).toLocaleString()} Nos` : "N/A";
-            return `
-                <div class="part-chip-planning-row">
-                    <span class="chip-plan-badge chip-plan-mrp" title="MRP Monthly Target"><i class="fa-solid fa-calendar-days"></i> MRP: <strong>${mrpTxt}</strong></span>
-                    <span class="chip-plan-badge chip-plan-mo" title="MOs &amp; Parts Produced this month"><i class="fa-solid fa-industry"></i> MO Produced: <strong>${moTxt}</strong></span>
-                    <span class="chip-plan-badge chip-plan-rem" title="Remaining Quantity (MRP - MO)"><i class="fa-solid fa-hourglass-half"></i> Remaining: <strong>${remTxt}</strong></span>
+        let partsHtml = "";
+        allLayoutParts.forEach((p, idx) => {
+            const chipClass = idx === 0 ? "layout-part-chip primary" : "layout-part-chip";
+            const icon = idx === 0 ? "fa-solid fa-star" : "fa-solid fa-shapes";
+            const formattedSize = p.size ? formatPartSize(p.size) : "";
+            partsHtml += `
+                <div class="${chipClass}" style="margin-bottom: 6px;">
+                    <span class="part-chip-name" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
+                        <span><i class="${icon}"></i> ${escapeHtml(p.part_no)} ${idx === 0 ? '(Base Part)' : ''}</span>
+                        ${formattedSize ? `<span class="part-kpi-size-badge"><i class="fa-solid fa-ruler-combined"></i> Size: <strong>${escapeHtml(formattedSize)}</strong></span>` : ''}
+                    </span>
+                    <span class="part-chip-qty" style="color: #047857; font-weight: 800;">
+                        ${p.totalQty.toLocaleString()} Nos
+                        <small style="color: #64748b; font-weight: normal;">(${sheetsNeeded} sheet${sheetsNeeded > 1 ? 's' : ''} × ${p.blanksPerSheet} blanks/sheet)</small>
+                    </span>
                 </div>
             `;
-        };
-
-        const p1RawSize = (currentIntelData?.planning_summary?.parts && currentIntelData.planning_summary.parts[0]?.cut_blank) ||
-            record.part1?.cut_blank || record.cut_blank || record.part_size || "";
-        const p1Size = formatPartSize(p1RawSize);
-
-        let partsHtml = `
-            <div class="layout-part-chip primary">
-                <span class="part-chip-name" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                    <span><i class="fa-solid fa-star"></i> Primary: ${escapeHtml(record.part_no || record.base_part)}</span>
-                    ${p1Size ? `<span class="part-kpi-size-badge"><i class="fa-solid fa-ruler-combined"></i> Part Size: <strong>${escapeHtml(p1Size)}</strong></span>` : ''}
-                </span>
-                <span class="part-chip-qty">${p1Info.totalQty.toLocaleString()} Nos <small>(${sheetsNeeded} sheet × ${p1Info.partQty} part qty × ${p1Info.stripQty} strip per part qty)</small></span>
-                ${getPartPlanBadges(record.part_no || record.base_part, 0)}
-            </div>
-        `;
-
-        // Child parts 2, 3, 4 if present
-        [record.part2, record.part3, record.part4].forEach((child, cIdx) => {
-            if (child && child.part_no) {
-                const cInfo = getPartBreakdown(child);
-                const cRawSize = (currentIntelData?.planning_summary?.parts && currentIntelData.planning_summary.parts[cIdx + 1]?.cut_blank) ||
-                    child.cut_blank || child.part_size || "";
-                const cSize = formatPartSize(cRawSize);
-                partsHtml += `
-                    <div class="layout-part-chip">
-                        <span class="part-chip-name" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                            <span>Part ${cIdx + 2}: ${escapeHtml(child.part_no)}</span>
-                            ${cSize ? `<span class="part-kpi-size-badge"><i class="fa-solid fa-ruler-combined"></i> Part Size: <strong>${escapeHtml(cSize)}</strong></span>` : ''}
-                        </span>
-                        <span class="part-chip-qty">${cInfo.totalQty.toLocaleString()} Nos <small>(${sheetsNeeded} sheet × ${cInfo.partQty} part qty × ${cInfo.stripQty} strip per part qty)</small></span>
-                        ${getPartPlanBadges(child.part_no, cIdx + 1)}
-                    </div>
-                `;
-            }
         });
-
         partsList.innerHTML = partsHtml;
 
         // Thumbnail preview if image exists
         if (thumbWrap && thumbImg) {
-            if (record.image_url) {
+            if (activeOptiCutterLayoutFile) {
+                try {
+                    thumbImg.src = URL.createObjectURL(activeOptiCutterLayoutFile);
+                    thumbWrap.style.display = "flex";
+                } catch(e) {}
+            } else if (record.image_url) {
                 thumbImg.src = record.image_url;
                 thumbWrap.style.display = "flex";
             } else {
@@ -1649,10 +1765,14 @@ function recalculateTargetQtyFromLayout() {
         }
     }
 
-    // Render End Bits (Offcuts) Preview for this layout & sheets
-    renderLayoutEndbits(record, sheetsNeeded);
+    // Render End Bits (Offcuts) Preview for this layout & sheets if standard
+    if (typeof renderLayoutEndbits === "function" && isStd) {
+        renderLayoutEndbits(record, sheetsNeeded);
+    }
 
-    updateAutomatedConstraints(currentIntelData?.stock_feasibility, record);
+    if (typeof updateAutomatedConstraints === "function") {
+        updateAutomatedConstraints(currentIntelData?.stock_feasibility, record);
+    }
 }
 
 function updateLayoutTypeUI(isStandard) {
@@ -1670,43 +1790,22 @@ function updateLayoutTypeUI(isStandard) {
     if (uploadBox) uploadBox.style.display = isStandard ? "none" : "block";
     const nonStdPartsBox = document.getElementById("nonStdPartsBox");
     if (nonStdPartsBox) nonStdPartsBox.style.display = isStandard ? "none" : "block";
+    const layoutPartsBanner = document.getElementById("layoutPartsBanner");
+    if (layoutPartsBanner) layoutPartsBanner.style.display = "flex";
 
-    // Dynamic Plan Mode UI: Auto-Fetched vs Manual Entry
+    // Dynamic Plan Mode UI: Auto-Calculated for both Standard & Non-Standard Layouts
     const autoDisplay = document.getElementById("autoQtyDisplayBox");
     const manualBox = document.getElementById("manualQtyInputBox");
     const badge = document.getElementById("currentPlanBadge");
-    const manualInput = document.getElementById("targetQtyManual");
-    const hiddenTarget = document.getElementById("targetQty");
 
-    if (isStandard) {
-        if (autoDisplay) autoDisplay.style.display = "flex";
-        if (manualBox) manualBox.style.display = "none";
-        if (badge) {
-            badge.className = "badge-auto";
-            badge.innerHTML = '<i class="fa-solid fa-calculator"></i> Auto-Fetched';
-        }
-        recalculateTargetQtyFromLayout();
-    } else {
-        if (autoDisplay) autoDisplay.style.display = "none";
-        if (manualBox) manualBox.style.display = "block";
-        if (badge) {
-            badge.className = "badge-manual";
-            badge.innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Manual Entry';
-        }
-        if (manualInput) {
-            if (!manualInput.value || manualInput.value === "0") {
-                const curVal = hiddenTarget?.value && hiddenTarget.value !== "0" ? hiddenTarget.value : "1";
-                manualInput.value = curVal;
-            }
-            if (hiddenTarget) hiddenTarget.value = manualInput.value;
-        }
-        if (typeof initNonStdPartsRows === "function") {
-            initNonStdPartsRows();
-        }
-        if (typeof recalculateAllNonStdTotals === "function") {
-            recalculateAllNonStdTotals();
-        }
+    if (autoDisplay) autoDisplay.style.display = "flex";
+    if (manualBox) manualBox.style.display = "none";
+    if (badge) {
+        badge.className = "badge-auto";
+        badge.innerHTML = '<i class="fa-solid fa-calculator"></i> Auto-Fetched';
     }
+
+    recalculateTargetQtyFromLayout();
 
     updateAutomatedConstraints(currentIntelData?.stock_feasibility, getSelectedLayoutRecord());
 }
@@ -1757,6 +1856,19 @@ document.addEventListener("click", function (e) {
 });
 
 function toggleLayoutType(isStandard) {
+    const rmSelect = document.getElementById("rmErpSelect");
+    const opt = rmSelect?.selectedOptions[0];
+    const isCustom = opt && (
+        opt.dataset.isCustom === "true" || 
+        opt.value === "__custom__" || 
+        (opt.textContent || "").toLowerCase().includes("custom")
+    );
+    if (isCustom && isStandard) {
+        const nonStdRadio = document.querySelector('input[name="is_standard_layout"][value="false"]');
+        if (nonStdRadio) nonStdRadio.checked = true;
+        updateLayoutTypeUI(false);
+        return;
+    }
     updateLayoutTypeUI(isStandard);
 
     // If part records exist, switch dropdown to the layout that matches the selected standardization type
@@ -1923,8 +2035,12 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
     const failedConstraints = [];
     if (!isStockSufficient) {
         failedConstraints.push("RM Stock Shortfall");
+    }
+
+    const currentPartVal = document.getElementById("partNoInput")?.value;
+    if (currentPartVal) {
         triggerRmAgentSuggestions({
-            part_no: document.getElementById("partNoInput")?.value,
+            part_no: currentPartVal,
             rm_erp: document.getElementById("moRmErpInput")?.value || document.getElementById("rmErpSelect")?.value,
             target_qty: parseInt(document.getElementById("targetQty")?.value) || 1,
             sheets_needed: sheetsNeeded,
@@ -2051,11 +2167,11 @@ function triggerRmAgentSuggestions(params) {
         if (!box || !list) return;
 
         box.style.display = "block";
-        if (verdict) verdict.textContent = "AI Agent scanning store sheets and verified CAD layouts...";
+        if (verdict) verdict.textContent = "AI Agent scanning in-store endbits for this part size, then evaluating fresh RM sheets...";
         if (badge) badge.textContent = "Analyzing...";
         list.innerHTML = `
             <div style="text-align: center; padding: 14px; color: #0284c7; font-size: 0.82rem;">
-                <i class="fa-solid fa-circle-notch fa-spin"></i> Checking store stock and simulating substitution yields...
+                <i class="fa-solid fa-circle-notch fa-spin"></i> Checking store offcuts &amp; raw material sheets...
             </div>
         `;
 
@@ -2076,10 +2192,6 @@ function triggerRmAgentSuggestions(params) {
             }
 
             const data = await res.json();
-            if (!data.has_shortage) {
-                hideRmAgentSuggestions();
-                return;
-            }
 
             // Strictly filter out any alternative with 0 sheets / 0 available stock
             if (data.recommendations && Array.isArray(data.recommendations)) {
@@ -2090,40 +2202,57 @@ function triggerRmAgentSuggestions(params) {
             }
 
             if (!data.recommendations || data.recommendations.length === 0) {
-                activeRmAgentRecommendations = [];
-                if (verdict) verdict.textContent = data.agent_verdict || "Critical Shortage: No alternative in-stock RM sheets or offcuts found in store.";
-                if (badge) badge.textContent = "0 Options";
-                list.innerHTML = `
-                    <div class="rm-agent-card partial" style="justify-content: center; text-align: center; padding: 14px;">
-                        <div style="font-size: 0.82rem; color: #b45309;">
-                            <i class="fa-solid fa-triangle-exclamation"></i> No compatible in-stock RM sheets or offcuts found in the store. 
-                            <strong>Order must be routed to Purchase Clearance.</strong>
+                if (data.has_shortage) {
+                    activeRmAgentRecommendations = [];
+                    if (verdict) verdict.textContent = data.agent_verdict || "Critical Shortage: No alternative in-stock RM sheets or offcuts found in store.";
+                    if (badge) badge.textContent = "0 Options";
+                    list.innerHTML = `
+                        <div class="rm-agent-card partial" style="justify-content: center; text-align: center; padding: 14px;">
+                            <div style="font-size: 0.82rem; color: #b45309;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> No compatible in-store offcuts or RM sheets found in the store. 
+                                <strong>Order must be routed to Purchase Clearance.</strong>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                } else {
+                    hideRmAgentSuggestions();
+                }
                 return;
             }
 
             activeRmAgentRecommendations = data.recommendations;
             if (verdict) verdict.textContent = data.agent_verdict;
+            const ebCount = data.endbits_count || data.recommendations.filter(r => r.type === 'endbit_salvage').length;
+            const rmCount = data.recommendations.length - ebCount;
             const engineLabel = data.powered_by ? `<span style="background: rgba(255,255,255,0.25); padding: 2px 7px; border-radius: 10px; margin-left: 6px;"><i class="fa-solid fa-diagram-project"></i> ${escapeHtml(data.powered_by)}</span>` : '';
-            if (badge) badge.innerHTML = `${data.recommendations.length} Option${data.recommendations.length > 1 ? 's' : ''}${engineLabel}`;
+            
+            let badgeText = "";
+            if (ebCount > 0 && rmCount > 0) {
+                badgeText = `✂️ ${ebCount} Endbit${ebCount > 1 ? 's' : ''} • 📄 ${rmCount} RM Sheet${rmCount > 1 ? 's' : ''}`;
+            } else if (ebCount > 0) {
+                badgeText = `✂️ ${ebCount} Endbit${ebCount > 1 ? 's' : ''} Ready`;
+            } else {
+                badgeText = `📄 ${rmCount} RM Option${rmCount > 1 ? 's' : ''}`;
+            }
+            if (badge) badge.innerHTML = `${badgeText}${engineLabel}`;
 
             list.innerHTML = data.recommendations.map((rec, idx) => {
                 const isSuff = rec.stock_sufficient;
-                const typeClass = rec.type === 'engineered_layout' ? 'layout' : (rec.type === 'endbit_salvage' ? 'endbit' : 'sheet');
                 const isEndbit = rec.type === 'endbit_salvage';
+                const typeClass = rec.type === 'engineered_layout' ? 'layout' : (isEndbit ? 'endbit' : 'sheet');
 
                 return `
-                    <div class="rm-agent-card ${isSuff ? 'sufficient' : 'partial'}">
+                    <div class="rm-agent-card ${isEndbit ? 'sufficient' : (isSuff ? 'sufficient' : 'partial')}" style="${isEndbit ? 'border-left: 4.5px solid #10b981; background: #f0fdf4;' : ''}">
                         <div class="rm-agent-card-info">
                             <div class="rm-agent-card-tags">
-                                <span class="rm-agent-pill-type ${typeClass}">
+                                <span class="rm-agent-pill-type ${typeClass}" style="${isEndbit ? 'background: #dcfce7; color: #15803d; font-weight: 800;' : ''}">
                                     ${escapeHtml(rec.tier_label)}
                                 </span>
-                                ${isSuff 
-                                    ? `<span style="background: #dcfce7; color: #15803d; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;"><i class="fa-solid fa-check"></i> Stock Ready</span>` 
-                                    : `<span style="background: #fef9c3; color: #854d0e; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Partial Stock</span>`}
+                                ${isEndbit 
+                                    ? `<span style="background: #ecfdf5; color: #047857; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 4px; border: 1px solid #a7f3d0;"><i class="fa-solid fa-leaf"></i> 0 Virgin Sheets</span>` 
+                                    : (isSuff 
+                                        ? `<span style="background: #dcfce7; color: #15803d; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;"><i class="fa-solid fa-check"></i> Stock Ready</span>` 
+                                        : `<span style="background: #fef9c3; color: #854d0e; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;"><i class="fa-solid fa-triangle-exclamation"></i> Partial Stock</span>`)}
                                 ${rec.yield_pct ? `<span style="background: #e0f2fe; color: #0369a1; font-size: 0.7rem; font-weight: 700; padding: 2px 6px; border-radius: 4px;"><i class="fa-solid fa-chart-pie"></i> ${rec.yield_pct}% Yield</span>` : ''}
                             </div>
                             <div class="rm-agent-card-title">
@@ -2133,25 +2262,21 @@ function triggerRmAgentSuggestions(params) {
                                 ${escapeHtml(rec.reason)}
                             </div>
                             <div class="rm-agent-metrics">
-                                <span><i class="fa-solid fa-warehouse"></i> Store Stock: <strong>${rec.onhand_stock} ${isEndbit ? 'Nos' : 'sheets'}</strong></span>
-                                ${rec.sheets_needed ? `<span><i class="fa-solid fa-layer-group"></i> Needed: <strong>${rec.sheets_needed} sheets</strong></span>` : ''}
-                                ${rec.parts_per_sheet ? `<span><i class="fa-solid fa-cubes"></i> Blanks/sheet: <strong>${rec.parts_per_sheet}</strong></span>` : ''}
+                                <span><i class="fa-solid fa-warehouse"></i> Store Stock: <strong>${rec.onhand_stock} ${isEndbit ? 'Offcut(s)' : 'sheets'}</strong></span>
+                                ${isEndbit 
+                                    ? `<span><i class="fa-solid fa-cubes-stacked"></i> Can Harvest: <strong>${rec.parts_producible || rec.parts_per_sheet || 1} blanks</strong></span>` 
+                                    : (rec.sheets_needed ? `<span><i class="fa-solid fa-layer-group"></i> Needed: <strong>${rec.sheets_needed} sheets</strong></span>` : '')}
+                                ${!isEndbit && rec.parts_per_sheet ? `<span><i class="fa-solid fa-cubes"></i> Blanks/sheet: <strong>${rec.parts_per_sheet}</strong></span>` : ''}
                             </div>
                         </div>
                         <div>
-                            <button type="button" class="btn-apply-rm-agent ${isEndbit ? 'endbit' : ''}" onclick="applyRmAgentRecommendation(${idx})">
-                                ${isEndbit ? `<i class="fa-solid fa-scissors"></i> Shear Offcut` : `<i class="fa-solid fa-arrows-rotate"></i> Switch RM`}
+                            <button type="button" class="btn-apply-rm-agent ${isEndbit ? 'endbit' : ''}" onclick="applyRmAgentRecommendation(${idx})" style="${isEndbit ? 'background: #059669; font-weight: 700; padding: 8px 14px;' : ''}">
+                                ${isEndbit ? `<i class="fa-solid fa-scissors"></i> Shear from Endbit` : `<i class="fa-solid fa-check"></i> Select This RM`}
                             </button>
                         </div>
                     </div>
                 `;
             }).join("");
-
-            if (box && data.recommendations && data.recommendations.length > 0) {
-                setTimeout(() => {
-                    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }, 100);
-            }
 
         } catch (err) {
             console.error("AI RM Advisor fetch failed:", err);
@@ -2166,7 +2291,12 @@ function applyRmAgentRecommendation(idx) {
 
     if (rec.type === 'endbit_salvage') {
         const payload = rec.action_payload || {};
-        const ebMsg = "AI Agent Recommendation:\n\nSwitch to shearing this part from store offcut [" + (rec.endbit_name || 'End Bit') + "] " + (rec.endbit_id || '') + "?\n\nThis will take you to the End Bit MO portal with this offcut pre-selected.";
+        const ebMsg = "✂️ AI RM Advisor Recommendation:\n\n" +
+                      "Offcut: [" + (rec.endbit_name || 'End Bit') + "] #" + (rec.endbit_id || '') + "\n" +
+                      "Dimensions: " + (payload.dim_str || '') + " mm (Grade: " + (payload.grade || '') + ")\n" +
+                      "Capacity: Can produce up to " + (rec.parts_producible || 1) + " blanks with ZERO virgin sheets!\n\n" +
+                      "• Click OK to open the End-Bit MO portal with this offcut pre-selected for shearing.\n" +
+                      "• Click Cancel to stay in this window.";
         if (confirm(ebMsg)) {
             closeCreateModal();
             showCreateEndbitMoView(payload.endbit_id);
@@ -2182,7 +2312,7 @@ function applyRmAgentRecommendation(idx) {
     if (!targetOpt) {
         targetOpt = document.createElement("option");
         targetOpt.value = rec.rm_erp;
-        targetOpt.textContent = `${rec.rm_erp} (${rec.grade || 'YS'}) - ${rec.status || 'AI Substitute'}`;
+        targetOpt.textContent = `${rec.rm_erp} (${rec.grade || 'YS'}) - ${rec.status || 'AI Recommended RM'}`;
         targetOpt.dataset.record = JSON.stringify({
             rm_erp: rec.rm_erp,
             layout_name: rec.layout_name,
@@ -2207,12 +2337,12 @@ function applyRmAgentRecommendation(idx) {
     onRmErpChanged(targetOpt.value);
 
     // Toast confirmation
-    alert(`🎉 AI RM Substitution Applied!\n\n` +
-          `• Switched to RM: ${rec.rm_erp}\n` +
+    alert(`🎉 AI RM Selection Applied!\n\n` +
+          `• Selected RM: ${rec.rm_erp}\n` +
           `• Layout: ${rec.layout_name || 'Standard'}\n` +
           `• Store Stock: ${rec.onhand_stock} sheets available\n` +
-          `• Yield: ${rec.yield_pct}%\n\n` +
-          `The layout and constraints have been automatically updated!`);
+          `• Estimated Yield: ${rec.yield_pct}%\n\n` +
+          `The layout specifications and sheet calculations have been updated!`);
 }
 
 async function submitCreateMo(e) {
@@ -2232,19 +2362,81 @@ async function submitCreateMo(e) {
     }
 
     const isStd = formData.get("is_standard_layout") === "true";
-    if (!isStd) {
+
+    // Multi-part collection (Base Part + Added Parts from #modalAdditionalPartsList)
+    const modalAddRows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+    const collectedParts = [];
+    const basePartNo = document.getElementById("partNoInput")?.value?.trim();
+    const basePartBase = document.getElementById("basePartInput")?.value?.trim() || (basePartNo ? basePartNo.split(" - ")[0] : "");
+    const basePartSize = document.getElementById("sheetSizeInput")?.value?.trim() || "";
+    const basePartGrade = document.getElementById("gradeInput")?.value?.trim() || "HR";
+    const basePartStrip = parseInt(document.getElementById("stripPerBlankInput")?.value) || 1;
+    const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
+
+    let baseBlanks = window._basePartPlacedBlanks || 1;
+    if (currentCutOptResult?.parts_summary?.length > 0) {
+        const bpMatch = currentCutOptResult.parts_summary.find(p => p.is_base || (p.part_no && basePartNo && p.part_no === basePartNo)) || currentCutOptResult.parts_summary[0];
+        if (bpMatch && bpMatch.placed_qty) baseBlanks = bpMatch.placed_qty;
+    }
+    const baseTotalQty = baseBlanks * basePartStrip * sheetsNeeded;
+
+    if (basePartNo) {
+        collectedParts.push({
+            part_no: basePartNo,
+            base_part: basePartBase,
+            size: basePartSize,
+            cut_blank: basePartSize,
+            grade: basePartGrade,
+            strip_qty: basePartStrip,
+            strip_per_blank_qty: basePartStrip,
+            blank_qty: baseBlanks,
+            blanks_per_sheet: baseBlanks,
+            target_qty: baseTotalQty,
+            is_base: true
+        });
+    }
+
+    if (modalAddRows && modalAddRows.length > 0) {
+        modalAddRows.forEach((r, idx) => {
+            const pNo = r.querySelector(".add-part-no")?.value?.trim();
+            const pGrade = r.querySelector(".add-part-grade")?.value?.trim() || basePartGrade;
+            const pSize = r.querySelector(".add-part-size")?.value?.trim() || "";
+            const pStrip = parseInt(r.querySelector(".add-part-strip")?.value) || 1;
+            let pBlanks = parseInt(r.querySelector(".add-part-qty")?.value) || 1;
+            if (currentCutOptResult?.parts_summary?.length > 0) {
+                const match = currentCutOptResult.parts_summary.find(p => p.part_no === pNo || (p.row_id && p.row_id === (idx + 2)));
+                if (match && match.placed_qty) pBlanks = match.placed_qty;
+            }
+            const pTotal = pBlanks * pStrip * sheetsNeeded;
+            if (pNo) {
+                collectedParts.push({
+                    part_no: pNo,
+                    base_part: pNo.split(" - ")[0],
+                    size: pSize,
+                    cut_blank: pSize,
+                    grade: pGrade,
+                    strip_qty: pStrip,
+                    strip_per_blank_qty: pStrip,
+                    blank_qty: pBlanks,
+                    blanks_per_sheet: pBlanks,
+                    target_qty: pTotal,
+                    is_base: false
+                });
+            }
+        });
+    }
+
+    if (collectedParts.length > 0) {
+        formData.set("parts", JSON.stringify(collectedParts));
+        const totalTargetQty = collectedParts.reduce((sum, p) => sum + p.target_qty, 0);
+        formData.set("target_qty", totalTargetQty);
+    } else if (!isStd) {
         const nonStdPartsJson = document.getElementById("nonStdPartsJson")?.value;
         if (nonStdPartsJson && nonStdPartsJson !== "[]") {
             try {
                 const partsArr = JSON.parse(nonStdPartsJson);
                 if (partsArr && partsArr.length > 0) {
                     formData.set("parts", nonStdPartsJson);
-                    if (partsArr[0].part_no) {
-                        formData.set("part_no", partsArr[0].part_no);
-                    }
-                    if (partsArr[0].base_part) {
-                        formData.set("base_part", partsArr[0].base_part);
-                    }
                     const totalPartsQty = partsArr.reduce((sum, p) => sum + (parseInt(p.no_of_parts || p.target_qty) || 1), 0);
                     if (totalPartsQty > 0) {
                         formData.set("target_qty", totalPartsQty);
@@ -2253,10 +2445,6 @@ async function submitCreateMo(e) {
             } catch (err) {
                 console.warn("Failed to parse nonStdPartsJson:", err);
             }
-        }
-        const manualInput = document.getElementById("targetQtyManual");
-        if (manualInput && manualInput.value && parseInt(manualInput.value, 10) > 0) {
-            formData.set("target_qty", manualInput.value);
         }
     }
     let file = formData.get("layout_doc");
@@ -2352,194 +2540,186 @@ function renderReviewConstraints(mo) {
         return;
     }
 
-    const stockOk = cs.stock_available !== false;
-    const mrpOk = cs.mrp_available !== false;
-    const remOk = cs.remaining_quota_satisfied !== false;
-    const allOk = cs.all_satisfied !== false && stockOk && mrpOk && remOk;
+    const rawFailed = Array.isArray(cs.failed_constraints) ? cs.failed_constraints : [];
+    const hasFailedStock = cs.stock_available === false || rawFailed.some(f => f.includes("Stock"));
+    const hasFailedMrp = cs.mrp_available === false || rawFailed.some(f => f.includes("MRP"));
+    const hasFailedRem = cs.remaining_quota_satisfied === false || rawFailed.some(f => f.includes("Remaining") || f.includes("Demand"));
+    const hasFailedYield = cs.yield_satisfied === false || rawFailed.some(f => f.includes("Yield"));
 
-    const failed = Array.isArray(cs.failed_constraints) ? [...cs.failed_constraints] : [];
-    if (!stockOk && !failed.includes("RM Stock Shortfall")) failed.push("RM Stock Shortfall");
-    if (!mrpOk && !failed.includes("MRP Schedule Target Missing")) failed.push("MRP Schedule Target Missing");
-    if (!remOk && !failed.includes("Plan Exceeds Remaining Demand")) failed.push("Plan Exceeds Remaining Demand");
+    const failedList = [];
+    if (hasFailedStock) {
+        failedList.push({
+            title: "RM Main Store Stock Shortfall",
+            detail: "Insufficient sheets on hand in Main Store inventory"
+        });
+    }
+    if (hasFailedMrp) {
+        failedList.push({
+            title: "MRP Monthly Schedule Demand Missing",
+            detail: "No active BOM schedule / monthly target found in MRP"
+        });
+    }
+    if (hasFailedRem) {
+        failedList.push({
+            title: "Plan Exceeds Remaining Demand",
+            detail: "Target quantity exceeds outstanding monthly production quota"
+        });
+    }
+    if (hasFailedYield) {
+        failedList.push({
+            title: "Layout Standardization / Low Yield",
+            detail: "Non-standard layout requires Krysalis technical review"
+        });
+    }
 
-    const badgeClass = allOk ? "pass" : "fail";
-    const badgeText = allOk ? "All Constraints Satisfied" : `${failed.length} Constraint(s) Cleared / Requiring Review`;
+    // Include any custom failed constraints from rawFailed
+    rawFailed.forEach(f => {
+        const alreadyIncluded = failedList.some(item =>
+            item.title.toLowerCase().includes(f.toLowerCase()) ||
+            f.toLowerCase().includes(item.title.toLowerCase())
+        );
+        if (!alreadyIncluded) {
+            failedList.push({
+                title: f,
+                detail: "Constraint check failed"
+            });
+        }
+    });
 
-    el.innerHTML = `
-        <div style="background: ${allOk ? '#f0fdf4' : '#fffbeb'}; border: 1.5px solid ${allOk ? '#86efac' : '#fcd34d'}; border-radius: 8px; padding: 12px 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.88rem; color: ${allOk ? '#166534' : '#92400e'};">
-                    <i class="fa-solid ${allOk ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
-                    <span>Automated Technical &amp; Planning Safety Verification</span>
+    const allOk = failedList.length === 0 && (cs.all_satisfied !== false);
+
+    if (allOk) {
+        el.innerHTML = `
+            <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 10px 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.88rem; color: #166534;">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>Automated Technical &amp; Planning Safety Verification</span>
+                    </div>
+                    <span class="constraint-status-badge pass" style="padding: 3px 10px; border-radius: 16px; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; background: #dcfce7; color: #15803d; border: 1px solid #86efac;">
+                        <i class="fa-solid fa-square-check"></i> All Constraints Satisfied
+                    </span>
                 </div>
-                <span class="constraint-status-badge ${badgeClass}" style="padding: 3px 10px; border-radius: 16px; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; background: ${allOk ? '#dcfce7' : '#fef3c7'}; color: ${allOk ? '#15803d' : '#b45309'}; border: 1px solid ${allOk ? '#86efac' : '#fde68a'};">
-                    <i class="fa-solid ${allOk ? 'fa-square-check' : 'fa-triangle-exclamation'}"></i> ${badgeText}
-                </span>
             </div>
-            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 8px; font-size: 0.78rem;">
-                <div style="display: flex; align-items: center; gap: 6px; color: ${stockOk ? '#15803d' : '#b45309'};">
-                    <i class="fa-solid ${stockOk ? 'fa-check' : 'fa-xmark'}"></i>
-                    <span>RM Main Store Stock Availability</span>
+        `;
+    } else {
+        el.innerHTML = `
+            <div style="background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 8px; padding: 12px 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 0.88rem; color: #92400e;">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>Automated Technical &amp; Planning Safety Verification</span>
+                    </div>
+                    <span class="constraint-status-badge fail" style="padding: 3px 10px; border-radius: 16px; font-weight: 700; font-size: 0.78rem; display: inline-flex; align-items: center; gap: 6px; background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5;">
+                        <i class="fa-solid fa-circle-xmark"></i> ${failedList.length} Constraint${failedList.length > 1 ? 's' : ''} Failed
+                    </span>
                 </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: ${mrpOk ? '#15803d' : '#b45309'};">
-                    <i class="fa-solid ${mrpOk ? 'fa-check' : 'fa-xmark'}"></i>
-                    <span>MRP Monthly Schedule Demand</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: ${remOk ? '#15803d' : '#b45309'};">
-                    <i class="fa-solid ${remOk ? 'fa-check' : 'fa-xmark'}"></i>
-                    <span>Production Quota vs Target Check</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px; color: #15803d;">
-                    <i class="fa-solid fa-check"></i>
-                    <span>Guillotine Machine Routing Feasible</span>
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 0.8rem;">
+                    ${failedList.map(item => `
+                        <div style="display: flex; align-items: center; gap: 8px; color: #b91c1c; background: #ffffff; padding: 8px 12px; border-radius: 6px; border: 1px solid #fecaca;">
+                            <i class="fa-solid fa-xmark" style="color: #dc2626; font-weight: 900; font-size: 0.85rem;"></i>
+                            <span style="font-weight: 700;">${escapeHtml(item.title)}</span>
+                            ${item.detail ? `<span style="color: #64748b; font-size: 0.75rem;">— ${escapeHtml(item.detail)}</span>` : ''}
+                        </div>
+                    `).join('')}
                 </div>
             </div>
-        </div>
-    `;
+        `;
+    }
+
     el.style.display = "block";
 }
 
 function renderReviewLayoutParts(mo) {
     const banner = document.getElementById("reviewLayoutPartsBanner");
-    const list = document.getElementById("reviewLayoutPartsList");
-    const thumbWrap = document.getElementById("reviewLayoutThumbWrap");
-    const thumbImg = document.getElementById("reviewLayoutThumbImg");
-    const planBadge = document.getElementById("reviewLayoutPlanBadge");
-    if (!banner || !list) return;
+    if (banner) banner.style.display = "none";
+}
 
-    let parts = mo.layout_parts;
-    if (!parts || !parts.length) {
-        const lr = mo.layout_record;
-        if (lr) {
-            parts = [];
-            [lr.part1, lr.part2, lr.part3, lr.part4].forEach((child, cIdx) => {
-                if (child && child.part_no) {
-                    const cb = child.cut_blank || lr.cut_blank || "";
-                    parts.push({
-                        label: cIdx === 0 ? "Primary Part" : `Part ${cIdx + 1}`,
-                        part_no: child.part_no,
-                        base_part: child.base_part || lr.base_part || "",
-                        cut_blank: cb,
-                        part_size: cb,
-                        blank_qty: child.blank_qty || 1,
-                        strip_qty: child.strip_qty || 1,
-                        total_blank_qty_sheet: child.total_blank_qty_sheet || (child.blank_qty * child.strip_qty) || 1,
-                        is_primary: cIdx === 0
-                    });
-                }
-            });
-        } else if (mo.parts && Array.isArray(mo.parts) && mo.parts.length > 0) {
-            parts = mo.parts.map((p, idx) => ({
-                label: p.label || (idx === 0 ? "Primary Part" : `Part ${idx + 1}`),
-                part_no: p.part_no,
-                base_part: p.base_part || mo.base_part || "",
-                cut_blank: p.part_size || p.cut_blank || `${p.thickness || mo.thickness || ''}*${p.cut_length || ''}*${p.cut_width || ''}`,
-                part_size: p.part_size || p.cut_blank || `${p.thickness || mo.thickness || ''}*${p.cut_length || ''}*${p.cut_width || ''}`,
-                blank_qty: p.blank_qty || p.no_of_parts || p.target_qty || 1,
-                strip_qty: p.strip_qty || 1,
-                total_blank_qty_sheet: p.total_blank_qty_sheet || p.no_of_parts || p.target_qty || 1,
-                is_primary: idx === 0 || p.is_primary
-            }));
-        } else if (mo.part_no) {
-            const cb = mo.part_size || (mo.thickness ? `${mo.thickness}*${mo.length}*${mo.width}` : '');
-            parts = [{
-                label: "Primary Part",
-                part_no: mo.part_no,
-                base_part: mo.base_part || "",
-                cut_blank: cb,
-                part_size: cb,
-                blank_qty: 1,
-                strip_qty: 1,
-                total_blank_qty_sheet: 1,
-                is_primary: true
-            }];
+function formatEndbitName(eb, fallbackGrade = null) {
+    if (!eb) return "offcut";
+    const grade = (eb.grade || fallbackGrade || "hr").toString().trim().toLowerCase();
+
+    // Collect available dimension numbers
+    let nums = [];
+    const dimStr = eb.dimensions || eb.dim || "";
+    if (dimStr) {
+        nums = (dimStr.toString().match(/[\d\.]+/g) || []).map(Number).filter(n => !isNaN(n) && n > 0);
+    }
+    if (nums.length === 0) {
+        [eb.thickness, eb.length, eb.width].forEach(v => {
+            const fv = parseFloat(v);
+            if (!isNaN(fv) && fv > 0) nums.push(fv);
+        });
+    } else if (eb.thickness && parseFloat(eb.thickness) > 0) {
+        const tv = parseFloat(eb.thickness);
+        if (!nums.some(n => Math.abs(n - tv) < 0.01)) {
+            nums.push(tv);
         }
     }
 
-    if (!parts || !parts.length) {
-        banner.style.display = "none";
-        return;
+    const cleanNum = n => (Number.isInteger(n) ? n.toString() : parseFloat(n.toFixed(2)).toString());
+
+    if (nums.length >= 3) {
+        const sorted = [...nums.slice(0, 3)].sort((a, b) => a - b);
+        const t = sorted[0];
+        const minP = sorted[1];
+        const maxP = sorted[2];
+        return `${grade} - ${cleanNum(t)}*${cleanNum(minP)}*${cleanNum(maxP)}`;
+    } else if (nums.length === 2) {
+        const minP = Math.min(nums[0], nums[1]);
+        const maxP = Math.max(nums[0], nums[1]);
+        return `${grade} - ${cleanNum(minP)}*${cleanNum(maxP)}`;
+    } else if (dimStr) {
+        return `${grade} - ${dimStr}`;
+    } else if (eb.name && eb.name.includes(" - ") && !eb.name.toLowerCase().startsWith("end bit")) {
+        return eb.name;
     }
+    return `${grade} - endbit`;
+}
 
-    const sheetsNeeded = parseInt(mo.sheets_required) || 1;
-    const planName = mo.cutting_plan || mo.layout_record?.cutting_plan || (mo.is_standard_layout ? "Standard Layout" : "Multi-Part Off-Take");
-    const yieldPct = mo.yield_pct || mo.layout_record?.yield_pct || (mo.is_standard_layout ? "98.56" : "90");
-
-    if (planBadge) {
-        planBadge.textContent = `${planName} • Yield: ${yieldPct}%`;
+/**
+ * Calculates offcut/endbit weight strictly using the formula:
+ * (thickness * length * width * 7.85) / 1000000
+ */
+function calculateEndbitWeight(eb, fallbackThickness = null) {
+    if (!eb) return 0;
+    if (eb.weight_kg !== undefined && eb.weight_kg !== null && parseFloat(eb.weight_kg) > 0) {
+        return parseFloat(parseFloat(eb.weight_kg).toFixed(3));
     }
+    let t = parseFloat(eb.thickness || fallbackThickness || 0);
+    let l = parseFloat(eb.length || 0);
+    let w = parseFloat(eb.width || 0);
 
-    const getReviewPartPlanBadges = (partNo, pIdx) => {
-        let pPlan = null;
-        if (reviewIntelData?.planning_summary?.parts) {
-            const cleanTarget = (partNo || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-            pPlan = reviewIntelData.planning_summary.parts.find(p => {
-                const cleanP = (p.child_part_no || p.part_no || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
-                return cleanTarget.includes(cleanP) || cleanP.includes(cleanTarget);
-            }) || reviewIntelData.planning_summary.parts[pIdx];
+    if (!t || !l || !w) {
+        const dimStr = eb.dimensions || eb.dim || eb.name || "";
+        const nums = (dimStr.toString().match(/[\d\.]+/g) || []).map(Number).filter(n => !isNaN(n) && n > 0);
+        if (nums.length >= 3) {
+            const sorted = [...nums.slice(0, 3)].sort((a, b) => a - b);
+            t = t > 0 ? t : sorted[0];
+            const remaining = sorted.filter(n => Math.abs(n - t) > 0.001);
+            if (remaining.length >= 2) {
+                w = remaining[0];
+                l = remaining[1];
+            } else {
+                w = sorted[1];
+                l = sorted[2];
+            }
+        } else if (nums.length === 2 && t > 0) {
+            w = Math.min(nums[0], nums[1]);
+            l = Math.max(nums[0], nums[1]);
         }
-
-        const mrpTxt = (pPlan && pPlan.mrp_monthly_target !== null && pPlan.mrp_monthly_target !== undefined)
-            ? `${Number(pPlan.mrp_monthly_target).toLocaleString()} Nos`
-            : (mo.mrp_monthly_target ? `${Number(mo.mrp_monthly_target).toLocaleString()} Nos` : "N/A");
-
-        const moCount = pPlan ? (pPlan.monthly_mo_count || 0) : (mo.monthly_mo_count || 0);
-        const partsProd = Number(pPlan ? (pPlan.parts_produced || 0) : (mo.parts_produced || 0)).toLocaleString();
-        const moTxt = `${moCount} MO${moCount === 1 ? '' : 's'} (${partsProd} Parts)`;
-
-        const remTxt = (pPlan && pPlan.remaining_quantity !== null && pPlan.remaining_quantity !== undefined)
-            ? `${Number(pPlan.remaining_quantity).toLocaleString()} Nos`
-            : (mo.remaining_quantity ? `${Number(mo.remaining_quantity).toLocaleString()} Nos` : "N/A");
-
-        return `
-            <div class="part-chip-planning-row">
-                <span class="chip-plan-badge chip-plan-mrp" title="MRP Monthly Target"><i class="fa-solid fa-calendar-days"></i> MRP: <strong>${mrpTxt}</strong></span>
-                <span class="chip-plan-badge chip-plan-mo" title="MOs &amp; Parts Produced this month"><i class="fa-solid fa-industry"></i> MO Produced: <strong>${moTxt}</strong></span>
-                <span class="chip-plan-badge chip-plan-rem" title="Remaining Quantity (MRP - MO)"><i class="fa-solid fa-hourglass-half"></i> Remaining: <strong>${remTxt}</strong></span>
-            </div>
-        `;
-    };
-
-    list.innerHTML = parts.map((p, idx) => {
-        const isPrimary = p.is_primary !== undefined ? p.is_primary : (idx === 0);
-        const partName = p.part_no || mo.part_no || '';
-        const rawCb = (reviewIntelData?.planning_summary?.parts && reviewIntelData.planning_summary.parts[idx]?.cut_blank) ||
-                      p.part_size || p.cut_blank || "";
-        const fmtCb = formatPartSize(rawCb);
-        const bq = parseFloat(p.blank_qty) || 1;
-        const sq = parseFloat(p.strip_qty) || 1;
-        const totalPerSheet = parseFloat(p.total_blank_qty_sheet) || (bq * sq);
-        const totalQty = totalPerSheet * sheetsNeeded;
-
-        const partLabelHtml = isPrimary 
-            ? `<i class="fa-solid fa-star"></i> Primary: ${escapeHtml(partName)}` 
-            : (p.label ? escapeHtml(p.label) : `Part ${idx + 1}: ${escapeHtml(partName)}`);
-
-        return `
-            <div class="layout-part-chip ${isPrimary ? 'primary' : ''}">
-                <span class="part-chip-name" style="display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap;">
-                    <span>${partLabelHtml}</span>
-                    ${fmtCb ? `
-                    <span class="part-kpi-size-badge">
-                        <i class="fa-solid fa-ruler-combined"></i>
-                        Part Size: <strong>${escapeHtml(fmtCb)}</strong>
-                    </span>` : ''}
-                </span>
-                <span class="part-chip-qty">${totalQty.toLocaleString()} Nos <small>(${sheetsNeeded} sheet × ${bq} part qty × ${sq} strip per part qty)</small></span>
-                ${getReviewPartPlanBadges(partName, idx)}
-            </div>
-        `;
-    }).join("");
-
-    const imgUrl = mo.image_url || mo.layout_record?.image_url;
-    if (thumbWrap && thumbImg && imgUrl) {
-        thumbImg.src = imgUrl;
-        thumbWrap.style.display = "flex";
-    } else if (thumbWrap) {
-        thumbWrap.style.display = "none";
     }
 
-    banner.style.display = "flex";
+    if (t > 0 && l > 0 && w > 0) {
+        const wt = (t * l * w * 7.85) / 1000000.0;
+        return parseFloat(wt.toFixed(3));
+    }
+    return 0;
+}
+
+function formatEndbitWeight(eb, fallbackThickness = null) {
+    const wt = calculateEndbitWeight(eb, fallbackThickness);
+    return wt > 0 ? `${wt} kg` : "-";
 }
 
 function renderReviewLayoutEndbits(mo) {
@@ -2569,10 +2749,13 @@ function renderReviewLayoutEndbits(mo) {
 
     let cardsHtml = "";
     ebList.forEach((eb, idx) => {
-        const ebName = eb.name || `End bit - ${idx + 1}`;
+        const ebName = formatEndbitName(eb, mo.grade);
         const qtyPerSheet = parseFloat(eb.qty_per_sheet) || parseFloat(eb.qty) || 1;
         const producedQty = eb.total_qty || Math.round(qtyPerSheet * sheetsNeeded) || 1;
         const gradeVal = eb.grade || mo.grade || "HR";
+        const wtDisplay = formatEndbitWeight(eb, mo.thickness || mo.material_thickness);
+        const ebId = eb.endbit_id || `EB-${mo.mo_number}-${idx + 1}`;
+        const availQty = eb.available_qty !== undefined ? eb.available_qty : producedQty;
 
         cardsHtml += `
             <div class="endbit-mini-card neat-endbit-card">
@@ -2585,11 +2768,22 @@ function renderReviewLayoutEndbits(mo) {
                         <span class="reb-clean-label">No. of End Bits Produced</span>
                         <strong class="reb-clean-val">${producedQty} Nos</strong>
                     </div>
+                    <div class="reb-clean-field">
+                        <span class="reb-clean-label">Weight</span>
+                        <strong class="reb-clean-val" style="color: #047857;">${escapeHtml(wtDisplay)}</strong>
+                    </div>
                     <div class="reb-clean-field" style="text-align: right;">
                         <span class="reb-clean-label">Grade</span>
                         <span class="reb-grade-pill">${escapeHtml(gradeVal)}</span>
                     </div>
                 </div>
+                ${(currentRole === 'shearing' && availQty > 0) ? `
+                <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #f1f5f9;">
+                    <button type="button" class="btn btn-primary btn-sm" style="width: 100%;" onclick="closeReviewModal(); openProducePartModal('${escapeHtml(ebId)}')">
+                        <i class="fa-solid fa-shapes"></i> Create Part from this End Bit
+                    </button>
+                </div>
+                ` : ''}
             </div>
         `;
     });
@@ -2603,6 +2797,15 @@ async function openReviewModal(moNumber) {
         const res = await fetch(`/api/mo/${encodeURIComponent(moNumber)}`);
         if (!res.ok) return;
         activeReviewMo = await res.json();
+        if (typeof activeReviewMo.parts === "string") {
+            try { activeReviewMo.parts = JSON.parse(activeReviewMo.parts); } catch(e) {}
+        }
+        if (typeof activeReviewMo.parts_produced === "string") {
+            try { activeReviewMo.parts_produced = JSON.parse(activeReviewMo.parts_produced); } catch(e) {}
+        }
+        if (!activeReviewMo.parts && Array.isArray(activeReviewMo.parts_produced)) {
+            activeReviewMo.parts = activeReviewMo.parts_produced;
+        }
         renderReviewModal(activeReviewMo);
         document.getElementById("reviewModal").style.display = "flex";
 
@@ -2649,6 +2852,10 @@ function closeReviewModal() {
     if (pCard) pCard.style.display = "none";
     const erpInput = document.getElementById("erpMoNumberInput");
     if (erpInput) erpInput.value = "";
+    const revRm = document.getElementById("reviewRmSummaryBar");
+    if (revRm) revRm.innerHTML = "";
+    const revPd = document.getElementById("reviewPartDetailsContainer");
+    if (revPd) { revPd.innerHTML = ""; revPd.style.display = "none"; }
     const revKpi = document.getElementById("reviewMoKpiContainer");
     if (revKpi) { revKpi.innerHTML = ""; revKpi.style.display = "none"; }
     const revCs = document.getElementById("reviewConstraintNotice");
@@ -2662,13 +2869,217 @@ function closeReviewModal() {
     document.getElementById("reviewModal").style.display = "none";
 }
 
+/**
+ * 1. Renders First Line in Review Modal:
+ * RM ERP Code, RM Grade, Yield %, and No. of Sheets (Required)
+ */
+function renderReviewRmSummary(mo) {
+    const bar = document.getElementById("reviewRmSummaryBar");
+    if (!bar) return;
+
+    const rmErp = mo.rm_erp || '-';
+    const gradeVal = (mo.grade || mo.material_grade || 'YS').toUpperCase();
+    const yieldBadgeHtml = formatYieldBadge(mo);
+    const reqSheets = mo.sheets_required || 1;
+
+    bar.innerHTML = `
+        <div class="review-rm-col">
+            <span class="review-rm-label">RM ERP Code</span>
+            <div class="review-rm-val">
+                <code class="review-rm-code"><i class="fa-solid fa-barcode" style="margin-right: 5px; color: #0284c7;"></i>${escapeHtml(rmErp)}</code>
+            </div>
+        </div>
+        <div class="review-rm-col">
+            <span class="review-rm-label">RM Grade</span>
+            <div class="review-rm-val">
+                <span class="reb-grade-pill">${escapeHtml(gradeVal)}</span>
+            </div>
+        </div>
+        <div class="review-rm-col">
+            <span class="review-rm-label">Yield %</span>
+            <div class="review-rm-val">
+                ${yieldBadgeHtml}
+            </div>
+        </div>
+        <div class="review-rm-col">
+            <span class="review-rm-label">No. of Sheets</span>
+            <div class="review-rm-val" style="color: #0369a1;">
+                <i class="fa-solid fa-layer-group" style="color: #0284c7; margin-right: 4px;"></i>
+                <strong>${reqSheets} Sheets</strong>
+            </div>
+        </div>
+    `;
+    bar.style.display = "grid";
+}
+
+/**
+ * 2. Renders Part Details table in Review Modal:
+ * Part Number, Size, No. of Parts, No. of Blanks, Yield %
+ * Supports single-part and multi-part layout orders seamlessly
+ */
+function renderReviewPartDetails(mo) {
+    const container = document.getElementById("reviewPartDetailsContainer");
+    if (!container) return;
+
+    // Gather parts from all possible sources
+    let partsList = [];
+    if (mo.parts && Array.isArray(mo.parts) && mo.parts.length > 0) {
+        partsList = [...mo.parts];
+    } else if (mo.constraints_status?.parts && Array.isArray(mo.constraints_status.parts) && mo.constraints_status.parts.length > 0) {
+        partsList = [...mo.constraints_status.parts];
+    } else if (mo.layout_record?.parts && Array.isArray(mo.layout_record.parts) && mo.layout_record.parts.length > 0) {
+        partsList = [...mo.layout_record.parts];
+    }
+
+    if (partsList.length === 0) {
+        if (mo.part1 && typeof mo.part1 === 'object' && mo.part1.part_no) {
+            partsList.push(mo.part1);
+            if (mo.part2 && typeof mo.part2 === 'object' && mo.part2.part_no) partsList.push(mo.part2);
+            if (mo.part3 && typeof mo.part3 === 'object' && mo.part3.part_no) partsList.push(mo.part3);
+            if (mo.part4 && typeof mo.part4 === 'object' && mo.part4.part_no) partsList.push(mo.part4);
+        } else if (mo.layout_record?.part1?.part_no) {
+            partsList.push(mo.layout_record.part1);
+            if (mo.layout_record.part2?.part_no) partsList.push(mo.layout_record.part2);
+        }
+    }
+
+    if (partsList.length === 0) {
+        partsList.push({
+            part_no: mo.part_no || '-',
+            base_part: mo.base_part || '-',
+            part_size: mo.part_size || mo.cut_blank || (mo.thickness && mo.length && mo.width ? `${mo.thickness}*${mo.length}*${mo.width}` : '-'),
+            no_of_parts: mo.no_of_parts || mo.target_qty || 1,
+            strip_per_blank_qty: mo.strip_per_blank_qty || mo.strip_qty || 1,
+            blank_qty: mo.blank_qty || mo.blanks_per_sheet || mo.blanks || 1,
+            yield_pct: mo.yield_pct ? `${mo.yield_pct}%` : `${formatYieldBadge(mo)}`,
+            is_primary: true
+        });
+    }
+
+    const isMulti = partsList.length > 1;
+    let totalParts = 0;
+    let totalBlanks = 0;
+
+    const rowsHtml = partsList.map((p, idx) => {
+        const pNo = p.part_no || p.child_part_no || mo.part_no || '-';
+        let pSize = p.part_size || p.size || p.cut_blank || '';
+        if (!pSize && (p.cut_length || p.blank_length) && (p.cut_width || p.blank_width)) {
+            const thk = p.thickness || mo.thickness || '';
+            const l = p.cut_length || p.blank_length;
+            const w = p.cut_width || p.blank_width;
+            pSize = thk ? `${thk}*${l}*${w}` : `${l}*${w}`;
+        }
+        if (!pSize) pSize = mo.cut_blank || `${mo.thickness || ''}*${mo.length || ''}*${mo.width || ''}`.replace(/^\*/, '') || '-';
+
+        const nParts = parseInt(p.no_of_parts || p.target_qty || 1) || 1;
+        
+        let stripQty = parseInt(
+            p.strip_per_blank_qty || 
+            p.strip_qty || 
+            p.strip || 
+            p.strip_per_blank || 
+            p.blank_per_strip ||
+            (p.part1 && (p.part1.strip_per_blank_qty || p.part1.strip_qty)) ||
+            (mo.layout_record?.part1?.strip_qty || mo.layout_record?.strip_qty) ||
+            (idx === 0 && (mo.strip_per_blank_qty || mo.strip_qty))
+        ) || 0;
+
+        if (!stripQty) {
+            const intelParts = reviewIntelData?.planning_summary?.parts || currentIntelData?.planning_summary?.parts;
+            if (intelParts && Array.isArray(intelParts)) {
+                const match = intelParts.find(x => x.part_no === pNo || x.child_part_no === pNo);
+                if (match && (match.strip_per_blank_qty || match.strip_qty)) {
+                    stripQty = parseInt(match.strip_per_blank_qty || match.strip_qty);
+                }
+            }
+        }
+        if (!stripQty) stripQty = 1;
+
+        const nBlanks = parseInt(
+            p.blank_qty || 
+            p.blanks_per_sheet || 
+            p.no_of_blanks || 
+            p.blanks || 
+            (p.part1 && (p.part1.blank_qty || p.part1.blanks_per_sheet)) ||
+            (mo.layout_record?.part1?.blank_qty || mo.layout_record?.blank_qty) ||
+            1
+        ) || 1;
+
+        totalParts += nParts;
+        totalBlanks += nBlanks;
+
+        let yPct = p.yield_pct || (p.yield ? `${p.yield}%` : '');
+        if (!yPct) {
+            yPct = (mo.yield_pct !== undefined && mo.yield_pct !== null) ? `${mo.yield_pct}%` : '-';
+        }
+
+        const isPrim = p.is_primary || idx === 0;
+
+        return `
+            <tr>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        <code class="review-part-code">${escapeHtml(pNo)}</code>
+                        ${isMulti ? `<span style="font-size: 0.68rem; font-weight: 700; padding: 1px 6px; border-radius: 4px; ${isPrim ? 'background: #e0f2fe; color: #0369a1;' : 'background: #f1f5f9; color: #64748b;'}">${isPrim ? '★ Part 1' : `Part ${idx + 1}`}</span>` : ''}
+                    </div>
+                    ${p.base_part && p.base_part !== pNo ? `<small class="text-muted" style="display: block; font-size: 0.72rem; margin-top: 2px;">Base: ${escapeHtml(p.base_part)}</small>` : ''}
+                </td>
+                <td>
+                    <code class="review-part-dim">${escapeHtml(pSize)} mm</code>
+                </td>
+                <td>
+                    <strong style="color: #0f172a; font-size: 0.92rem;">${nParts}</strong> <span style="font-size: 0.75rem; color: #64748b;">Nos</span>
+                </td>
+                <td>
+                    <strong style="color: #0369a1; font-size: 0.92rem;">${stripQty}</strong> <span style="font-size: 0.75rem; color: #64748b;">Nos</span>
+                    ${nBlanks > 1 ? `<small class="text-muted" style="display: block; font-size: 0.72rem; margin-top: 1px;">(${nBlanks} blanks/sh)</small>` : ''}
+                </td>
+                <td>
+                    <span class="reb-grade-pill" style="background: #ecfdf5; color: #047857; font-weight: 700; font-size: 0.82rem;">${escapeHtml(yPct)}</span>
+                </td>
+            </tr>
+        `;
+    }).join("");
+
+    container.innerHTML = `
+        <div class="review-part-details-header">
+            <div class="review-part-title">
+                <i class="fa-solid fa-shapes" style="color: #0284c7;"></i>
+                <span>Part Details</span>
+                <span class="review-part-count-badge">${partsList.length} Part${partsList.length > 1 ? 's' : ''}</span>
+            </div>
+            ${isMulti ? `
+            <div style="font-size: 0.78rem; color: #475569; background: #f8fafc; border: 1px solid #e2e8f0; padding: 3px 10px; border-radius: 6px;">
+                Total Parts: <strong style="color: #0f172a;">${totalParts}</strong> | Total Blanks: <strong style="color: #0369a1;">${totalBlanks}</strong>
+            </div>
+            ` : ''}
+        </div>
+        <div class="mo-table-responsive" style="overflow-x: auto;">
+            <table class="mo-table review-parts-table">
+                <thead>
+                    <tr>
+                        <th style="width: 30%;">Part Number</th>
+                        <th style="width: 24%;">Size</th>
+                        <th style="width: 16%;">No. of Parts</th>
+                        <th style="width: 18%;">Strip / Blank Qty</th>
+                        <th style="width: 12%;">Yield %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${rowsHtml}
+                </tbody>
+            </table>
+        </div>
+    `;
+    container.style.display = "block";
+}
 
 function renderReviewModal(mo) {
     document.getElementById("reviewMoTitle").textContent = `${mo.mo_number} — ${mo.part_no}`;
     document.getElementById("reviewMoSubtitle").textContent = 
         `Base: ${mo.base_part || '-'} | RM ERP: ${mo.rm_erp || '-'} | Grade: ${mo.grade || 'YS'}`;
 
-    // Render Stepper
+    // Render Stepper (flow kept as it is)
     renderStepper(mo);
 
     // Render Rejection Alert Banner if MO is rejected
@@ -2709,81 +3120,94 @@ function renderReviewModal(mo) {
         }
     }
 
-    // Render Specs Grid
+    // 1. Render First Line: RM ERP Code, RM Grade, Yield %, and No. of Sheets (Required)
+    renderReviewRmSummary(mo);
+
+    // 2. Render Part Details: Part Number, Size, No. of Parts, No. of Blanks, then Yield
+    renderReviewPartDetails(mo);
+
+    // Clear legacy grid if present
     const grid = document.getElementById("reviewDetailsGrid");
-    grid.innerHTML = `
-        <div class="review-item">
-            <span class="review-label">MO Number</span>
-            <span class="review-val">${escapeHtml(mo.mo_number)}</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">Part Number</span>
-            <span class="review-val">${escapeHtml(mo.part_no)}</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">Base Part</span>
-            <span class="review-val">${escapeHtml(mo.base_part || '-')}</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">RM ERP Code</span>
-            <span class="review-val">${escapeHtml(mo.rm_erp || '-')}</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">Sheet Dimensions</span>
-            <span class="review-val">${mo.thickness || '-'} * ${mo.length || '-'} * ${mo.width || '-'} mm</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">Target / Sheets Qty</span>
-            <span class="review-val">${mo.target_qty || 1} units (${mo.sheets_required || 1} sheets)</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">Layout Standard</span>
-            <span class="review-val">${mo.is_standard_layout ? '✅ Standardized' : '⚠️ Non-Standard'}</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label"><i class="fa-solid fa-chart-pie"></i> Layout Yield %</span>
-            <span class="review-val">${formatYieldBadge(mo)}</span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">Workflow Path</span>
-            <span class="review-val"><code>${escapeHtml(mo.workflow_path || '-')}</code></span>
-        </div>
-        <div class="review-item">
-            <span class="review-label">Current Stage</span>
-            <span class="review-val"><strong style="color: #2563eb;">${escapeHtml(mo.current_stage || 'Completed')}</strong></span>
-        </div>
-        ${mo.erp_mo_number ? `
-        <div class="review-item" style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px;">
-            <span class="review-label" style="color: #166534;"><i class="fa-solid fa-hashtag"></i> ERP System MO #</span>
-            <span class="review-val" style="color: #15803d; font-weight: 800; font-family: monospace; font-size: 0.95rem;">${escapeHtml(mo.erp_mo_number)}</span>
-        </div>
-        ` : ''}
-    `;
+    if (grid) grid.innerHTML = "";
 
     // Render Constraints & Safety Status
     renderReviewConstraints(mo);
 
-    // Render Layout Parts & Drawing Preview
-    renderReviewLayoutParts(mo);
+    // 3. Render 4 KPI Cards: RM Sheets On Hand, MRP Monthly Target, Parts Produced, Remaining Quantity
+    renderDefaultSinglePartKpis(
+        (mo.rm_onhand !== undefined && mo.rm_onhand !== null) ? mo.rm_onhand : null,
+        mo.rm_erp ? { item_code: mo.rm_erp } : null,
+        (mo.mrp_monthly_target !== undefined && mo.mrp_monthly_target !== null) ? mo.mrp_monthly_target : null,
+        null,
+        mo.parts_produced || 0,
+        (mo.remaining_quantity !== undefined && mo.remaining_quantity !== null) ? mo.remaining_quantity : null,
+        null,
+        true
+    );
 
-    // Render End Bits Section in Review Modal (Banner style matching Image 2)
+    // 4. Render End Bits Section in Review Modal
     renderReviewLayoutEndbits(mo);
-    renderReviewParts(mo);
 
-    // Render Document Attachment if any
+    // Render Document Attachment or Layout Drawing Preview if available
     const docSec = document.getElementById("reviewDocSection");
     const docCard = document.getElementById("docPreviewCard");
-    if (mo.layout_doc_url) {
+    const hasDoc = Boolean(mo.layout_doc_url);
+    const isStd = mo.is_standard_layout !== false && String(mo.is_standard_layout).toLowerCase() !== "false";
+    
+    // For Non-Standard layout: ONLY the custom attached image/document is shown. Extra standard layout image is NOT shown!
+    const imgUrl = isStd ? (mo.image_url || mo.layout_record?.image_url) : null;
+
+    if (hasDoc || imgUrl) {
         docSec.style.display = "block";
-        docCard.innerHTML = `
-            <div>
-                <strong><i class="fa-solid fa-file-pdf"></i> ${escapeHtml(mo.layout_doc_filename || 'Layout Document')}</strong>
-                <small class="text-muted block">Uploaded by Shearing for Non-Standard layout verification</small>
-            </div>
-            <a href="${escapeHtml(mo.layout_doc_url)}" target="_blank" class="btn btn-secondary">
-                <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Drawing
-            </a>
-        `;
+        let docHtml = "";
+        if (hasDoc) {
+            const isCustomImg = /\.(png|jpe?g|svg|webp|gif)$/i.test(mo.layout_doc_filename || mo.layout_doc_url || '') || String(mo.layout_doc_url).startsWith('data:image/');
+            if (isCustomImg) {
+                docHtml += `
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #0284c7; margin-bottom: ${imgUrl ? '10px' : '0'};">
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <img src="${escapeHtml(mo.layout_doc_url)}" alt="Custom Attached Layout Drawing" style="width: 60px; height: 42px; object-fit: contain; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; background: #f8fafc;" onclick="window.open('${escapeHtml(mo.layout_doc_url)}', '_blank')">
+                            <div>
+                                <strong style="color: #0369a1;"><i class="fa-solid fa-file-image"></i> ${escapeHtml(mo.layout_doc_filename || 'Custom Attached Layout Drawing')}</strong>
+                                <small class="text-muted" style="display: block;">Custom uploaded layout verification drawing</small>
+                            </div>
+                        </div>
+                        <a href="${escapeHtml(mo.layout_doc_url)}" target="_blank" class="btn btn-secondary btn-sm" style="color: #0284c7; border-color: #0284c7;">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> View Drawing
+                        </a>
+                    </div>
+                `;
+            } else {
+                docHtml += `
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: ${imgUrl ? '10px' : '0'};">
+                        <div>
+                            <strong><i class="fa-solid fa-file-pdf"></i> ${escapeHtml(mo.layout_doc_filename || 'Custom Layout Document')}</strong>
+                            <small class="text-muted block">Custom uploaded layout verification document</small>
+                        </div>
+                        <a href="${escapeHtml(mo.layout_doc_url)}" target="_blank" class="btn btn-secondary btn-sm">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> Open Document
+                        </a>
+                    </div>
+                `;
+            }
+        }
+        if (imgUrl) {
+            docHtml += `
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <img src="${escapeHtml(imgUrl)}" alt="Layout Drawing Preview" style="width: 60px; height: 42px; object-fit: contain; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; background: #f8fafc;" onclick="window.open('${escapeHtml(imgUrl)}', '_blank')">
+                        <div>
+                            <strong style="color: #1e293b;"><i class="fa-solid fa-image"></i> Layout Drawing Preview</strong>
+                            <small class="text-muted" style="display: block;">Click thumbnail to inspect full drawing</small>
+                        </div>
+                    </div>
+                    <a href="${escapeHtml(imgUrl)}" target="_blank" class="btn btn-secondary btn-sm">
+                        <i class="fa-solid fa-arrow-up-right-from-square"></i> View Drawing
+                    </a>
+                </div>
+            `;
+        }
+        docCard.innerHTML = docHtml;
     } else {
         docSec.style.display = "none";
     }
@@ -2856,8 +3280,9 @@ function renderReviewModal(mo) {
         }
     }
 
-    // Trigger Purchase AI Decision Agent analysis for Purchase role or failing constraints
-    fetchAndDisplayPurchaseAi(mo);
+    // Purchase AI Decision Agent hidden as per request
+    const pAiCard = document.getElementById("purchaseAiCard");
+    if (pAiCard) pAiCard.style.display = "none";
 }
 
 function renderStepper(mo) {
@@ -3043,156 +3468,8 @@ let activePurchaseAiDecision = null;
 
 async function fetchAndDisplayPurchaseAi(mo) {
     const card = document.getElementById("purchaseAiCard");
-    if (!card) return;
-
-    // Check if this MO comes for Purchase clearance
-    const isEndbit = Boolean(mo.is_endbit || mo.is_end_bit || mo.is_endbit_mo || (mo.source_endbit_ids && mo.source_endbit_ids.length > 0));
-    const requiresPurchase = Boolean(mo.workflow_path && mo.workflow_path.includes("PURCHASE"));
-
-    // For Purchase team / review, ONLY activate for orders that come for Purchase approval (NOT for endbits and other MOs)
-    if (isEndbit || !requiresPurchase) {
-        card.style.display = "none";
-        return;
-    }
-
-    // Show when role is purchase OR stage is PURCHASE
-    const isPurchaseContext = (currentRole === "purchase") || (mo.current_stage === "PURCHASE");
-
-    if (!isPurchaseContext) {
-        card.style.display = "none";
-        return;
-    }
-
-    card.style.display = "block";
-    const engineBadge = document.getElementById("purchaseAiEngineBadge");
-    const severityBadge = document.getElementById("purchaseAiSeverityBadge");
-    const titleEl = document.getElementById("purchaseAiVerdictTitle");
-    const textEl = document.getElementById("purchaseAiVerdictText");
-    const stripEl = document.getElementById("purchaseAiConstraintsStrip");
-    const stratCallout = document.getElementById("purchaseAiStrategyCallout");
-    const stratText = document.getElementById("purchaseAiStrategyText");
-    const subBox = document.getElementById("purchaseAiSubstituteBox");
-    const subDesc = document.getElementById("purchaseAiSubDesc");
-    const btnPartial = document.getElementById("btnApplyPartialRemarks");
-
-    // Loading states
-    if (severityBadge) {
-        severityBadge.className = "purchase-ai-severity-badge loading";
-        severityBadge.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Evaluating Constraints...`;
-    }
-    if (titleEl) titleEl.innerHTML = `<i class="fa-solid fa-brain fa-pulse"></i> AI Decision Engine Scanning Constraints...`;
-    if (textEl) textEl.textContent = "Analyzing RM inventory shortfall, MRP balance, and optimal procurement strategy...";
-    if (stripEl) stripEl.innerHTML = "";
-    if (stratCallout) stratCallout.style.display = "none";
-    if (subBox) subBox.style.display = "none";
-
-    try {
-        const res = await fetch(`/api/agent/purchase-advisor?mo_number=${encodeURIComponent(mo.mo_number)}`);
-        if (!res.ok) {
-            if (severityBadge) severityBadge.textContent = "Unavailable";
-            return;
-        }
-
-        const data = await res.json();
-        activePurchaseAiDecision = data;
-
-        // Engine badge
-        if (engineBadge && data.decision?.powered_by) {
-            engineBadge.innerHTML = `<i class="fa-solid fa-microchip"></i> ${escapeHtml(data.decision.powered_by)}`;
-        }
-
-        // Severity badge & status
-        const hasShortfall = data.metrics?.shortfall_sheets > 0;
-        const failCount = data.failing_constraints_count || 0;
-        if (severityBadge) {
-            if (hasShortfall) {
-                severityBadge.className = "purchase-ai-severity-badge danger";
-                severityBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Stock Shortfall (${data.metrics.shortfall_sheets} Sheets)`;
-            } else if (failCount > 0) {
-                severityBadge.className = "purchase-ai-severity-badge warning";
-                severityBadge.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${failCount} Constraint(s) Failing`;
-            } else {
-                severityBadge.className = "purchase-ai-severity-badge success";
-                severityBadge.innerHTML = `<i class="fa-solid fa-square-check"></i> Standard Clearance`;
-            }
-        }
-
-        // Constraints strip
-        if (stripEl) {
-            if (data.failing_constraints && data.failing_constraints.length > 0) {
-                stripEl.innerHTML = data.failing_constraints.map(c => `
-                    <div class="failing-constraint-pill ${escapeHtml((c.severity || 'warning').toLowerCase())}">
-                        <i class="fa-solid ${escapeHtml(c.icon || 'fa-circle-exclamation')}"></i>
-                        <strong>${escapeHtml(c.name)}:</strong>
-                        <span>${escapeHtml(c.details)}</span>
-                        <span class="pill-metric">${escapeHtml(c.deficit_metric)}</span>
-                    </div>
-                `).join("");
-            } else {
-                stripEl.innerHTML = `
-                    <div class="failing-constraint-pill success">
-                        <i class="fa-solid fa-square-check"></i>
-                        <span>No physical inventory shortage detected. Proceed with standard procurement review.</span>
-                    </div>
-                `;
-            }
-        }
-
-        // Decision headline & summary
-        if (titleEl) {
-            titleEl.innerHTML = `<i class="fa-solid fa-shield-halved"></i> ${escapeHtml(data.decision?.decision_title || "Procurement Decision Formulated")}`;
-        }
-        if (textEl) {
-            textEl.textContent = data.decision?.executive_summary || "Decision synthesized.";
-        }
-        if (stratCallout && data.decision?.action_strategy) {
-            stratCallout.style.display = "flex";
-            if (stratText) stratText.textContent = data.decision.action_strategy;
-        }
-
-        // Key metrics
-        const m = data.metrics || {};
-        const setVal = (id, val) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = val;
-        };
-        setVal("pMetricOnhand", `${m.onhand_stock ?? 0} Sheets`);
-        setVal("pMetricRequired", `${m.sheets_required ?? 0} Sheets`);
-        setVal("pMetricShortfall", `${m.shortfall_sheets ?? 0} Sheets`);
-        setVal("pMetricWeight", `${m.shortfall_weight_kg ?? 0} kg`);
-        setVal("pMetricPo", `${m.recommended_po_sheets ?? 0} Sheets`);
-        setVal("pMetricLeadTime", m.est_lead_time || "3-5 Days");
-
-        // Viable in-stock substitute
-        if (subBox) {
-            if (data.viable_substitute && data.viable_substitute.onhand_stock > 0) {
-                subBox.style.display = "block";
-                const sub = data.viable_substitute;
-                if (subDesc) {
-                    subDesc.innerHTML = `
-                        In-Store Alternative: <strong>${escapeHtml(sub.rm_erp)}</strong> (${sub.tier_label || 'Compatible Sheet'}). 
-                        Confirmed store balance: <strong>${sub.onhand_stock} sheets</strong> (${sub.yield_pct || 0}% yield). 
-                        Authorizing this in-stock sheet eliminates <strong>${sub.lead_time_days_saved || 5} days</strong> of supplier lead time!
-                    `;
-                }
-            } else {
-                subBox.style.display = "none";
-            }
-        }
-
-        // Partial shearing button
-        if (btnPartial) {
-            if (data.decision?.recommended_remarks_partial) {
-                btnPartial.style.display = "inline-flex";
-            } else {
-                btnPartial.style.display = "none";
-            }
-        }
-
-    } catch (err) {
-        console.error("Failed to load Purchase AI decision:", err);
-        if (severityBadge) severityBadge.textContent = "Error";
-    }
+    if (card) card.style.display = "none";
+    return; // Disabled as of now: Purchase AI agent hidden
 }
 
 function applyPurchasePoRemarks() {
@@ -3293,7 +3570,7 @@ async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, len
         } else {
             reviewIntelData = intel;
             if (activeReviewMo) {
-                renderReviewLayoutParts(activeReviewMo);
+                renderReviewPartDetails(activeReviewMo);
                 renderReviewLayoutEndbits(activeReviewMo);
             }
         }
@@ -3305,32 +3582,39 @@ async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, len
 }
 
 function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan, isReview = false) {
+    const rmValStr = (rmOnHand !== null && rmOnHand !== undefined)
+        ? `${rmOnHand} Sheets`
+        : (rm?.onhand_stock !== undefined ? `${rm.onhand_stock} Sheets` : (isReview && activeReviewMo?.rm_onhand !== undefined && activeReviewMo?.rm_onhand !== null ? `${activeReviewMo.rm_onhand} Sheets` : "- Sheets"));
+    const rmSubStr = rm?.item_code 
+        ? `${rm.item_code} (Main Store)` 
+        : (isReview && activeReviewMo?.rm_erp ? `${activeReviewMo.rm_erp} (Main Store)` : "Select RM & part");
+
+    const quickStockEl = document.getElementById("rmStockBoxVal");
+    if (quickStockEl && !isReview) {
+        quickStockEl.textContent = rmValStr;
+    }
+
     const container = document.getElementById(isReview ? "reviewMoKpiContainer" : "moKpiContainer");
     if (!container) return;
 
-    const rmValStr = (rmOnHand !== null && rmOnHand !== undefined)
-        ? `${rmOnHand} Sheets`
-        : (rm?.onhand_stock !== undefined ? `${rm.onhand_stock} Sheets` : "- Sheets");
-    const rmSubStr = rm?.item_code ? `${rm.item_code} (Main Store)` : "Select RM & part";
-
     const mrpValStr = (mrpTarget !== null && mrpTarget !== undefined)
         ? `${Number(mrpTarget).toLocaleString()} Nos`
-        : "- Nos";
-    const childPart = plan?.child_part_no || mrp?.child_part_no || "";
+        : (isReview && activeReviewMo?.mrp_monthly_target !== undefined && activeReviewMo?.mrp_monthly_target !== null ? `${Number(activeReviewMo.mrp_monthly_target).toLocaleString()} Nos` : "- Nos");
+    const childPart = plan?.child_part_no || mrp?.child_part_no || (isReview ? (activeReviewMo?.part_no || "") : "");
     const mrpSubStr = childPart ? `${childPart} (Balance)` : "Balance demand";
 
     const moCount = (plan && plan.monthly_mo_count !== undefined)
         ? plan.monthly_mo_count
-        : (plan?.monthly_mo_records ? plan.monthly_mo_records.length : 0);
+        : (plan?.monthly_mo_records ? plan.monthly_mo_records.length : (isReview ? (activeReviewMo?.monthly_mo_count || 0) : 0));
     const partsCount = (partsProduced !== null && partsProduced !== undefined)
         ? Number(partsProduced).toLocaleString()
-        : "0";
-    const partsValStr = plan ? `${partsCount} Nos` : "- Nos";
+        : (isReview && activeReviewMo?.parts_produced !== undefined && activeReviewMo?.parts_produced !== null ? Number(activeReviewMo.parts_produced).toLocaleString() : "0");
+    const partsValStr = (plan || (isReview && (activeReviewMo?.parts_produced !== undefined || partsProduced > 0))) ? `${partsCount} Nos` : "- Nos";
     const moSubStr = `${moCount} MO${moCount === 1 ? '' : 's'} produced`;
 
     const remValStr = (remainingQty !== null && remainingQty !== undefined)
         ? `${Number(remainingQty).toLocaleString()} Nos`
-        : "- Nos";
+        : (isReview && activeReviewMo?.remaining_quantity !== undefined && activeReviewMo?.remaining_quantity !== null ? `${Number(activeReviewMo.remaining_quantity).toLocaleString()} Nos` : "- Nos");
     const remSubStr = "MRP Bal - MO Produced";
 
     const targetPartNo = isReview 
@@ -3340,60 +3624,244 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
     let partSizeRaw = plan?.part_size || plan?.cut_blank || layoutRec?.cut_blank || layoutRec?.part1?.cut_blank || (isReview ? (activeReviewMo?.part_size || activeReviewMo?.cut_blank) : "");
     const formattedPartSize = formatPartSize(partSizeRaw);
 
-    container.innerHTML = `
-        ${targetPartNo ? `
-        <div class="part-kpi-header" style="margin-bottom: 8px;">
-            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <span class="part-kpi-badge primary">
-                    <i class="fa-solid fa-star"></i>
-                    Primary Part: <strong>${escapeHtml(targetPartNo)}</strong>
-                </span>
-                ${formattedPartSize ? `
-                <span class="part-kpi-size-badge">
-                    <i class="fa-solid fa-ruler-combined"></i>
-                    Part Size: <strong>${escapeHtml(formattedPartSize)}</strong>
-                </span>` : ''}
-            </div>
-        </div>
-        ` : ''}
-        <div class="mo-kpi-row" id="${isReview ? 'reviewMoKpiRow' : 'moKpiRow'}">
-            <div class="mo-kpi-card kpi-rm-stock">
-                <div class="mo-kpi-icon"><i class="fa-solid fa-layer-group"></i></div>
-                <div class="mo-kpi-content">
-                    <span class="mo-kpi-label">RM Sheets (On Hand)</span>
-                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRmOnHand' : 'kpiRmOnHand'}">${rmValStr}</div>
-                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRmSubtext' : 'kpiRmSubtext'}" title="${escapeHtml(rmSubStr)}">${escapeHtml(rmSubStr)}</small>
-                </div>
-            </div>
+    // Collect all parts for KPI indicators (Multi-Part support)
+    let allPartsList = [];
+    if (plan?.parts && Array.isArray(plan.parts) && plan.parts.length > 0) {
+        allPartsList = plan.parts.map(p => ({ ...p }));
+    }
 
-            <div class="mo-kpi-card kpi-mrp-qty">
-                <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
-                <div class="mo-kpi-content">
-                    <span class="mo-kpi-label">MRP Monthly Target</span>
-                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMrpTarget' : 'kpiMrpTarget'}">${mrpValStr}</div>
-                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMrpSubtext' : 'kpiMrpSubtext'}" title="${escapeHtml(mrpSubStr)}">${escapeHtml(mrpSubStr)}</small>
-                </div>
-            </div>
+    if (isReview && activeReviewMo) {
+        let revParts = activeReviewMo.parts;
+        if (typeof revParts === "string") {
+            try { revParts = JSON.parse(revParts); } catch(e) { revParts = []; }
+        }
+        if (!revParts && activeReviewMo.parts_produced) {
+            revParts = activeReviewMo.parts_produced;
+            if (typeof revParts === "string") {
+                try { revParts = JSON.parse(revParts); } catch(e) { revParts = []; }
+            }
+        }
+        if (Array.isArray(revParts) && revParts.length > 0) {
+            revParts.forEach(rp => {
+                const rpNo = rp.part_no || rp.child_part_no;
+                if (!rpNo) return;
+                const existing = allPartsList.find(p => (p.part_no === rpNo || p.child_part_no === rpNo));
+                if (existing) {
+                    if (!existing.part_size && (rp.size || rp.cut_blank)) existing.part_size = rp.size || rp.cut_blank;
+                    if (rp.target_qty) existing.target_qty = rp.target_qty;
+                } else {
+                    allPartsList.push({
+                        part_no: rpNo,
+                        child_part_no: rpNo,
+                        part_size: rp.size || rp.cut_blank || "",
+                        mrp_monthly_target: rp.mrp_monthly_target || null,
+                        parts_produced: rp.parts_produced || 0,
+                        remaining_quantity: rp.remaining_quantity || null,
+                        target_qty: rp.target_qty
+                    });
+                }
+            });
+        }
+    } else if (!isReview) {
+        const modalAddRows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+        if (modalAddRows && modalAddRows.length > 0) {
+            modalAddRows.forEach((r, idx) => {
+                const rowPartNo = r.querySelector(".add-part-no")?.value?.trim();
+                if (!rowPartNo) return;
+                const rowSize = r.querySelector(".add-part-size")?.value?.trim() || "";
+                const existing = allPartsList.find(p => (p.part_no === rowPartNo || p.child_part_no === rowPartNo));
+                if (existing) {
+                    if (!existing.part_size && rowSize) existing.part_size = rowSize;
+                } else {
+                    const mrpTxt = r.querySelector(`#addPartMrpQty_${idx}`)?.textContent?.replace(/[^0-9]/g, "") || "";
+                    const toPTxt = r.querySelector(`#addPartToProduce_${idx}`)?.textContent?.replace(/[^0-9]/g, "") || "";
+                    allPartsList.push({
+                        part_no: rowPartNo,
+                        child_part_no: rowPartNo,
+                        part_size: rowSize,
+                        mrp_monthly_target: mrpTxt ? parseInt(mrpTxt) : null,
+                        parts_produced: 0,
+                        remaining_quantity: toPTxt ? parseInt(toPTxt) : null
+                    });
+                }
+            });
+        }
+    }
 
-            <div class="mo-kpi-card kpi-mo-produced">
-                <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
-                <div class="mo-kpi-content">
-                    <span class="mo-kpi-label">Parts Produced</span>
-                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMoProduced' : 'kpiMoProduced'}">${partsValStr}</div>
-                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMoProducedSubtext' : 'kpiMoProducedSubtext'}" title="${moCount} MO${moCount === 1 ? '' : 's'} produced (${partsCount} parts in ${plan?.target_month || 'month'})">${escapeHtml(moSubStr)}</small>
-                </div>
-            </div>
+    if (allPartsList.length === 0 && targetPartNo) {
+        allPartsList.push({
+            part_no: targetPartNo,
+            child_part_no: childPart || targetPartNo,
+            part_size: formattedPartSize,
+            mrp_monthly_target: mrpTarget,
+            parts_produced: partsProduced,
+            remaining_quantity: remainingQty,
+            monthly_mo_count: moCount
+        });
+    }
 
-            <div class="mo-kpi-card kpi-remaining-qty">
-                <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
-                <div class="mo-kpi-content">
-                    <span class="mo-kpi-label">Remaining Quantity</span>
-                    <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRemainingQty' : 'kpiRemainingQty'}">${remValStr}</div>
-                    <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRemainingSubtext' : 'kpiRemainingSubtext'}" title="${escapeHtml(remSubStr)}">${escapeHtml(remSubStr)}</small>
+    const isMulti = allPartsList.length > 1;
+
+    if (!isMulti) {
+        // Classic Single-Part 4-Card Row
+        container.innerHTML = `
+            ${(!isReview && targetPartNo) ? `
+            <div class="part-kpi-header" style="margin-bottom: 8px;">
+                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <span class="part-kpi-badge primary">
+                        <i class="fa-solid fa-star"></i>
+                        Primary Part: <strong>${escapeHtml(targetPartNo)}</strong>
+                    </span>
+                    ${formattedPartSize ? `
+                    <span class="part-kpi-size-badge">
+                        <i class="fa-solid fa-ruler-combined"></i>
+                        Part Size: <strong>${escapeHtml(formattedPartSize)}</strong>
+                    </span>` : ''}
                 </div>
             </div>
-        </div>
-    `;
+            ` : ''}
+            <div class="mo-kpi-row" id="${isReview ? 'reviewMoKpiRow' : 'moKpiRow'}">
+                <div class="mo-kpi-card kpi-rm-stock">
+                    <div class="mo-kpi-icon"><i class="fa-solid fa-layer-group"></i></div>
+                    <div class="mo-kpi-content">
+                        <span class="mo-kpi-label">RM Sheets (On Hand)</span>
+                        <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRmOnHand' : 'kpiRmOnHand'}">${rmValStr}</div>
+                        <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRmSubtext' : 'kpiRmSubtext'}" title="${escapeHtml(rmSubStr)}">${escapeHtml(rmSubStr)}</small>
+                    </div>
+                </div>
+
+                <div class="mo-kpi-card kpi-mrp-qty">
+                    <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                    <div class="mo-kpi-content">
+                        <span class="mo-kpi-label">MRP Monthly Target</span>
+                        <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMrpTarget' : 'kpiMrpTarget'}">${mrpValStr}</div>
+                        <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMrpSubtext' : 'kpiMrpSubtext'}" title="${escapeHtml(mrpSubStr)}">${escapeHtml(mrpSubStr)}</small>
+                    </div>
+                </div>
+
+                <div class="mo-kpi-card kpi-mo-produced">
+                    <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
+                    <div class="mo-kpi-content">
+                        <span class="mo-kpi-label">Parts Produced</span>
+                        <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMoProduced' : 'kpiMoProduced'}">${partsValStr}</div>
+                        <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMoProducedSubtext' : 'kpiMoProducedSubtext'}" title="${moCount} MO${moCount === 1 ? '' : 's'} produced (${partsCount} parts in ${plan?.target_month || 'month'})">${escapeHtml(moSubStr)}</small>
+                    </div>
+                </div>
+
+                <div class="mo-kpi-card kpi-remaining-qty">
+                    <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                    <div class="mo-kpi-content">
+                        <span class="mo-kpi-label">Remaining Quantity</span>
+                        <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRemainingQty' : 'kpiRemainingQty'}">${remValStr}</div>
+                        <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRemainingSubtext' : 'kpiRemainingSubtext'}" title="${escapeHtml(remSubStr)}">${escapeHtml(remSubStr)}</small>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Multi-Part: Sheet-Level RM Stock Card + Individual 3-Card Planning Sets for ALL Parts
+        container.innerHTML = `
+            <div class="multi-part-kpis-wrapper" id="${isReview ? 'reviewMultiPartKpisWrapper' : 'multiPartKpisWrapper'}">
+                <!-- 1. Sheet-Level RM Sheets On Hand (Shared across all parts on this sheet) -->
+                <div class="mo-kpi-card kpi-rm-stock" style="margin-bottom: 12px; display: flex; align-items: center; gap: 14px; background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 8px; padding: 12px 18px;">
+                    <div class="mo-kpi-icon" style="font-size: 1.3rem; color: #0284c7; background: #e0f2fe; width: 42px; height: 42px; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+                        <i class="fa-solid fa-layer-group"></i>
+                    </div>
+                    <div class="mo-kpi-content" style="flex: 1;">
+                        <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 6px;">
+                            <span class="mo-kpi-label" style="font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: #0369a1;">
+                                RM Sheets (On Hand) — Sheet Level Inventory
+                            </span>
+                            <span style="font-size: 0.78rem; color: #0284c7; font-weight: 700; background: #e0f2fe; padding: 2px 10px; border-radius: 12px; border: 1px solid #bae6fd;">
+                                <i class="fa-solid fa-shapes"></i> Multi-Part Sheet (${allPartsList.length} Parts Total)
+                            </span>
+                        </div>
+                        <div style="display: flex; align-items: baseline; gap: 12px; margin-top: 4px; flex-wrap: wrap;">
+                            <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRmOnHand' : 'kpiRmOnHand'}" style="font-size: 1.3rem; font-weight: 800; color: #0c4a6e;">${rmValStr}</div>
+                            <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRmSubtext' : 'kpiRmSubtext'}" style="color: #0369a1; font-weight: 600; font-size: 0.82rem;" title="${escapeHtml(rmSubStr)}">${escapeHtml(rmSubStr)}</small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 2. Individual Planning Indicators (MRP Target, Produced, Remaining) for Every Part -->
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    ${allPartsList.map((p, idx) => {
+                        const pNo = p.part_no || p.child_part_no || (idx === 0 ? targetPartNo : `Part ${idx + 1}`);
+                        const pSize = formatPartSize(p.part_size || (idx === 0 ? formattedPartSize : ""));
+                        const pMrp = (p.mrp_monthly_target !== null && p.mrp_monthly_target !== undefined)
+                            ? `${Number(p.mrp_monthly_target).toLocaleString()} Nos`
+                            : (idx === 0 ? mrpValStr : "- Nos");
+                        const pMoCount = (p.monthly_mo_count !== undefined)
+                            ? p.monthly_mo_count
+                            : (p.monthly_mo_records ? p.monthly_mo_records.length : 0);
+                        const pProducedCount = (p.parts_produced !== null && p.parts_produced !== undefined)
+                            ? Number(p.parts_produced).toLocaleString()
+                            : "0";
+                        const pProducedVal = (p.parts_produced !== null && p.parts_produced !== undefined)
+                            ? `${pProducedCount} Nos`
+                            : (idx === 0 ? partsValStr : "0 Nos");
+                        const pMoSub = `${pMoCount} MO${pMoCount === 1 ? '' : 's'} produced`;
+                        const pRem = (p.remaining_quantity !== null && p.remaining_quantity !== undefined)
+                            ? `${Number(p.remaining_quantity).toLocaleString()} Nos`
+                            : (idx === 0 ? remValStr : "- Nos");
+                        const pTargetQty = p.target_qty ? `${Number(p.target_qty).toLocaleString()} Nos` : "";
+
+                        return `
+                        <div class="multi-part-kpi-card" style="background: #ffffff; border: 1.5px solid ${idx === 0 ? '#bfdbfe' : '#e2e8f0'}; border-radius: 8px; padding: 12px 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.03);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <span class="part-kpi-badge ${idx === 0 ? 'primary' : 'secondary'}" style="${idx === 0 ? 'background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe;' : 'background: #f8fafc; color: #475569; border: 1px solid #cbd5e1;'} padding: 3px 10px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px;">
+                                        <i class="${idx === 0 ? 'fa-solid fa-star' : 'fa-solid fa-shapes'}" style="${idx === 0 ? 'color: #3b82f6;' : 'color: #64748b;'}"></i>
+                                        ${idx === 0 ? 'Base / Primary Part' : `Added Part ${idx}`}: <strong>${escapeHtml(pNo)}</strong>
+                                    </span>
+                                    ${pSize ? `
+                                    <span class="part-kpi-size-badge" style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 3px 8px; border-radius: 6px; font-size: 0.78rem; color: #334155; font-weight: 600; display: inline-flex; align-items: center; gap: 5px;">
+                                        <i class="fa-solid fa-ruler-combined" style="color: #64748b;"></i>
+                                        Part Size: <strong>${escapeHtml(pSize)}</strong>
+                                    </span>` : ''}
+                                </div>
+                                ${pTargetQty ? `
+                                <span class="part-kpi-output-badge" style="background: #ecfdf5; border: 1px solid #86efac; color: #166534; padding: 2px 10px; border-radius: 6px; font-size: 0.78rem; font-weight: 700;">
+                                    <i class="fa-solid fa-industry"></i> Plan Output: ${pTargetQty}
+                                </span>` : ''}
+                            </div>
+
+                            <div class="mo-kpi-row" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
+                                <div class="mo-kpi-card kpi-mrp-qty">
+                                    <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                                    <div class="mo-kpi-content">
+                                        <span class="mo-kpi-label">MRP Monthly Target</span>
+                                        <div class="mo-kpi-value">${pMrp}</div>
+                                        <small class="mo-kpi-subtext" title="${escapeHtml(pNo)} (Balance)">${escapeHtml(pNo)} (Balance)</small>
+                                    </div>
+                                </div>
+
+                                <div class="mo-kpi-card kpi-mo-produced">
+                                    <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
+                                    <div class="mo-kpi-content">
+                                        <span class="mo-kpi-label">Parts Produced</span>
+                                        <div class="mo-kpi-value">${pProducedVal}</div>
+                                        <small class="mo-kpi-subtext" title="${escapeHtml(pMoSub)}">${escapeHtml(pMoSub)}</small>
+                                    </div>
+                                </div>
+
+                                <div class="mo-kpi-card kpi-remaining-qty">
+                                    <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                                    <div class="mo-kpi-content">
+                                        <span class="mo-kpi-label">Remaining Quantity</span>
+                                        <div class="mo-kpi-value">${pRem}</div>
+                                        <small class="mo-kpi-subtext" title="MRP Bal - MO Produced">MRP Bal - MO Produced</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        `;
+                    }).join("")}
+                </div>
+            </div>
+        `;
+    }
+    container.style.display = "block";
 }
 
 
@@ -3483,14 +3951,16 @@ function renderIntelligenceCard(intel, isReview = false) {
     const container = document.getElementById(isReview ? "reviewMoKpiContainer" : "moKpiContainer");
 
     if (isReview) {
+        const revBanner = document.getElementById("reviewLayoutPartsBanner");
+        if (revBanner) revBanner.style.display = "none";
+
         if (container) {
-            container.style.display = "none";
-            container.innerHTML = "";
+            container.style.display = "block";
+            renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan, true);
         }
         const revCard = document.getElementById("reviewErpIntelCard");
         if (revCard) revCard.style.display = "none";
         if (activeReviewMo) {
-            renderReviewLayoutParts(activeReviewMo);
             renderReviewLayoutEndbits(activeReviewMo);
         }
     } else {
@@ -3892,6 +4362,13 @@ async function loadDbTableData() {
             iconEl.innerHTML = `<i class="fa-solid ${cfg.icon || 'fa-table'}"></i>`;
         }
 
+        // Toggle Add buttons for ERP team in table header
+        const isErp = (currentRole === "erp");
+        const tableAddRm = document.getElementById("tableAddRmBtn");
+        const tableAddPart = document.getElementById("tableAddPartBtn");
+        if (tableAddRm) tableAddRm.style.display = (isErp && currentDbTable === "rm") ? "inline-flex" : "none";
+        if (tableAddPart) tableAddPart.style.display = (isErp && currentDbTable === "parts") ? "inline-flex" : "none";
+
         // Render Head
         let columns = (data.columns || []).filter(c => !["sl_no", "slno", "s_no"].includes(c.toLowerCase()));
         if (currentDbTable === "erp_mo_reports") {
@@ -3988,6 +4465,35 @@ function formatCellValue(col, val, row) {
         const num = parseFloat(val);
         const cls = num > 0 ? "text-success" : "text-danger";
         return `<strong class="${cls}" style="font-size: 0.92rem;"><i class="fa-solid fa-layer-group"></i> ${num.toLocaleString()}</strong>`;
+    }
+
+    // Special handling for qty_to_produce (e.g. in MRP table)
+    if (col === "qty_to_produce") {
+        const sched = parseFloat(row?.monthly_schedule) || 0;
+        const curStock = parseFloat(row?.current_stock) || 0;
+        const remaining = sched > curStock ? (sched - curStock) : 0;
+        
+        if (remaining <= 0 || curStock >= sched) {
+            return `
+                <div style="display: inline-flex; align-items: center; gap: 6px;">
+                    <strong style="color: #059669; font-size: 0.92rem;">0 Nos</strong>
+                    <span class="mrp-stock-hint-badge" title="In-House Stock (${curStock.toLocaleString()} Nos) covers monthly schedule (${sched.toLocaleString()} Nos). Remaining qty to produce is 0." style="display: inline-flex; align-items: center; gap: 4px; background: #ecfdf5; border: 1px solid #86efac; color: #065f46; padding: 2px 8px; border-radius: 12px; font-size: 0.72rem; font-weight: 700; cursor: help;">
+                        <i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Stock: ${curStock.toLocaleString()} Nos
+                    </span>
+                </div>
+            `;
+        }
+        return `<strong style="color: #b45309; font-size: 0.92rem;">${remaining.toLocaleString()} Nos</strong>`;
+    }
+
+    if (col === "monthly_schedule" || col === "current_stock") {
+        const n = parseFloat(val);
+        return !isNaN(n) ? `<strong>${n.toLocaleString()} Nos</strong>` : escapeHtml(String(val));
+    }
+
+    if (col === "offtake") {
+        const n = parseFloat(val);
+        return !isNaN(n) ? `<span style="font-weight: 700; color: #0284c7; background: #f0fdf4; border: 1px solid #86efac; padding: 2px 8px; border-radius: 6px; font-size: 0.8rem;"><i class="fa-solid fa-shapes" style="font-size: 0.75rem; margin-right: 3px;"></i>${n.toLocaleString()} Nos</span>` : escapeHtml(String(val));
     }
 
     if (col === "target_qty" || col === "sheets_required" || col === "number_of_sheets" || col === "total_parent_qty" || col === "schedule_qty" || col === "total_qty" || col === "balance_qty" || col === "inhouse_erp_qty" || col === "outsource_erp_qty") {
@@ -4253,15 +4759,26 @@ function renderLayoutEndbits(record, sheetsNeeded = 1) {
         const pieceWeight = (len > 0 && wid > 0 && thick > 0) ? (len * wid * thick * 7.85 / 1000000) : 0;
         const totalWeight = pieceWeight * totalQty;
 
+        const gradeVal = record.grade || "YS";
+        const ebName = formatEndbitName({
+            grade: gradeVal,
+            thickness: thick,
+            length: len,
+            width: wid,
+            dim: dimStr,
+            name: eb.name
+        }, gradeVal);
+
         validEndbits.push({
-            name: eb.name || `End Bit - ${idx + 1}`,
+            name: ebName,
             dim: dimStr,
             thickness: thick,
             length: len,
             width: wid,
             qty_per_sheet: qtyPerSheet,
             total_qty: totalQty,
-            total_weight_kg: parseFloat(totalWeight.toFixed(2))
+            weight_kg: parseFloat(pieceWeight.toFixed(3)),
+            total_weight_kg: parseFloat(totalWeight.toFixed(3))
         });
     });
 
@@ -4283,16 +4800,21 @@ function renderLayoutEndbits(record, sheetsNeeded = 1) {
     let cardsHtml = "";
     validEndbits.forEach((eb) => {
         const gradeVal = record.grade || "YS";
+        const wtDisplay = formatEndbitWeight(eb, record.thickness || record.mat_thickness);
         cardsHtml += `
             <div class="endbit-mini-card neat-endbit-card">
                 <div class="reb-clean-field">
                     <span class="reb-clean-label">End Bit Name</span>
-                    <strong class="reb-clean-val reb-name-val"><i class="fa-solid fa-scissors" style="color: #0284c7; margin-right: 5px;"></i>${escapeHtml(eb.name)}</strong>
+                    <strong class="reb-clean-val reb-name-val"><i class="fa-solid fa-scissors" style="color: #0284c7; margin-right: 5px;"></i>${escapeHtml(eb.name || formatEndbitName(eb, gradeVal))}</strong>
                 </div>
                 <div class="reb-clean-row">
                     <div class="reb-clean-field">
                         <span class="reb-clean-label">No. of End Bits Produced</span>
                         <strong class="reb-clean-val">${eb.total_qty} Nos</strong>
+                    </div>
+                    <div class="reb-clean-field">
+                        <span class="reb-clean-label">Weight</span>
+                        <strong class="reb-clean-val" style="color: #047857;">${escapeHtml(wtDisplay)}</strong>
                     </div>
                     <div class="reb-clean-field" style="text-align: right;">
                         <span class="reb-clean-label">Grade</span>
@@ -4338,9 +4860,10 @@ function renderReviewEndbits(mo) {
     let cardsHtml = "";
     ebList.forEach((eb, idx) => {
         const ebId = eb.endbit_id || `EB-${mo.mo_number}-${idx + 1}`;
-        const ebName = eb.name || ebId;
+        const ebName = formatEndbitName(eb, mo.grade || mo.material_grade);
         const producedQty = eb.initial_qty || eb.total_qty || eb.qty || 1;
         const gradeVal = eb.grade || mo.grade || mo.material_grade || "YS";
+        const wtDisplay = formatEndbitWeight(eb, mo.thickness || mo.material_thickness);
         const availQty = eb.available_qty !== undefined ? eb.available_qty : producedQty;
 
         cardsHtml += `
@@ -4354,6 +4877,10 @@ function renderReviewEndbits(mo) {
                         <div class="reb-clean-field">
                             <span class="reb-clean-label">No. of End Bits Produced</span>
                             <strong class="reb-clean-val">${producedQty} Nos</strong>
+                        </div>
+                        <div class="reb-clean-field">
+                            <span class="reb-clean-label">Weight</span>
+                            <strong class="reb-clean-val" style="color: #047857;">${escapeHtml(wtDisplay)}</strong>
                         </div>
                         <div class="reb-clean-field" style="text-align: right;">
                             <span class="reb-clean-label">Grade</span>
@@ -4383,7 +4910,7 @@ async function loadEndbitsStoreData() {
     const tbody = document.getElementById("endbitsTableBody");
     const totalPill = document.getElementById("ebStoreTotalPill");
     if (tbody) {
-        tbody.innerHTML = `<tr><td colspan="7" class="loading-cell"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading end bits store...</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" class="loading-cell"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading end bits store...</td></tr>`;
     }
 
     try {
@@ -4425,7 +4952,7 @@ async function loadEndbitsStoreData() {
     } catch (err) {
         console.error("Error loading endbits store:", err);
         if (tbody) {
-            tbody.innerHTML = `<tr><td colspan="7" class="loading-cell text-danger">Failed to load end bits: ${escapeHtml(err.message)}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="loading-cell text-danger">Failed to load end bits: ${escapeHtml(err.message)}</td></tr>`;
         }
     }
 }
@@ -4446,7 +4973,7 @@ function renderEndbitsTable(endbits) {
     if (!endbits || endbits.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="${isShearing ? 5 : 4}" class="loading-cell text-muted" style="padding: 40px 20px;">
+                <td colspan="${isShearing ? 6 : 5}" class="loading-cell text-muted" style="padding: 40px 20px;">
                     <i class="fa-solid fa-scissors" style="font-size: 2rem; color: #cbd5e1; margin-bottom: 10px; display: block;"></i>
                     No end bits found matching your filter criteria.<br>
                     <small>When a Material Order is submitted with offcuts, they appear here.</small>
@@ -4457,17 +4984,23 @@ function renderEndbitsTable(endbits) {
     }
 
     tbody.innerHTML = endbits.map(eb => {
-        const ebName = eb.endbit_id || eb.name || "-";
+        const ebName = formatEndbitName(eb);
+        const ebId = eb.endbit_id || "";
         const produced = eb.initial_qty || eb.total_qty || eb.available_qty || 1;
-        const gradeVal = eb.grade || "YS";
+        const gradeVal = (eb.grade || "YS").toUpperCase();
         const moNum = eb.source_mo_number || eb.mo_number || "-";
         const avail = eb.available_qty !== undefined ? eb.available_qty : produced;
+        const wtDisplay = formatEndbitWeight(eb);
 
         return `
             <tr>
-                <td><code style="font-weight: 600; color: #0284c7; font-size: 0.88rem;"><i class="fa-solid fa-scissors" style="margin-right: 5px;"></i>${escapeHtml(ebName)}</code></td>
+                <td>
+                    <code style="font-weight: 700; color: #0369a1; font-size: 0.9rem;"><i class="fa-solid fa-scissors" style="margin-right: 5px; color: #0284c7;"></i>${escapeHtml(ebName)}</code>
+                    ${ebId ? `<small class="text-muted" style="display: block; font-size: 0.75rem; margin-top: 2px;">${escapeHtml(ebId)}</small>` : ''}
+                </td>
                 <td><strong style="color: #0f172a; font-size: 0.92rem;">${produced} Nos</strong></td>
                 <td><span class="reb-grade-pill">${escapeHtml(gradeVal)}</span></td>
+                <td><strong style="color: #047857; font-size: 0.92rem;">${escapeHtml(wtDisplay)}</strong></td>
                 <td>
                     <button class="btn-link-action" onclick="openReviewModal('${escapeHtml(moNum)}')">
                         ${escapeHtml(moNum)}
@@ -4555,23 +5088,26 @@ function downloadEndbitsReport() {
         doc.setFontSize(8);
         doc.text(`Generated: ${nowStr} | Total Records: ${allEndbits.length}`, pageWidth - margin, 14, { align: "right" });
 
-        // Table Columns: End Bit Name, No. of End Bits Produced, Grade, Source MO #
+        // Table Columns: End Bit Name, No. of End Bits Produced, Grade, Weight (kg), Source MO #
         const tableColumns = [
             { header: "End Bit Name", dataKey: "endbit_id" },
             { header: "No. of End Bits Produced", dataKey: "qty" },
             { header: "Grade", dataKey: "grade" },
+            { header: "Weight (kg)", dataKey: "weight" },
             { header: "Source MO #", dataKey: "source_mo" }
         ];
 
         const tableRows = allEndbits.map(eb => {
-            const ebName = eb.endbit_id || eb.name || "-";
+            const ebName = formatEndbitName(eb);
             const produced = eb.initial_qty || eb.total_qty || eb.available_qty || 1;
-            const gradeVal = eb.grade || "YS";
+            const gradeVal = (eb.grade || "YS").toUpperCase();
             const moNum = eb.source_mo_number || eb.mo_number || "-";
+            const wtDisplay = formatEndbitWeight(eb);
             return {
                 endbit_id: ebName,
                 qty: `${produced} Nos`,
                 grade: gradeVal,
+                weight: wtDisplay,
                 source_mo: moNum
             };
         });
@@ -5019,7 +5555,7 @@ function openAddManualEndbitModal() {
 
     const genSuffix = Date.now().toString().slice(-6);
     if (idInput) idInput.value = `EB-MAN-${genSuffix}`;
-    if (nameInput) nameInput.value = "End bit - Shop Floor Offcut";
+    if (nameInput) nameInput.value = "ys - 4.8*0*0";
     if (thickInput) thickInput.value = "4.8";
     if (lenInput) lenInput.value = "";
     if (widInput) widInput.value = "";
@@ -5042,6 +5578,17 @@ function calculateManualEbWeight() {
     const len = parseFloat(document.getElementById("manEbLength")?.value) || 0;
     const wid = parseFloat(document.getElementById("manEbWidth")?.value) || 0;
     const qty = parseInt(document.getElementById("manEbQty")?.value) || 1;
+    const grade = (document.getElementById("manEbGrade")?.value || "ys").trim().toLowerCase();
+    const nameInput = document.getElementById("manEbName");
+
+    if (nameInput) {
+        nameInput.value = formatEndbitName({
+            grade: grade,
+            thickness: thick,
+            length: len,
+            width: wid
+        });
+    }
 
     const dimPreview = document.getElementById("manEbDimPreview");
     const weightPreview = document.getElementById("manEbWeightPreview");
@@ -5116,6 +5663,277 @@ async function submitAddManualEndbit(e) {
 }
 
 /* =========================================================================
+   ERP MASTER DATA MANAGEMENT (ADD RM SHEET & ADD PART MASTER)
+   ========================================================================= */
+
+function openAddRmModal() {
+    if (currentRole !== "erp") {
+        alert("Access Restricted: Only the ERP Team can add new Raw Material sheets to Master Data.");
+        return;
+    }
+    const modal = document.getElementById("addRmModal");
+    if (!modal) return;
+
+    // Reset fields to sensible defaults
+    const gradeInp = document.getElementById("newRmGrade");
+    const thkInp = document.getElementById("newRmThickness");
+    const lenInp = document.getElementById("newRmLength");
+    const widInp = document.getElementById("newRmWidth");
+    const sheetsInp = document.getElementById("newRmSheets");
+
+    if (gradeInp) gradeInp.value = "CRCA";
+    if (thkInp) thkInp.value = "2.0";
+    if (lenInp) lenInp.value = "2500";
+    if (widInp) widInp.value = "1250";
+    if (sheetsInp) sheetsInp.value = "50";
+
+    calculateRmCodeAndWeight();
+    modal.style.display = "flex";
+}
+
+function closeAddRmModal() {
+    const modal = document.getElementById("addRmModal");
+    if (modal) modal.style.display = "none";
+}
+
+function calculateRmCodeAndWeight(isManualWeightEdit = false) {
+    const grade = (document.getElementById("newRmGrade")?.value || "CRCA").trim().toUpperCase();
+    const thk = parseFloat(document.getElementById("newRmThickness")?.value) || 0;
+    const len = parseFloat(document.getElementById("newRmLength")?.value) || 0;
+    const wid = parseFloat(document.getElementById("newRmWidth")?.value) || 0;
+    const sheets = parseInt(document.getElementById("newRmSheets")?.value) || 0;
+
+    const rmCodeInput = document.getElementById("newRmCode");
+    if (rmCodeInput) {
+        const thkStr = (thk % 1 === 0) ? thk.toFixed(1) : String(thk);
+        const maxDim = Math.max(len, wid);
+        const minDim = Math.min(len, wid);
+        rmCodeInput.value = `${grade}-${thkStr}-${Math.round(maxDim)}-${Math.round(minDim)}`;
+    }
+
+    const unitWtInput = document.getElementById("newRmUnitWeight");
+    let unitWeight = parseFloat(unitWtInput?.value) || 0;
+
+    if (!isManualWeightEdit && thk > 0 && len > 0 && wid > 0) {
+        // Density 7.85 kg/dm3 -> (T * L * W * 7.85) / 1,000,000
+        unitWeight = Math.round((thk * len * wid * 7.85) / 10000.0) / 100.0;
+        if (unitWtInput) unitWtInput.value = unitWeight.toFixed(2);
+    }
+
+    const totalStockWeight = Math.round(unitWeight * sheets * 100) / 100;
+
+    const dimPrev = document.getElementById("newRmDimPreview");
+    const wtPrev = document.getElementById("newRmWeightPreview");
+    const totalPrev = document.getElementById("newRmTotalStockWeight");
+
+    if (dimPrev) dimPrev.textContent = `${thk} × ${len} × ${wid} mm`;
+    if (wtPrev) wtPrev.textContent = `Calculated Unit Weight: ~${unitWeight.toFixed(2)} kg`;
+    if (totalPrev) totalPrev.textContent = `~${totalStockWeight.toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})} kg (${sheets} Sheets)`;
+}
+
+async function submitAddRmForm(e) {
+    e.preventDefault();
+    const form = document.getElementById("addRmForm");
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    const submitBtn = document.getElementById("submitAddRmBtn");
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Saving RM Sheet...`;
+    }
+
+    try {
+        const res = await fetch("/api/rm/create", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+            const resp = await res.json();
+            alert(`🎉 Raw Material Sheet Successfully Recorded!\n\n` +
+                  `• RM Code: ${resp.rm_code}\n` +
+                  `• Opening Stock: ${data.available_sheets} Sheets\n` +
+                  `• Unit Weight: ${data.weight_per_sheet} kg\n\n` +
+                  `This RM is now active in the live store and ready for shearing production!`);
+
+            closeAddRmModal();
+            if (currentDbTable === "rm") {
+                await loadDbTableData();
+            }
+            await loadStats();
+        } else {
+            const err = await res.json();
+            alert(`Failed to save RM sheet: ${err.error || 'Server error'}`);
+        }
+    } catch (err) {
+        console.error("RM sheet submission failed:", err);
+        alert("Failed to save RM sheet. Please check network connection.");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save RM Sheet to Store`;
+        }
+    }
+}
+
+function openAddPartModal() {
+    if (currentRole !== "erp") {
+        alert("Access Restricted: Only the ERP Team can add new Part specifications to Master Data.");
+        return;
+    }
+    const modal = document.getElementById("addPartModal");
+    if (!modal) return;
+
+    // Reset defaults
+    const partNo = document.getElementById("newPartNo");
+    const basePart = document.getElementById("newBasePart");
+    const desc = document.getElementById("newPartDesc");
+    const grade = document.getElementById("newPartGrade");
+    const thk = document.getElementById("newPartThickness");
+    const len = document.getElementById("newPartLength");
+    const wid = document.getElementById("newPartWidth");
+    const offtake = document.getElementById("newPartOfftake");
+    const stripQty = document.getElementById("newPartStripQty");
+    const sched = document.getElementById("newPartMonthlySched");
+    const stock = document.getElementById("newPartCurrentStock");
+
+    if (partNo) partNo.value = "";
+    if (basePart) basePart.value = "";
+    if (desc) desc.value = "";
+    if (grade) grade.value = "BSK";
+    if (thk) thk.value = "5.8";
+    if (len) len.value = "200";
+    if (wid) wid.value = "151";
+    if (offtake) offtake.value = "2";
+    if (stripQty) stripQty.value = "1";
+    if (sched) sched.value = "";
+    if (stock) stock.value = "0";
+
+    calculatePartWeight();
+    populateStandardRmDropdownForPartModal();
+    modal.style.display = "flex";
+}
+
+function closeAddPartModal() {
+    const modal = document.getElementById("addPartModal");
+    if (modal) modal.style.display = "none";
+}
+
+function onNewPartNoInput(val) {
+    const basePartInput = document.getElementById("newBasePart");
+    if (basePartInput) {
+        basePartInput.value = (val || "").trim().split(" - ")[0].split(" / ")[0];
+    }
+}
+
+function calculatePartWeight() {
+    const thk = parseFloat(document.getElementById("newPartThickness")?.value) || 0;
+    const len = parseFloat(document.getElementById("newPartLength")?.value) || 0;
+    const wid = parseFloat(document.getElementById("newPartWidth")?.value) || 0;
+
+    let partWeight = 0;
+    if (thk > 0 && len > 0 && wid > 0) {
+        partWeight = Math.round((thk * len * wid * 7.85) / 1000.0) / 1000.0;
+    }
+
+    const wtInput = document.getElementById("newPartWeight");
+    if (wtInput) wtInput.value = partWeight.toFixed(3);
+
+    const dimPrev = document.getElementById("newPartDimPreview");
+    const wtPrev = document.getElementById("newPartWeightPreview");
+
+    if (dimPrev) dimPrev.textContent = `${thk} × ${len} × ${wid} mm`;
+    if (wtPrev) wtPrev.textContent = `Calculated Blank Weight: ~${partWeight.toFixed(3)} kg`;
+}
+
+async function populateStandardRmDropdownForPartModal() {
+    const select = document.getElementById("newPartStandardRm");
+    if (!select) return;
+
+    const grade = (document.getElementById("newPartGrade")?.value || "").trim();
+    const thk = parseFloat(document.getElementById("newPartThickness")?.value) || 0;
+
+    select.innerHTML = `<option value="">-- Select Standard RM Sheet --</option>`;
+
+    try {
+        const res = await fetch(`/api/clean/rms?grade=${encodeURIComponent(grade)}&thickness=${encodeURIComponent(thk)}`);
+        if (res.ok) {
+            const rms = await res.json();
+            if (rms && rms.length > 0) {
+                rms.forEach(r => {
+                    const opt = document.createElement("option");
+                    opt.value = r.rm_code;
+                    opt.textContent = `${r.rm_code} (${r.available_sheets} sheets in store)`;
+                    select.appendChild(opt);
+                });
+            }
+        }
+    } catch (e) {
+        console.warn("Could not load suggested standard RM:", e);
+    }
+}
+
+async function submitAddPartForm(e) {
+    e.preventDefault();
+    const form = document.getElementById("addPartForm");
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    const submitBtn = document.getElementById("submitAddPartBtn");
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Saving Part...`;
+    }
+
+    try {
+        const res = await fetch("/api/part/create", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+            const resp = await res.json();
+            alert(`🎉 Part Master Successfully Created!\n\n` +
+                  `• Part No: ${resp.part_no}\n` +
+                  `• Grade: ${data.grade}\n` +
+                  `• Blank Size: ${data.thickness} × ${data.length} × ${data.width} mm\n` +
+                  `• Offtake: ${data.offtake} Nos\n\n` +
+                  `This part is now available immediately in the Master Catalog, autocompletes, and live MO generation!`);
+
+            closeAddPartModal();
+            if (currentDbTable === "parts") {
+                await loadDbTableData();
+            }
+            await loadStats();
+        } else {
+            const err = await res.json();
+            alert(`Failed to save part master: ${err.error || 'Server error'}`);
+        }
+    } catch (err) {
+        console.error("Part master submission failed:", err);
+        alert("Failed to save part. Please check network connection.");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save Part Master`;
+        }
+    }
+}
+
+/* =========================================================================
    CREATE MATERIAL ORDER FOR END BITS (MANUAL OFFCUT SHEARING - NO LAYOUTS)
    ========================================================================= */
 
@@ -5151,8 +5969,9 @@ async function populateEbMoDropdown(preselectedId = null) {
         availableEndbits.forEach(eb => {
             const opt = document.createElement("option");
             opt.value = eb.endbit_id;
+            const ebName = formatEndbitName(eb);
             const dimStr = eb.dimensions || eb.dim || `${eb.thickness}*${eb.length}*${eb.width}`;
-            opt.textContent = `[${eb.name || 'End bit'}] ${eb.endbit_id} • ${dimStr} mm`;
+            opt.textContent = `[${ebName}] ${eb.endbit_id} • ${dimStr} mm`;
             opt.dataset.record = JSON.stringify(eb);
             group.appendChild(opt);
         });
@@ -5166,10 +5985,11 @@ async function populateEbMoDropdown(preselectedId = null) {
         } else {
             chipsGrid.innerHTML = availableEndbits.map(eb => {
                 const isSelected = preselectedId === eb.endbit_id;
+                const ebName = formatEndbitName(eb);
                 return `
                     <button type="button" class="eb-chip-btn ${isSelected ? 'active' : ''}" onclick="selectEbFromChip('${escapeHtml(eb.endbit_id)}')" style="background: ${isSelected ? '#0284c7' : '#f1f5f9'}; color: ${isSelected ? '#fff' : '#334155'}; border: 1px solid ${isSelected ? '#0284c7' : '#cbd5e1'}; padding: 5px 10px; border-radius: 6px; font-size: 0.8rem; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
                         <i class="fa-solid fa-scissors"></i>
-                        <strong>${escapeHtml(eb.name || 'End bit')}</strong>
+                        <strong>${escapeHtml(ebName)}</strong>
                     </button>
                 `;
             }).join("");
@@ -5536,11 +6356,68 @@ function onEbPartRowSizeInput(inputEl, rowId) {
     recalculateAllEbTotals();
 }
 
+/**
+ * Calculates optimal 2D guillotine cut capacity matching OptiCutter.
+ * Evaluates uniform grids and multi-block guillotine splits (both vertical and horizontal cuts).
+ */
+function calculateMaxGuillotineBlanks(sheetLen, sheetWid, blankLen, blankWid, kerf = 0) {
+    const sL = Math.max(parseFloat(sheetLen) || 0, parseFloat(sheetWid) || 0);
+    const sW = Math.min(parseFloat(sheetLen) || 0, parseFloat(sheetWid) || 0);
+    const bL = Math.max(parseFloat(blankLen) || 0, parseFloat(blankWid) || 0);
+    const bW = Math.min(parseFloat(blankLen) || 0, parseFloat(blankWid) || 0);
+    if (sL <= 0 || sW <= 0 || bL <= 0 || bW <= 0) return 0;
+    if (bL > sL || bW > sW) return 0;
+
+    const k = Math.max(0, parseFloat(kerf) || 0);
+    let best = 0;
+
+    // 1. Uniform 0 deg
+    best = Math.max(best, Math.floor(sL / (bL + k)) * Math.floor(sW / (bW + k)));
+    // 2. Uniform 90 deg
+    best = Math.max(best, Math.floor(sL / (bW + k)) * Math.floor(sW / (bL + k)));
+
+    const pairs = [
+        { l1: bL, w1: bW, l2: bW, w2: bL },
+        { l1: bW, w1: bL, l2: bL, w2: bW }
+    ];
+
+    // 3. Vertical splits (along sL)
+    pairs.forEach(({ l1, w1, l2, w2 }) => {
+        const nx1 = Math.floor(sL / (l1 + k));
+        const ny1 = Math.floor(sW / (w1 + k));
+        for (let col = 1; col < nx1; col++) {
+            const remL = sL - col * (l1 + k);
+            const nx2 = Math.floor(remL / (l2 + k));
+            const ny2 = Math.floor(sW / (w2 + k));
+            if (nx2 > 0 && ny2 > 0) {
+                best = Math.max(best, col * ny1 + nx2 * ny2);
+            }
+        }
+    });
+
+    // 4. Horizontal splits (along sW)
+    pairs.forEach(({ l1, w1, l2, w2 }) => {
+        const nx1 = Math.floor(sL / (l1 + k));
+        const ny1 = Math.floor(sW / (w1 + k));
+        for (let row = 1; row < ny1; row++) {
+            const remW = sW - row * (w1 + k);
+            const nx2 = Math.floor(sL / (l2 + k));
+            const ny2 = Math.floor(remW / (w2 + k));
+            if (nx2 > 0 && ny2 > 0) {
+                best = Math.max(best, nx1 * row + nx2 * ny2);
+            }
+        }
+    });
+
+    return best;
+}
+
 function checkRowEbCapacity(rowId, autoApply = false) {
     const feedbackEl = document.getElementById(`ebAgentFeedback_${rowId}`);
     const sizeInput = document.getElementById(`ebPartSize_${rowId}`);
     const qtyInput = document.getElementById(`ebPartQty_${rowId}`);
     const yieldInput = document.getElementById(`ebPartYield_${rowId}`);
+    const rowEl = document.getElementById(`ebPartRow_${rowId}`);
 
     const endbitsUsedInput = document.getElementById("ebEndbitsUsed");
     const endbitsCount = Math.max(1, parseInt(endbitsUsedInput?.value) || 1);
@@ -5612,9 +6489,17 @@ function checkRowEbCapacity(rowId, autoApply = false) {
         sizeInput.style.backgroundColor = "#f0fdf4";
     }
 
+    // Optimal 2D guillotine cut capacity matching OptiCutter
+    const guillotineBlanks = calculateMaxGuillotineBlanks(ebMax, ebMin, bMax, bMin);
     const opt1 = Math.floor(ebMax / bMax) * Math.floor(ebMin / bMin);
     const opt2 = Math.floor(ebMax / bMin) * Math.floor(ebMin / bMax);
-    const partsPerEb = Math.max(opt1, opt2, 1);
+    let partsPerEb = Math.max(guillotineBlanks, opt1, opt2, 1);
+
+    // If OptiCutter has verified a placement on this row or layout is attached, honor verified count
+    if (rowEl && rowEl.dataset.opticutterBlanks) {
+        partsPerEb = Math.max(partsPerEb, parseInt(rowEl.dataset.opticutterBlanks) || 0);
+    }
+
     const totalMaxParts = partsPerEb * endbitsCount;
     const totalPlateArea = offLen * offWid * endbitsCount;
     const maxCapacityYield = Math.min(100, Math.round(((totalMaxParts * cutLen * cutWid) / totalPlateArea) * 1000) / 10);
@@ -5634,7 +6519,10 @@ function checkRowEbCapacity(rowId, autoApply = false) {
         }
     }
 
-    const hasCapacityShortage = enteredQty > totalMaxParts;
+    const totalCutArea = enteredQty * cutLen * cutWid;
+    const isOptiCutterVerified = Boolean((rowEl && rowEl.dataset.opticutterBlanks) || activeEbOptiCutterLayoutFile);
+    // Capacity shortage check: strictly only flag shortage if entered quantity exceeds maximum guillotine capacity AND total raw material area
+    const hasCapacityShortage = (enteredQty > totalMaxParts) && (totalCutArea > totalPlateArea || !isOptiCutterVerified);
     feedbackEl.style.display = "block";
 
     if (hasCapacityShortage) {
@@ -5657,7 +6545,7 @@ function checkRowEbCapacity(rowId, autoApply = false) {
                     <i class="fa-solid fa-triangle-exclamation" style="color: #dc2626; font-size: 1.1rem; margin-top: 2px;"></i>
                     <div>
                         <span style="font-weight: 700; color: #b91c1c;">⚠️ RM Shortfall (${enteredQty} requested vs ${totalMaxParts} max capacity):</span>
-                        <span style="display: block; margin-top: 2px;">${endbitsCount} selected end-bit(s) can only produce <strong>${totalMaxParts} parts</strong> (${partsPerEb} blanks/plate).</span>
+                        <span style="display: block; margin-top: 2px;">${endbitsCount} selected end-bit(s) can produce <strong>${totalMaxParts} parts</strong> (${partsPerEb} blanks/plate).</span>
                         <span style="display: block; font-size: 0.74rem; color: #7f1d1d; margin-top: 2px;">
                             Deficit of <strong>${shortage} parts</strong>. Need at least <strong>${neededEbs} end-bits</strong> to produce ${enteredQty} parts.
                         </span>
@@ -5682,11 +6570,15 @@ function checkRowEbCapacity(rowId, autoApply = false) {
             yieldInput.style.color = "#059669";
         }
 
+        const verificationBadge = isOptiCutterVerified ?
+            `<span style="color: #0369a1; font-weight: 700; background: #e0f2fe; padding: 1px 6px; border-radius: 3px; font-size: 0.72rem; margin-left: 4px;"><i class="fa-solid fa-circle-check"></i> OptiCutter 2D Nesting Verified</span>` :
+            `<span style="color: #059669; font-weight: 700; font-size: 0.72rem; margin-left: 4px;">(2D Guillotine Nesting)</span>`;
+
         feedbackEl.innerHTML = `
             <div style="display: flex; align-items: center; justify-content: space-between; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 5px 10px; font-size: 0.78rem; color: #166534;">
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <i class="fa-solid fa-calculator" style="color: #16a34a;"></i>
-                    <span><strong>Agent Pro-Rata Capacity:</strong> Fits <strong>${partsPerEb} blanks/endbit</strong> × <strong>${endbitsCount} endbits</strong> = <strong style="color: #15803d; font-size: 0.88rem;">${totalMaxParts} Max Parts</strong> (${maxCapacityYield}% Max Yield)</span>
+                    <span><strong>Agent Capacity:</strong> Fits <strong>${partsPerEb} blanks/endbit</strong> × <strong>${endbitsCount} endbits</strong> = <strong style="color: #15803d; font-size: 0.88rem;">${totalMaxParts} Max Parts</strong> (${maxCapacityYield}% Max Yield) ${verificationBadge}</span>
                 </div>
                 <button type="button" class="btn btn-primary btn-xs" onclick="applyEbAgentParts(${rowId}, ${totalMaxParts}, '${maxCapacityYield}%')" style="padding: 2px 8px; font-size: 0.72rem; font-weight: 600; border-radius: 4px; background: #0284c7; border-color: #0284c7; color: #fff; cursor: pointer;">
                     <i class="fa-solid fa-check"></i> ${enteredQty === totalMaxParts ? 'Optimal Capacity' : `Set to ${totalMaxParts} Max`}
@@ -5709,6 +6601,13 @@ function checkRowEbCapacity(rowId, autoApply = false) {
 function applyEbAgentParts(rowId, maxParts, yieldStr) {
     const qtyInput = document.getElementById(`ebPartQty_${rowId}`);
     const yieldInput = document.getElementById(`ebPartYield_${rowId}`);
+    const rowEl = document.getElementById(`ebPartRow_${rowId}`);
+    const endbitsUsedInput = document.getElementById("ebEndbitsUsed");
+    const endbitsCount = Math.max(1, parseInt(endbitsUsedInput?.value) || 1);
+
+    if (rowEl) {
+        rowEl.dataset.opticutterBlanks = Math.ceil(maxParts / endbitsCount);
+    }
     if (qtyInput) {
         qtyInput.value = maxParts;
         qtyInput.style.borderColor = "";
@@ -5903,12 +6802,20 @@ async function submitCreateEndbitMo(e) {
             }
 
             // 2. Pro-Rata Capacity Check: Does requested quantity exceed raw material capacity?
+            const guillotineBlanks = calculateMaxGuillotineBlanks(ebMax, ebMin, bMax, bMin);
             const opt1 = Math.floor(ebMax / bMax) * Math.floor(ebMin / bMin);
-            const opt2 = Math.floor(ebMax / bMin) * Math.floor(ebMin / bMax);
-            const partsPerEb = Math.max(opt1, opt2, 1);
-            const maxPartsAllowed = partsPerEb * endbitsCount;
+            const opt2 = Math.floor(ebMax / bMin) * Math.floor(ebMin / bMin);
+            let partsPerEb = Math.max(guillotineBlanks, opt1, opt2, 1);
 
-            if (p.no_of_parts > maxPartsAllowed) {
+            const rowEl = Array.from(rows).find(r => r.querySelector(".eb-part-no")?.value?.trim() === p.part_no);
+            if (rowEl && rowEl.dataset.opticutterBlanks) {
+                partsPerEb = Math.max(partsPerEb, parseInt(rowEl.dataset.opticutterBlanks) || 0);
+            }
+            const maxPartsAllowed = partsPerEb * endbitsCount;
+            const isOptiCutterVerified = Boolean((rowEl && rowEl.dataset.opticutterBlanks) || activeEbOptiCutterLayoutFile);
+            const partTotalCutArea = p.cut_length * p.cut_width * p.no_of_parts;
+
+            if (p.no_of_parts > maxPartsAllowed && (partTotalCutArea > totalOffcutArea || !isOptiCutterVerified)) {
                 const neededEbs = Math.ceil(p.no_of_parts / partsPerEb);
                 alert(`❌ Cannot create MO: Raw Material Shortage!\n\nRequested ${p.no_of_parts} parts for '${p.part_no}' exceeds the capacity of ${endbitsCount} selected end-bit(s).\n\n• Maximum Producible: ${maxPartsAllowed} parts (${partsPerEb} blanks/plate)\n• End-bits Required: at least ${neededEbs} end-bits for ${p.no_of_parts} parts\n\nWithout sufficient raw material, you cannot produce these parts. Please click 'Cap to ${maxPartsAllowed} Parts' or increase the number of end-bits.`);
                 return;
@@ -5932,6 +6839,10 @@ async function submitCreateEndbitMo(e) {
         formData.set("layout_doc", activeEbOptiCutterLayoutFile);
     }
 
+    // Pass calculated blanks_per_endbit to backend
+    const firstRowBlanks = rows[0]?.dataset?.opticutterBlanks ? parseInt(rows[0].dataset.opticutterBlanks) : calculateMaxGuillotineBlanks(ebMax, ebMin, parts[0].cut_length, parts[0].cut_width);
+    formData.set("blanks_per_endbit", Math.max(1, firstRowBlanks || 1));
+
     // Primary part for high-level lists
     formData.set("part_no", parts[0].part_no);
     formData.set("base_part", parts[0].base_part);
@@ -5945,12 +6856,21 @@ async function submitCreateEndbitMo(e) {
     if (chosenEbId && chosenEbId !== "__manual__") {
         formData.set("endbit_id", chosenEbId);
         if (currentSelectedEndbit) {
-            formData.set("endbit_name", currentSelectedEndbit.name || "End bit");
+            formData.set("endbit_name", formatEndbitName(currentSelectedEndbit));
             formData.set("source_mo_number", currentSelectedEndbit.source_mo_number || currentSelectedEndbit.mo_number || "");
         }
     } else {
+        const ebGrade = document.getElementById("ebGradeInput")?.value || "ys";
+        const ebThick = parseFloat(document.getElementById("ebThickness")?.value) || 4.8;
+        const ebLen = parseFloat(document.getElementById("ebOffcutLength")?.value) || 0;
+        const ebWid = parseFloat(document.getElementById("ebOffcutWidth")?.value) || 0;
         formData.set("endbit_id", "");
-        formData.set("endbit_name", "Shop Floor Offcut");
+        formData.set("endbit_name", formatEndbitName({
+            grade: ebGrade,
+            thickness: ebThick,
+            length: ebLen,
+            width: ebWid
+        }));
     }
 
     const submitBtn = document.getElementById("submitEbMoBtn");
@@ -6116,37 +7036,762 @@ async function generateOptiCutterLayoutFile(filename = "OptiCutter_Layout_Plan.p
     });
 }
 
+// ============================================================================
+// Modal "Parts to Cut on this Sheet" (Add Part Section) Logic
+// ============================================================================
+let addModalPartCounter = 0;
+
+function addModalAdditionalPartRow() {
+    const list = document.getElementById("modalAdditionalPartsList");
+    if (!list) return;
+
+    const rowIdx = addModalPartCounter++;
+    const row = document.createElement("div");
+    row.className = "modal-add-part-card modal-add-part-row";
+    row.id = `modalAddPartRow_${rowIdx}`;
+
+    row.innerHTML = `
+        <!-- Row 1: Part Inputs Grid -->
+        <div class="modal-add-part-grid">
+            <div class="form-col" style="position: relative;">
+                <label>Part Number <span style="color:#ef4444;">*</span></label>
+                <div class="part-search-input-wrap">
+                    <i class="fa-solid fa-barcode"></i>
+                    <input type="text" class="add-part-no" id="addPartNo_${rowIdx}" placeholder="Type Part Number..." autocomplete="off" oninput="searchAdditionalPartForModal(${rowIdx}, this.value)" style="height: 38px !important; font-size: 0.85rem; padding-left: 32px !important;">
+                    <div class="part-dropdown-results add-part-dropdown" id="addPartDropdown_${rowIdx}" style="display: none;"></div>
+                </div>
+            </div>
+
+            <div class="form-col">
+                <label>Grade</label>
+                <input type="text" class="add-part-grade" id="addPartGrade_${rowIdx}" readonly placeholder="Auto" style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 700; color: #0284c7; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+            </div>
+
+            <div class="form-col">
+                <label>Size (T × L × W)</label>
+                <input type="text" class="add-part-size" id="addPartSize_${rowIdx}" readonly placeholder="Auto" style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 600; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+                <input type="hidden" class="add-part-len" id="addPartLen_${rowIdx}">
+                <input type="hidden" class="add-part-wid" id="addPartWid_${rowIdx}">
+                <input type="hidden" class="add-part-thick" id="addPartThick_${rowIdx}">
+            </div>
+
+            <div class="form-col">
+                <label>Strip/Blank</label>
+                <input type="text" class="add-part-strip" id="addPartStrip_${rowIdx}" readonly placeholder="Auto" style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 700; color: #0369a1; background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 6px;">
+            </div>
+
+            <div class="form-col">
+                <label>Offtake</label>
+                <input type="text" class="add-part-offtake" id="addPartOfftake_${rowIdx}" readonly placeholder="Auto" style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 700; color: #0284c7; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 6px;">
+            </div>
+
+            <div class="form-col">
+                <label>Blanks Qty <span style="color:#ef4444;">*</span></label>
+                <input type="number" min="1" step="1" class="add-part-qty" id="addPartQty_${rowIdx}" value="1" oninput="onAddPartQtyChanged()" style="height: 38px !important; font-size: 0.95rem; text-align: center; font-weight: 700; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+            </div>
+
+            <div class="form-col" style="justify-content: flex-end;">
+                <button type="button" class="btn btn-sm btn-danger" onclick="removeModalAdditionalPartRow(${rowIdx})" style="height: 38px; width: 38px; min-width: 38px; padding: 0; border-radius: 6px; background: #fee2e2; border: 1.5px solid #fca5a5; color: #b91c1c; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Remove this part">
+                    <i class="fa-solid fa-trash"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Row 3: 3 Cards/Tabs for this Added Part: MRP Quantity, Current Stock, Qty to Produce -->
+        <div class="modal-add-part-mrp-tabs" id="addPartMrpRow_${rowIdx}">
+            <div class="modal-add-part-mrp-card" style="background: #f5f3ff; border: 1.5px solid #ddd6fe;">
+                <div style="width: 28px; height: 28px; border-radius: 5px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                    <i class="fa-solid fa-calendar-days"></i>
+                </div>
+                <div class="card-info">
+                    <span class="card-title" style="color: #6d28d9;">MRP Quantity</span>
+                    <div class="card-val" id="addPartMrpQty_${rowIdx}" style="color: #5b21b6;">- Nos</div>
+                </div>
+            </div>
+
+            <div class="modal-add-part-mrp-card" style="background: #ecfdf5; border: 1.5px solid #a7f3d0;">
+                <div style="width: 28px; height: 28px; border-radius: 5px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <div class="card-info">
+                    <span class="card-title" style="color: #047857;">Current Stock</span>
+                    <div class="card-val" id="addPartCurStock_${rowIdx}" style="color: #065f46;">- Nos</div>
+                </div>
+            </div>
+
+            <div class="modal-add-part-mrp-card" style="background: #fffbeb; border: 1.5px solid #fde68a;">
+                <div style="width: 28px; height: 28px; border-radius: 5px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                    <i class="fa-solid fa-industry"></i>
+                </div>
+                <div class="card-info">
+                    <span class="card-title" style="color: #b45309;">Qty to Produce</span>
+                    <div class="card-val" id="addPartToProduce_${rowIdx}" style="color: #92400e;">- Nos</div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    list.appendChild(row);
+    updateModalAddPartsCountBadge();
+
+    const input = document.getElementById(`addPartNo_${rowIdx}`);
+    if (input) input.focus();
+}
+
+function removeModalAdditionalPartRow(rowIdx) {
+    const row = document.getElementById(`modalAddPartRow_${rowIdx}`);
+    if (row) row.remove();
+    updateModalAddPartsCountBadge();
+    onAddPartQtyChanged();
+}
+
+function updateModalAddPartsCountBadge() {
+    const badge = document.getElementById("addPartsCountBadge");
+    const count = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row").length;
+    if (badge) {
+        badge.textContent = count === 0 ? "1 Part" : `${1 + count} Parts`;
+    }
+}
+
+let addPartSearchTimer = null;
+function searchAdditionalPartForModal(rowIdx, query) {
+    clearTimeout(addPartSearchTimer);
+    const dropdown = document.getElementById(`addPartDropdown_${rowIdx}`);
+    if (!query || query.trim().length < 2) {
+        if (dropdown) dropdown.style.display = "none";
+        return;
+    }
+
+    addPartSearchTimer = setTimeout(async () => {
+        try {
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}`);
+            if (res.ok) {
+                const results = await res.json();
+                if (dropdown) {
+                    if (results.length === 0) {
+                        dropdown.innerHTML = `<div class="part-dropdown-item text-muted">No matching parts found.</div>`;
+                    } else {
+                        dropdown.innerHTML = results.map(r => {
+                            const sizeStr = (r.thickness && r.length && r.width) ? `${r.thickness}×${r.length}×${r.width} mm` : '';
+                            const metaBadge = [r.grade, sizeStr, `Offtake: ${r.offtake || 1} Nos`].filter(Boolean).join(' • ');
+                            return `
+                                <div class="part-dropdown-item" onclick="selectAdditionalPartForModal(${rowIdx}, '${escapeHtml(r.part_no)}')">
+                                    <div>
+                                        <strong>${escapeHtml(r.part_no)}</strong>
+                                        <small class="text-muted"> (${r.rm_count} RM codes)</small>
+                                    </div>
+                                    <span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600; font-size:0.75rem;">${escapeHtml(metaBadge || r.base_part)}</span>
+                                </div>
+                            `;
+                        }).join("");
+                    }
+                    dropdown.style.display = "block";
+                }
+            }
+        } catch (e) {
+            console.error("Additional part search error:", e);
+        }
+    }, 200);
+}
+
+async function selectAdditionalPartForModal(rowIdx, partNo) {
+    const input = document.getElementById(`addPartNo_${rowIdx}`);
+    const dropdown = document.getElementById(`addPartDropdown_${rowIdx}`);
+    if (input) input.value = partNo;
+    if (dropdown) dropdown.style.display = "none";
+
+    try {
+        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const records = data.records || [];
+        const r = records[0] || {};
+        const p1 = r.part1 || {};
+
+        const gradeEl = document.getElementById(`addPartGrade_${rowIdx}`);
+        const sizeEl = document.getElementById(`addPartSize_${rowIdx}`);
+        const lenEl = document.getElementById(`addPartLen_${rowIdx}`);
+        const widEl = document.getElementById(`addPartWid_${rowIdx}`);
+        const thickEl = document.getElementById(`addPartThick_${rowIdx}`);
+        const stripEl = document.getElementById(`addPartStrip_${rowIdx}`);
+        const offtakeEl = document.getElementById(`addPartOfftake_${rowIdx}`);
+        const qtyEl = document.getElementById(`addPartQty_${rowIdx}`);
+
+        const gradeVal = r.grade || data.grade || "HR";
+        const thickVal = parseFloat(r.thickness || data.thickness || 0);
+
+        let pL = 0, pW = 0;
+        if (p1.blank_size?.length && p1.blank_size?.width) {
+            pL = parseFloat(p1.blank_size.length);
+            pW = parseFloat(p1.blank_size.width);
+        } else if (p1.cut_blank) {
+            const d = parseDimString(p1.cut_blank, thickVal);
+            pL = d.l; pW = d.w;
+        } else if (r.length && r.width) {
+            pL = parseFloat(r.length);
+            pW = parseFloat(r.width);
+        }
+
+        if (gradeEl) gradeEl.value = gradeVal;
+        if (sizeEl) sizeEl.value = (p1.cut_blank || `${thickVal}*${pL}*${pW}`);
+        if (lenEl) lenEl.value = pL;
+        if (widEl) widEl.value = pW;
+        if (thickEl) thickEl.value = thickVal;
+
+        const stripVal = p1.strip_qty || r.strip_qty || 1;
+        if (stripEl) stripEl.value = `${stripVal} Nos`;
+
+        const offtakeVal = data.offtake || r.offtake || Math.max(1, Math.round((parseFloat(p1.blank_qty) || 1) * stripVal));
+        if (offtakeEl) offtakeEl.value = `${offtakeVal} Nos`;
+
+        if (qtyEl && (!qtyEl.value || qtyEl.value === "1")) {
+            qtyEl.value = offtakeVal;
+        }
+
+        // Populate the 3 MRP Cards for this added part (Live from 7-table Supabase DB)
+        const mrp = data.mrp || {};
+        const sched = Number(mrp.monthly_schedule || 0);
+        const curStock = Number(mrp.current_stock || 0);
+        let remQty = 0;
+        let isCoveredByStock = false;
+
+        if (mrp.monthly_schedule !== undefined) {
+            if (curStock >= sched) {
+                remQty = 0;
+                isCoveredByStock = true;
+            } else {
+                remQty = sched - curStock;
+            }
+        }
+
+        const mrpQ = mrp.monthly_schedule !== undefined ? `${sched.toLocaleString()} Nos` : "- Nos";
+        const curS = mrp.current_stock !== undefined ? `${curStock.toLocaleString()} Nos` : "- Nos";
+
+        const mrpQEl = document.getElementById(`addPartMrpQty_${rowIdx}`);
+        const curSEl = document.getElementById(`addPartCurStock_${rowIdx}`);
+        const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+        if (mrpQEl) mrpQEl.textContent = mrpQ;
+        if (curSEl) curSEl.textContent = curS;
+        if (toPEl) {
+            if (mrp.monthly_schedule !== undefined) {
+                if (isCoveredByStock) {
+                    toPEl.innerHTML = `0 Nos <small style="display:inline-block; margin-left:6px; font-size:0.7rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Stock: ${curStock.toLocaleString()} Nos</small>`;
+                } else {
+                    toPEl.textContent = `${remQty.toLocaleString()} Nos`;
+                }
+            } else {
+                toPEl.textContent = "- Nos";
+            }
+        }
+
+        onAddPartQtyChanged();
+    } catch (e) {
+        console.error("Error loading additional part details:", e);
+    }
+}
+
+function refreshModalIntelligenceForCurrentParts() {
+    const basePartNo = document.getElementById("partNoInput")?.value?.trim();
+    if (!basePartNo) return;
+    const rmSelect = document.getElementById("rmErpSelect");
+    const selOpt = rmSelect?.selectedOptions[0];
+    let rmCode = selOpt?.value || "";
+    if (rmCode === "__custom__" && window._selectedCustomRmRecord) {
+        rmCode = window._selectedCustomRmRecord.rm_code || "";
+    }
+    const grade = document.getElementById("gradeInput")?.value?.trim() || "";
+    const thickness = document.getElementById("thicknessInput")?.value?.trim() || "";
+    const length = document.getElementById("sheetLengthInput")?.value?.trim() || "";
+    const width = document.getElementById("sheetWidthInput")?.value?.trim() || "";
+    const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
+
+    const allParts = [basePartNo];
+    document.querySelectorAll("#modalAdditionalPartsList .add-part-no").forEach(inp => {
+        const val = inp.value?.trim();
+        if (val && !allParts.includes(val)) allParts.push(val);
+    });
+
+    fetchAndDisplayIntelligence(
+        basePartNo,
+        rmCode,
+        grade,
+        thickness,
+        length,
+        width,
+        sheetsNeeded,
+        false,
+        allParts
+    );
+}
+
+function onAddPartQtyChanged() {
+    recalculateTargetQtyFromLayout();
+    refreshModalIntelligenceForCurrentParts();
+    if (typeof fetchAiPartSuggestions === "function") {
+        fetchAiPartSuggestions(activeAiFilterMode || "all");
+    }
+}
+
+window.addModalAdditionalPartRow = addModalAdditionalPartRow;
+window.removeModalAdditionalPartRow = removeModalAdditionalPartRow;
+window.searchAdditionalPartForModal = searchAdditionalPartForModal;
+window.selectAdditionalPartForModal = selectAdditionalPartForModal;
+window.onAddPartQtyChanged = onAddPartQtyChanged;
+window.refreshModalIntelligenceForCurrentParts = refreshModalIntelligenceForCurrentParts;
+
+// ============================================================================
+// AI PART CO-PRODUCTION & YIELD ADVISOR AGENT
+// Autonomous companion part recommender: First priority = Highest Sheet Yield Boost,
+// Second priority = Low stock / pending MRP demand
+// ============================================================================
+let activeAiFilterMode = "all";
+let currentAiSuggestionsData = null;
+let isAiSuggestionsLoading = false;
+
+async function fetchAiPartSuggestions(filterMode = "all") {
+    activeAiFilterMode = filterMode;
+    const basePartNo = document.getElementById("partNoInput")?.value?.trim();
+    if (!basePartNo) {
+        const inlineBanner = document.getElementById("inlineAiPartSuggestionsBanner");
+        if (inlineBanner) inlineBanner.style.display = "none";
+        return;
+    }
+
+    const sLen = parseFloat(document.getElementById("sheetLengthInput")?.value) || 2500;
+    const sWid = parseFloat(document.getElementById("sheetWidthInput")?.value) || 1250;
+    const grade = document.getElementById("gradeInput")?.value?.trim() || "";
+    const thickness = parseFloat(document.getElementById("thicknessInput")?.value) || 0;
+    const baseBlanks = parseInt(document.getElementById("autoTargetQtyDisplay")?.textContent) || 1;
+
+    // Collect all currently added parts so we don't suggest duplicates
+    const currentParts = [basePartNo];
+    document.querySelectorAll("#modalAdditionalPartsList .add-part-no").forEach(inp => {
+        const val = inp.value?.trim();
+        if (val && !currentParts.includes(val)) currentParts.push(val);
+    });
+
+    isAiSuggestionsLoading = true;
+    const modalCardsContainer = document.getElementById("aiAdvisorCardsContainer");
+    if (modalCardsContainer && document.getElementById("modalAiPartSuggestions")?.style.display === "flex") {
+        modalCardsContainer.innerHTML = `
+            <div style="padding: 30px; text-align: center; color: #6d28d9;">
+                <i class="fa-solid fa-spinner fa-spin fa-2x" style="margin-bottom: 10px;"></i>
+                <div style="font-weight: 700;">AI Agent Nesting Simulator Running...</div>
+                <small style="color: #64748b;">Evaluating 2D guillotine cut yield and MRP inventory for companion parts</small>
+            </div>
+        `;
+    }
+
+    try {
+        const params = new URLSearchParams({
+            base_part: basePartNo,
+            sheet_length: sLen,
+            sheet_width: sWid,
+            grade: grade,
+            thickness: thickness,
+            base_blanks: baseBlanks,
+            filter_mode: filterMode,
+            current_parts: currentParts.join(",")
+        });
+
+        const res = await fetch(`/api/intelligence/suggest-parts?${params.toString()}`);
+        if (!res.ok) {
+            console.error("AI suggestions fetch failed:", res.status);
+            return;
+        }
+
+        const data = await res.json();
+        currentAiSuggestionsData = data;
+
+        // Render inline quick-cards
+        renderInlineAiPartSuggestions(data);
+
+        // Render full modal content if modal is open
+        if (document.getElementById("modalAiPartSuggestions")?.style.display === "flex") {
+            renderAiAdvisorModalContent(data);
+        }
+    } catch (err) {
+        console.error("Failed to load AI companion parts:", err);
+    } finally {
+        isAiSuggestionsLoading = false;
+    }
+}
+
+function renderInlineAiPartSuggestions(data) {
+    const banner = document.getElementById("inlineAiPartSuggestionsBanner");
+    const cardsWrap = document.getElementById("inlineAiSuggestionsCards");
+    if (!banner || !cardsWrap) return;
+
+    const recs = data?.recommendations || [];
+    if (!data || !data.success || recs.length === 0) {
+        banner.style.display = "none";
+        return;
+    }
+
+    // Show top 3-4 recommendation cards inline
+    const topCandidates = recs.slice(0, 3);
+    cardsWrap.innerHTML = topCandidates.map((cand, idx) => {
+        const boostVal = parseFloat(cand.yield_boost || 0);
+        const boostSign = boostVal > 0 ? `+${boostVal.toFixed(1)}%` : `${boostVal.toFixed(1)}%`;
+        const boostColor = boostVal > 0 ? "#059669" : "#64748b";
+        const qtyProduce = parseInt(cand.qty_to_produce || 0);
+        const curStock = parseInt(cand.current_stock || 0);
+
+        let qtyBadgeBg = "#fef3c7";
+        let qtyBadgeColor = "#b45309";
+        let qtyLabel = `${qtyProduce.toLocaleString()} to produce`;
+        if (qtyProduce >= 100) {
+            qtyBadgeBg = "#fee2e2";
+            qtyBadgeColor = "#b91c1c";
+            qtyLabel = `🔥 High Demand: ${qtyProduce.toLocaleString()} Nos`;
+        } else if (qtyProduce > 0 && qtyProduce < 50) {
+            qtyBadgeBg = "#fef9c3";
+            qtyBadgeColor = "#854d0e";
+            qtyLabel = `⚡ Scrap Filler: ${qtyProduce} Nos`;
+        } else if (qtyProduce === 0) {
+            qtyBadgeBg = "#f1f5f9";
+            qtyBadgeColor = "#475569";
+            qtyLabel = `Stock: ${curStock.toLocaleString()} Nos`;
+        }
+
+        return `
+            <div style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 1px 3px rgba(0,0,0,0.05); transition: border-color 0.2s;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 5px;">
+                    <div>
+                        <strong style="font-size: 0.88rem; color: #1e293b; display: block;">${escapeHtml(cand.part_no)}</strong>
+                        <div style="font-size: 0.72rem; color: #64748b;">${escapeHtml(cand.grade)} • ${escapeHtml(cand.blank_size_str)} mm</div>
+                    </div>
+                    <span style="font-size: 0.68rem; font-weight: 800; background: #e0f2fe; color: #0369a1; padding: 2px 7px; border-radius: 4px;">
+                        #${idx + 1} Fit
+                    </span>
+                </div>
+                
+                <div style="display: flex; align-items: center; gap: 6px; margin: 5px 0; flex-wrap: wrap;">
+                    <span style="font-size: 0.72rem; font-weight: 700; background: #ecfdf5; color: ${boostColor}; border: 1px solid #a7f3d0; padding: 2px 6px; border-radius: 4px;" title="Combined Multi-Part Sheet Yield">
+                        <i class="fa-solid fa-arrow-trend-up"></i> ${cand.combined_yield.toFixed(1)}% (${boostSign})
+                    </span>
+                    <span style="font-size: 0.72rem; font-weight: 700; background: ${qtyBadgeBg}; color: ${qtyBadgeColor}; padding: 2px 6px; border-radius: 4px;" title="Pending MRP Demand / In-Hand Stock">
+                        ${escapeHtml(qtyLabel)}
+                    </span>
+                </div>
+
+                <div style="margin-top: 8px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 6px;">
+                    <small style="font-size: 0.72rem; color: #64748b; font-weight: 600;">Nests ${cand.recommended_blanks} blanks</small>
+                    <button type="button" class="btn btn-sm btn-primary" onclick="addSuggestedPartToCutList('${escapeHtml(cand.part_no)}', ${cand.recommended_blanks})" style="font-size: 0.74rem; padding: 3px 10px; font-weight: 700; border-radius: 5px; background: #0284c7; color: #fff; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 1px 2px rgba(2, 132, 199, 0.2);">
+                        <i class="fa-solid fa-plus"></i> Add to Sheet
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join("");
+
+    banner.style.display = "block";
+}
+
+function openAiPartSuggestionsModal() {
+    const basePartNo = document.getElementById("partNoInput")?.value?.trim();
+    if (!basePartNo) {
+        alert("Please select a primary part first before opening the AI Co-Production Advisor.");
+        return;
+    }
+
+    const modal = document.getElementById("modalAiPartSuggestions");
+    if (!modal) return;
+
+    // Populate Context Ribbon
+    const grade = document.getElementById("gradeInput")?.value?.trim() || "HR";
+    const thickness = document.getElementById("thicknessInput")?.value?.trim() || "0";
+    const sLen = document.getElementById("sheetLengthInput")?.value?.trim() || "2500";
+    const sWid = document.getElementById("sheetWidthInput")?.value?.trim() || "1250";
+
+    const baseEl = document.getElementById("aiAdvisorBasePartDisplay");
+    const gradeEl = document.getElementById("aiAdvisorGradeDisplay");
+    const sheetEl = document.getElementById("aiAdvisorSheetSizeDisplay");
+    const baseYieldEl = document.getElementById("aiAdvisorBaselineYieldDisplay");
+
+    if (baseEl) baseEl.textContent = basePartNo;
+    if (gradeEl) gradeEl.textContent = `${grade} (${thickness} mm)`;
+    if (sheetEl) sheetEl.textContent = `${sLen} × ${sWid} mm`;
+    if (baseYieldEl) baseYieldEl.textContent = currentAiSuggestionsData?.baseline_yield ? `${currentAiSuggestionsData.baseline_yield.toFixed(1)}%` : "-%";
+
+    modal.style.display = "flex";
+
+    // Reset tabs
+    document.querySelectorAll(".ai-filter-tab").forEach(tab => {
+        if (tab.getAttribute("data-mode") === (activeAiFilterMode || "all")) {
+            tab.style.background = "#7c3aed";
+            tab.style.color = "#fff";
+            tab.style.borderColor = "#7c3aed";
+        } else {
+            tab.style.background = "#fff";
+            tab.style.color = "#334155";
+            tab.style.borderColor = "#cbd5e1";
+        }
+    });
+
+    fetchAiPartSuggestions(activeAiFilterMode || "all");
+}
+
+function closeAiPartSuggestionsModal() {
+    const modal = document.getElementById("modalAiPartSuggestions");
+    if (modal) modal.style.display = "none";
+}
+
+function setAiAdvisorFilterMode(mode, btn) {
+    activeAiFilterMode = mode;
+    // Sync modal tabs
+    document.querySelectorAll(".ai-filter-tab").forEach(tab => {
+        if (tab.getAttribute("data-mode") === mode) {
+            tab.style.background = "#7c3aed";
+            tab.style.color = "#fff";
+            tab.style.borderColor = "#7c3aed";
+        } else {
+            tab.style.background = "#fff";
+            tab.style.color = "#334155";
+            tab.style.borderColor = "#cbd5e1";
+        }
+    });
+
+    // Sync inline chips
+    const chipMap = {
+        all: "chipAiAll",
+        more_qty: "chipAiMoreQty",
+        less_qty: "chipAiLessQty",
+        max_yield: "chipAiMaxYield"
+    };
+    document.querySelectorAll(".inline-ai-chip").forEach(chip => {
+        chip.style.background = "#fff";
+        chip.style.color = "#334155";
+        chip.style.borderColor = "#cbd5e1";
+    });
+    const activeChipId = chipMap[mode];
+    if (activeChipId) {
+        const c = document.getElementById(activeChipId);
+        if (c) {
+            c.style.background = "#059669";
+            c.style.color = "#fff";
+            c.style.borderColor = "#059669";
+        }
+    }
+
+    fetchAiPartSuggestions(mode);
+}
+
+function renderAiAdvisorModalContent(data) {
+    const container = document.getElementById("aiAdvisorCardsContainer");
+    const execText = document.getElementById("aiAdvisorExecutiveText");
+    const baseYieldEl = document.getElementById("aiAdvisorBaselineYieldDisplay");
+    if (!container) return;
+
+    if (baseYieldEl && data.baseline_yield) {
+        baseYieldEl.textContent = `${data.baseline_yield.toFixed(1)}%`;
+    }
+
+    if (execText && data.ai_executive_summary) {
+        execText.innerHTML = `<strong>Autonomous Recommendation:</strong> ${escapeHtml(data.ai_executive_summary)}`;
+    }
+
+    const recs = data.recommendations || [];
+    if (recs.length === 0) {
+        container.innerHTML = `
+            <div style="background: #ffffff; border: 1.5px dashed #cbd5e1; border-radius: 8px; padding: 30px; text-align: center; color: #64748b;">
+                <i class="fa-solid fa-shapes fa-2x" style="margin-bottom: 10px; color: #94a3b8;"></i>
+                <div style="font-weight: 700; color: #1e293b;">No matching candidate parts found for this filter</div>
+                <small>Try selecting "Top Ranked" or verifying that parts with grade "${escapeHtml(data.grade)}" and thickness "${data.thickness}mm" exist in the parts master.</small>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = recs.map((cand, idx) => {
+        const boostVal = parseFloat(cand.yield_boost || 0);
+        const boostSign = boostVal > 0 ? `+${boostVal.toFixed(1)}%` : `${boostVal.toFixed(1)}%`;
+        const boostColor = boostVal > 0 ? "#059669" : "#64748b";
+
+        const isUrgent = cand.stock_status === "CRITICAL_ZERO" || cand.stock_status === "LOW_STOCK";
+        const stockBadgeBg = isUrgent ? "#fee2e2" : "#fef3c7";
+        const stockBadgeColor = isUrgent ? "#b91c1c" : "#b45309";
+
+        return `
+            <div class="ai-candidate-card" style="background: #ffffff; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.03); transition: all 0.2s; position: relative;">
+                <!-- Card Header -->
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; flex-wrap: wrap; gap: 8px;">
+                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                        <span style="background: #7c3aed; color: #fff; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 12px;">
+                            #${idx + 1} Best Match
+                        </span>
+                        <span style="background: ${cand.badge_color}18; color: ${cand.badge_color}; border: 1px solid ${cand.badge_color}40; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 6px;">
+                            <i class="fa-solid fa-tag"></i> ${escapeHtml(cand.badge_title)}
+                        </span>
+                        <h4 style="margin: 0; font-size: 0.96rem; font-weight: 800; color: #1e293b;">
+                            ${escapeHtml(cand.part_no)}
+                        </h4>
+                        <span style="background: #e0f2fe; color: #0284c7; font-size: 0.72rem; font-weight: 700; padding: 2px 7px; border-radius: 4px;">
+                            ${escapeHtml(cand.grade)} ${cand.thickness}mm Match
+                        </span>
+                    </div>
+
+                    <button type="button" class="btn btn-sm btn-primary" onclick="addSuggestedPartToCutList('${escapeHtml(cand.part_no)}', ${cand.recommended_blanks})" style="font-size: 0.8rem; font-weight: 700; padding: 5px 14px; border-radius: 6px; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; box-shadow: 0 2px 4px rgba(2, 132, 199, 0.25);">
+                        <i class="fa-solid fa-plus"></i> Add to Sheet (${cand.recommended_blanks} Blanks)
+                    </button>
+                </div>
+
+                <!-- Two-Column Grid: Left: Blank Geometry & Yield / Right: MRP Demand & Inventory -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 10px;">
+                    <!-- Left: 2D Yield Simulation -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 0.72rem; font-weight: 700; color: #475569; text-transform: uppercase;">
+                                <i class="fa-solid fa-vector-square" style="color: #0284c7;"></i> Blank Geometry
+                            </span>
+                            <span style="font-size: 0.75rem; font-weight: 700; color: #1e293b;">
+                                ${escapeHtml(cand.blank_size_str)} mm
+                            </span>
+                        </div>
+
+                        <!-- Yield Comparison Meter -->
+                        <div style="margin-top: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.74rem; font-weight: 700; margin-bottom: 3px;">
+                                <span style="color: #64748b;">Single Yield: ${cand.baseline_yield.toFixed(1)}%</span>
+                                <span style="color: ${boostColor};">Combo Yield: ${cand.combined_yield.toFixed(1)}% (${boostSign})</span>
+                            </div>
+                            <div style="height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; display: flex;">
+                                <div style="width: ${Math.min(100, cand.baseline_yield)}%; background: #94a3b8;" title="Baseline Single-Part Yield"></div>
+                                <div style="width: ${Math.max(0, cand.combined_yield - cand.baseline_yield)}%; background: #10b981;" title="Yield Boost"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right: MRP Demand & Stock -->
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                            <span style="font-size: 0.72rem; font-weight: 700; color: #475569; text-transform: uppercase;">
+                                <i class="fa-solid fa-boxes-stacked" style="color: #7c3aed;"></i> MRP Inventory Status
+                            </span>
+                            <span style="font-size: 0.7rem; font-weight: 700; background: ${stockBadgeBg}; color: ${stockBadgeColor}; padding: 1px 6px; border-radius: 4px;">
+                                ${escapeHtml(cand.stock_label)}
+                            </span>
+                        </div>
+                        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; text-align: center; margin-top: 6px;">
+                            <div style="background: #fff; padding: 4px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                                <span style="font-size: 0.65rem; color: #64748b; display: block;">Monthly Demand</span>
+                                <strong style="font-size: 0.8rem; color: #4338ca;">${cand.mrp_monthly_target.toLocaleString()}</strong>
+                            </div>
+                            <div style="background: #fff; padding: 4px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                                <span style="font-size: 0.65rem; color: #64748b; display: block;">Current Stock</span>
+                                <strong style="font-size: 0.8rem; color: #047857;">${cand.current_stock.toLocaleString()}</strong>
+                            </div>
+                            <div style="background: #fff; padding: 4px; border-radius: 4px; border: 1px solid #e2e8f0;">
+                                <span style="font-size: 0.65rem; color: #64748b; display: block;">To Produce</span>
+                                <strong style="font-size: 0.8rem; color: #b45309;">${cand.qty_to_produce.toLocaleString()}</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Engineering Justification Note -->
+                <div style="background: #fbfbfe; border-left: 3px solid #7c3aed; padding: 6px 10px; border-radius: 0 4px 4px 0; font-size: 0.76rem; color: #4b5563; line-height: 1.4;">
+                    <i class="fa-solid fa-sparkles" style="color: #8b5cf6; margin-right: 4px;"></i>
+                    <strong>AI Rationale:</strong> ${escapeHtml(cand.ai_rationale)}
+                </div>
+            </div>
+        `;
+    }).join("");
+}
+
+async function addSuggestedPartToCutList(partNo, blanksQty = 1) {
+    if (!partNo) return;
+
+    // 1. Add a new row to modalAdditionalPartsList
+    addModalAdditionalPartRow();
+
+    // 2. Locate the row index of the newly added card
+    const rows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+    const lastRow = rows[rows.length - 1];
+    if (!lastRow) return;
+    const rowIdx = parseInt(lastRow.id.replace("modalAddPartRow_", ""));
+
+    // 3. Populate part details via selectAdditionalPartForModal
+    await selectAdditionalPartForModal(rowIdx, partNo);
+
+    // 4. Set the recommended blanks qty
+    const qtyInput = document.getElementById(`addPartQty_${rowIdx}`);
+    if (qtyInput && blanksQty) {
+        qtyInput.value = blanksQty;
+    }
+
+    // 5. Trigger recalculation and OptiCutter update
+    onAddPartQtyChanged();
+
+    // 6. Close the modal if open
+    closeAiPartSuggestionsModal();
+
+    // 7. Visual highlight on the added row
+    lastRow.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    lastRow.style.transition = "background-color 0.4s ease, border-color 0.4s ease";
+    lastRow.style.backgroundColor = "#eff6ff";
+    lastRow.style.borderColor = "#0284c7";
+    setTimeout(() => {
+        lastRow.style.backgroundColor = "";
+        lastRow.style.borderColor = "";
+    }, 1800);
+
+    // Refresh inline AI suggestions excluding this newly added part
+    fetchAiPartSuggestions(activeAiFilterMode || "all");
+}
+
+window.fetchAiPartSuggestions = fetchAiPartSuggestions;
+window.openAiPartSuggestionsModal = openAiPartSuggestionsModal;
+window.closeAiPartSuggestionsModal = closeAiPartSuggestionsModal;
+window.setAiAdvisorFilterMode = setAiAdvisorFilterMode;
+window.addSuggestedPartToCutList = addSuggestedPartToCutList;
+
 /**
  * Opens 2D Cut Optimizer for Normal MO Modal (Standard or Custom RM)
  */
 async function openCutOptimizerForModal() {
     cutOptCallingContext = "moModal";
 
-    let sLen = parseFloat(document.getElementById("lengthInput")?.value) || 0;
-    let sWid = parseFloat(document.getElementById("widthInput")?.value) || 0;
     const sheetSizeStr = document.getElementById("sheetSizeInput")?.value || "";
     const thickVal = parseFloat(document.getElementById("thicknessInput")?.value) || 0;
 
-    if ((!sLen || !sWid) && sheetSizeStr) {
-        const d = parseDimString(sheetSizeStr, thickVal);
-        if (d.l > 0 && d.w > 0) {
-            sLen = d.l;
-            sWid = d.w;
+    // Determine Sheet Dimensions from selected RM Sheet (Standard or Custom RM)
+    let sLen = 0;
+    let sWid = 0;
+    const rmSelect = document.getElementById("rmErpSelect");
+    const selOpt = rmSelect?.selectedOptions[0];
+    let rmRec = selOpt?.dataset?.record ? JSON.parse(selOpt.dataset.record) : null;
+    if (!rmRec && window._selectedCustomRmRecord) {
+        rmRec = window._selectedCustomRmRecord;
+    }
+    if (rmRec) {
+        sLen = parseFloat(rmRec.length) || 0;
+        sWid = parseFloat(rmRec.width) || 0;
+        if ((!sLen || !sWid) && rmRec.sheet_size) {
+            const sd = parseDimString(rmRec.sheet_size, thickVal);
+            if (sd.l > 0 && sd.w > 0) { sLen = sd.l; sWid = sd.w; }
         }
     }
-
     if (!sLen || !sWid) {
         sLen = 2500;
         sWid = 1250;
     }
 
-    // Determine Blank dimensions
+    // Determine Base Part Blank dimensions (from sheetSizeInput or layoutRec)
     let bLen = 0;
     let bWid = 0;
     const partNo = document.getElementById("partNoInput")?.value?.trim() || "Part";
     const layoutRec = typeof getSelectedLayoutRecord === "function" ? getSelectedLayoutRecord() : null;
 
-    if (layoutRec) {
+    if (sheetSizeStr) {
+        const d = parseDimString(sheetSizeStr, thickVal);
+        if (d.l > 0 && d.w > 0) {
+            bLen = d.l;
+            bWid = d.w;
+        }
+    }
+
+    if ((!bLen || !bWid) && layoutRec) {
         const p1 = layoutRec.part1 || {};
         const p1Bs = p1.blank_size || {};
 
@@ -6195,10 +7840,47 @@ async function openCutOptimizerForModal() {
         bWid = 300;
     }
 
-    // Check for multiple parts in non-standard layout container
+    // 1. Check for parts added in the modal's Add Part section (modalAdditionalPartsList)
+    const modalAddRows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+    const modalAddPartsList = [];
+    if (modalAddRows && modalAddRows.length > 0) {
+        modalAddRows.forEach((r, idx) => {
+            const pNo = r.querySelector(".add-part-no")?.value?.trim();
+            let pL = parseFloat(r.querySelector(".add-part-len")?.value) || 0;
+            let pW = parseFloat(r.querySelector(".add-part-wid")?.value) || 0;
+            const pThick = parseFloat(r.querySelector(".add-part-thick")?.value) || thickVal || 0;
+            const sizeVal = r.querySelector(".add-part-size")?.value?.trim() || "";
+            if ((!pL || !pW) && sizeVal) {
+                const d = parseDimString(sizeVal, pThick);
+                if (d.l > 0 && d.w > 0) { pL = d.l; pW = d.w; }
+            }
+            const pQty = Math.max(1, parseInt(r.querySelector(".add-part-qty")?.value) || 1);
+            if (pNo && pL > 0 && pW > 0) {
+                modalAddPartsList.push({
+                    row_id: idx + 2,
+                    part_no: pNo,
+                    length: Math.max(pL, pW),
+                    width: Math.min(pL, pW),
+                    qty: pQty
+                });
+            }
+        });
+    }
+
+    // Check for multiple parts in non-standard layout container or modal additional parts
     const nonStdRows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
     const nonStdPartsList = [];
-    if (nonStdRows && nonStdRows.length > 0) {
+    if (modalAddPartsList.length > 0) {
+        const baseQty = window._basePartPlacedBlanks || (layoutRec?.part1?.blank_qty ? parseFloat(layoutRec.part1.blank_qty) : 1);
+        nonStdPartsList.push({
+            row_id: 1,
+            part_no: partNo || "Base Part",
+            length: Math.max(bLen, bWid),
+            width: Math.min(bLen, bWid),
+            qty: baseQty,
+            is_base: true
+        }, ...modalAddPartsList);
+    } else if (nonStdRows && nonStdRows.length > 0) {
         nonStdRows.forEach((r, idx) => {
             const rowId = r.dataset.rowId || (idx + 1);
             let pNo = r.querySelector(".nonstd-part-no")?.value?.trim() || "";
@@ -6820,23 +8502,57 @@ async function applyCutOptimizerResults() {
         // ---------------------------------------------------------------------
         // 1. END BIT MO CONTEXT
         // ---------------------------------------------------------------------
-        const totalYieldDisplay = document.getElementById("totalYieldDisplay");
-        const yieldHidden = document.getElementById("yieldHidden");
+        const endbitsUsedInput = document.getElementById("ebEndbitsUsed");
+        const endbitsCount = Math.max(1, parseInt(endbitsUsedInput?.value) || 1);
+
+        const totalYieldDisplay = document.getElementById("ebTotalYieldDisplay");
+        const yieldHidden = document.getElementById("ebYieldInput");
         if (yieldHidden) yieldHidden.value = `${yieldVal}%`;
         if (totalYieldDisplay) totalYieldDisplay.innerHTML = `<span style="color: #059669; font-weight: 700;">${yieldVal}%</span>`;
 
-        // If part row exists, update blanks per endbit
         const rows = document.querySelectorAll(".eb-part-card-row");
-        if (rows.length > 0 && totalBlanks > 0) {
-            const firstRow = rows[0];
-            const blanksInput = firstRow.querySelector(".eb-blanks-per-endbit");
-            if (blanksInput) {
-                blanksInput.value = totalBlanks;
-                if (typeof recalculateEbPartRow === "function") {
-                    recalculateEbPartRow(firstRow);
+
+        if (currentCutOptResult.is_multi_part && currentCutOptResult.parts_summary && currentCutOptResult.parts_summary.length > 0) {
+            // Multi-part nesting
+            currentCutOptResult.parts_summary.forEach((ps, idx) => {
+                let targetRow = null;
+                if (ps.row_id) {
+                    targetRow = document.getElementById(`ebPartRow_${ps.row_id}`);
                 }
+                if (!targetRow && rows[idx]) {
+                    targetRow = rows[idx];
+                }
+                if (targetRow) {
+                    targetRow.dataset.opticutterBlanks = ps.placed_qty;
+                    const qInput = targetRow.querySelector(".eb-part-qty");
+                    if (qInput) qInput.value = ps.placed_qty * endbitsCount;
+                    const yInput = targetRow.querySelector(".eb-part-yield");
+                    const sLen = parseFloat(document.getElementById("optSheetLength")?.value) || 1;
+                    const sWid = parseFloat(document.getElementById("optSheetWidth")?.value) || 1;
+                    const partYield = Math.min(100, Math.round(((ps.placed_qty * ps.length * ps.width) / (sLen * sWid)) * 1000) / 10);
+                    if (yInput) {
+                        yInput.value = `${partYield}%`;
+                        yInput.style.color = "#059669";
+                    }
+                    const rowId = targetRow.dataset.rowId;
+                    if (rowId) checkRowEbCapacity(rowId, false);
+                }
+            });
+        } else if (rows.length > 0 && totalBlanks > 0) {
+            // Single-part nesting
+            const firstRow = rows[0];
+            firstRow.dataset.opticutterBlanks = totalBlanks;
+            const qInput = firstRow.querySelector(".eb-part-qty");
+            if (qInput) qInput.value = totalBlanks * endbitsCount;
+            const yInput = firstRow.querySelector(".eb-part-yield");
+            if (yInput) {
+                yInput.value = `${yieldVal}%`;
+                yInput.style.color = "#059669";
             }
+            const rowId = firstRow.dataset.rowId;
+            if (rowId) checkRowEbCapacity(rowId, false);
         }
+
         if (typeof recalculateAllEbTotals === "function") {
             recalculateAllEbTotals();
         }
@@ -6872,8 +8588,13 @@ async function applyCutOptimizerResults() {
             }
         }
 
+        // Re-calculate all totals after file is attached
+        if (typeof recalculateAllEbTotals === "function") {
+            recalculateAllEbTotals();
+        }
+
         closeCutOptimizerModal();
-        alert(`✅ Applied 2D Cut Optimization (${yieldVal}% Yield) & attached OptiCutter layout drawing to End Bit MO!`);
+        alert(`✅ Applied 2D Cut Optimization (${yieldVal}% Yield, ${totalBlanks * endbitsCount} Parts) & attached OptiCutter layout drawing to End Bit MO!`);
     } else {
         // ---------------------------------------------------------------------
         // 2. NORMAL CREATE MO CONTEXT (moModal)
@@ -6892,29 +8613,32 @@ async function applyCutOptimizerResults() {
         if (nonStdRadio) nonStdRadio.checked = true;
         updateLayoutTypeUI(false);
 
-        // If blanks per sheet is computed, update target quantity display/calculation
-        if (totalBlanks > 0) {
-            const sheetsInput = document.getElementById("sheetsRequired");
-            const sheetsNeeded = Math.max(1, parseFloat(sheetsInput?.value) || 1);
-            const targetQtyInput = document.getElementById("targetQty");
-            const manualQtyInput = document.getElementById("targetQtyManual");
-            const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
-            const autoQtyHint = document.getElementById("autoQtyHint");
+        // Multi-part nesting synchronization from OptiCutter results
+        if (currentCutOptResult.parts_summary && currentCutOptResult.parts_summary.length > 0) {
+            const modalAddRows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+            const basePartNo = document.getElementById("partNoInput")?.value?.trim();
 
-            const calculatedTarget = Math.round(sheetsNeeded * totalBlanks);
-            if (manualQtyInput) {
-                manualQtyInput.value = calculatedTarget;
-            }
-            if (targetQtyInput) {
-                targetQtyInput.value = calculatedTarget;
-            }
-            if (autoQtyDisplay) {
-                autoQtyDisplay.textContent = `${calculatedTarget.toLocaleString()} Units`;
-            }
-            if (autoQtyHint) {
-                autoQtyHint.textContent = `${sheetsNeeded} sheets × ${totalBlanks} blanks/sheet (OptiCutter 2D Nesting)`;
-            }
+            currentCutOptResult.parts_summary.forEach((ps, idx) => {
+                if (ps.is_base || (basePartNo && ps.part_no && ps.part_no === basePartNo) || idx === 0) {
+                    window._basePartPlacedBlanks = ps.placed_qty;
+                }
+                if (modalAddRows && modalAddRows.length > 0) {
+                    modalAddRows.forEach((row, rIdx) => {
+                        const rowPartNo = row.querySelector(".add-part-no")?.value?.trim();
+                        if (rowPartNo && ps.part_no && (rowPartNo === ps.part_no || (ps.row_id && ps.row_id === (rIdx + 2)))) {
+                            const qInput = row.querySelector(".add-part-qty");
+                            if (qInput) qInput.value = ps.placed_qty;
+                            row.dataset.placedBlanks = ps.placed_qty;
+                        }
+                    });
+                }
+            });
+        } else if (totalBlanks > 0) {
+            window._basePartPlacedBlanks = totalBlanks;
         }
+
+        // Recalculate and render full multi-part counts breakdown in UI
+        recalculateTargetQtyFromLayout();
 
         // Auto-populate generated remnants into End Bits Offcuts if any exist
         if (currentCutOptResult.remnants && currentCutOptResult.remnants.length > 0) {
@@ -6925,16 +8649,25 @@ async function applyCutOptimizerResults() {
             const sheetsNeeded = Math.max(1, parseFloat(sheetsInput?.value) || 1);
             const thickness = parseFloat(document.getElementById("thicknessInput")?.value) || 2.0;
 
-            const optEndbits = currentCutOptResult.remnants.map((r, i) => ({
-                name: `Offcut Remnant ${i + 1} (${r.length}×${r.width} mm)`,
-                dim: `${thickness}*${r.length}*${r.width}`,
-                thickness: thickness,
-                length: r.length,
-                width: r.width,
-                qty_per_sheet: 1,
-                total_qty: sheetsNeeded,
-                grade: document.getElementById("gradeInput")?.value || "YS"
-            }));
+            const optGrade = document.getElementById("gradeInput")?.value || "YS";
+            const optEndbits = currentCutOptResult.remnants.map((r, i) => {
+                const ebName = formatEndbitName({
+                    grade: optGrade,
+                    thickness: thickness,
+                    length: r.length,
+                    width: r.width
+                }, optGrade);
+                return {
+                    name: ebName,
+                    dim: `${thickness}*${r.length}*${r.width}`,
+                    thickness: thickness,
+                    length: r.length,
+                    width: r.width,
+                    qty_per_sheet: 1,
+                    total_qty: sheetsNeeded,
+                    grade: optGrade
+                };
+            });
 
             if (hiddenJson) {
                 hiddenJson.value = JSON.stringify(optEndbits);
@@ -7171,8 +8904,26 @@ function formatNotifTime(isoString) {
     }
 }
 
+let currentNotifTab = "unread";
+let cachedNotifications = [];
+
+function switchNotifTab(tab, e) {
+    if (e) {
+        if (typeof e.preventDefault === "function") e.preventDefault();
+        if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
+    currentNotifTab = tab || "unread";
+    const unreadBtn = document.getElementById("notifTabBtnUnread");
+    const allBtn = document.getElementById("notifTabBtnAll");
+    if (unreadBtn) unreadBtn.classList.toggle("active", currentNotifTab === "unread");
+    if (allBtn) allBtn.classList.toggle("active", currentNotifTab === "all");
+    renderNotificationsList(cachedNotifications);
+}
+
 function toggleNotificationsDropdown(e) {
-    if (e) e.stopPropagation();
+    if (e) {
+        if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
     const panel = document.getElementById("notifDropdownPanel");
     if (!panel) return;
     const isHidden = panel.style.display === "none" || !panel.style.display;
@@ -7193,6 +8944,7 @@ async function fetchNotifications(silent = false) {
         const data = await res.json();
         const notifs = data.notifications || [];
         const unreadCount = data.unread_count || 0;
+        cachedNotifications = notifs;
 
         // Update bell badge
         const badge = document.getElementById("notifBadge");
@@ -7211,7 +8963,13 @@ async function fetchNotifications(silent = false) {
             unreadText.textContent = `${unreadCount} Unread`;
         }
 
-        // Render notifications in dropdown panel
+        // Update tab count badges
+        const tabUnreadNum = document.getElementById("notifTabUnreadNum");
+        if (tabUnreadNum) tabUnreadNum.textContent = unreadCount;
+        const tabAllNum = document.getElementById("notifTabAllNum");
+        if (tabAllNum) tabAllNum.textContent = notifs.length;
+
+        // Render notifications in dropdown panel according to active tab
         renderNotificationsList(notifs);
 
         // Check for newly arrived unread notifications to trigger floating toast
@@ -7248,17 +9006,32 @@ function renderNotificationsList(notifs) {
     const listEl = document.getElementById("notifPanelList");
     if (!listEl) return;
 
-    if (!notifs || notifs.length === 0) {
-        listEl.innerHTML = `
-            <div class="notif-empty-state">
-                <i class="fa-regular fa-bell-slash"></i>
-                <span>No notifications yet</span>
-            </div>
-        `;
+    const allItems = notifs || [];
+    const itemsToRender = (currentNotifTab === "unread")
+        ? allItems.filter(n => !n.is_read)
+        : allItems;
+
+    if (itemsToRender.length === 0) {
+        if (currentNotifTab === "unread") {
+            listEl.innerHTML = `
+                <div class="notif-empty-state">
+                    <i class="fa-solid fa-circle-check" style="color: #10b981; font-size: 2rem;"></i>
+                    <strong style="color: #1e293b; font-size: 0.88rem;">All Caught Up!</strong>
+                    <span style="font-size: 0.75rem; color: #64748b;">No unread notifications. Messages you click or open are marked done.</span>
+                </div>
+            `;
+        } else {
+            listEl.innerHTML = `
+                <div class="notif-empty-state">
+                    <i class="fa-regular fa-bell-slash"></i>
+                    <span>No notifications in history</span>
+                </div>
+            `;
+        }
         return;
     }
 
-    listEl.innerHTML = notifs.map(n => {
+    listEl.innerHTML = itemsToRender.map(n => {
         const isUnread = !n.is_read;
         const priority = n.priority || "normal";
         const notifType = n.type || "";
@@ -7270,18 +9043,18 @@ function renderNotificationsList(notifs) {
         if (priority === "urgent" || notifType === "MO_REJECTED") {
             iconClass = "fa-triangle-exclamation";
             colClass = "urgent";
-            itemExtraClass = "urgent";
+            itemExtraClass = isUnread ? "urgent" : "";
         } else if (priority === "success" || notifType === "MO_APPROVED") {
             iconClass = "fa-circle-check";
             colClass = "success";
-            itemExtraClass = "success";
+            itemExtraClass = isUnread ? "success" : "";
         } else if (notifType === "MO_CREATED" || notifType === "MO_ROUTED" || notifType === "MO_RESUBMITTED") {
             iconClass = "fa-file-invoice";
             colClass = "info";
         }
 
         const timeStr = formatNotifTime(n.created_at);
-        const unreadClass = isUnread ? "unread" : "";
+        const unreadClass = isUnread ? "unread" : "read";
         const moNum = n.mo_number || "";
 
         return `
@@ -7292,10 +9065,18 @@ function renderNotificationsList(notifs) {
                 <div class="notif-content-col">
                     <div class="notif-title-row">
                         <span class="notif-item-title">${escapeHtml(n.title)}</span>
-                        <span class="notif-item-time">${timeStr}</span>
+                        <div style="display: flex; align-items: center; gap: 4px;">
+                            <span class="notif-item-time">${timeStr}</span>
+                            <button type="button" class="notif-dismiss-btn" onclick="dismissNotification('${escapeHtml(n.id)}', event)" title="Dismiss message">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
                     </div>
                     <p class="notif-item-msg">${escapeHtml(n.message)}</p>
-                    ${moNum ? `<span class="notif-item-chip"><i class="fa-solid fa-hashtag" style="font-size:0.6rem;"></i> ${escapeHtml(moNum)}</span>` : ""}
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 4px;">
+                        ${moNum ? `<span class="notif-item-chip"><i class="fa-solid fa-hashtag" style="font-size:0.6rem;"></i> ${escapeHtml(moNum)}</span>` : "<span></span>"}
+                        ${!isUnread ? `<span class="notif-done-pill"><i class="fa-solid fa-check"></i> Done</span>` : ""}
+                    </div>
                 </div>
             </div>
         `;
@@ -7362,6 +9143,27 @@ async function onNotificationClick(notifId, moNumber) {
     const panel = document.getElementById("notifDropdownPanel");
     if (panel) panel.style.display = "none";
 
+    // Optimistically mark this notification as read in cache
+    const targetItem = cachedNotifications.find(n => String(n.id) === String(notifId));
+    if (targetItem) {
+        targetItem.is_read = true;
+    }
+    const unreadCount = cachedNotifications.filter(n => !n.is_read).length;
+    const badge = document.getElementById("notifBadge");
+    if (badge) {
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
+            badge.style.display = "inline-flex";
+        } else {
+            badge.style.display = "none";
+        }
+    }
+    const unreadText = document.getElementById("notifUnreadCount");
+    if (unreadText) unreadText.textContent = `${unreadCount} Unread`;
+    const tabUnreadNum = document.getElementById("notifTabUnreadNum");
+    if (tabUnreadNum) tabUnreadNum.textContent = unreadCount;
+    renderNotificationsList(cachedNotifications);
+
     // Mark as read in backend
     try {
         await fetch("/api/notifications/mark-read", {
@@ -7385,13 +9187,58 @@ async function onNotificationClick(notifId, moNumber) {
     }
 }
 
+async function dismissNotification(notifId, e) {
+    if (e) {
+        if (typeof e.preventDefault === "function") e.preventDefault();
+        if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
+
+    // Optimistically remove from cached notifications
+    cachedNotifications = cachedNotifications.filter(n => String(n.id) !== String(notifId));
+    const unreadCount = cachedNotifications.filter(n => !n.is_read).length;
+    const badge = document.getElementById("notifBadge");
+    if (badge) {
+        if (unreadCount > 0) {
+            badge.textContent = unreadCount > 99 ? "99+" : unreadCount;
+            badge.style.display = "inline-flex";
+        } else {
+            badge.style.display = "none";
+        }
+    }
+    const unreadText = document.getElementById("notifUnreadCount");
+    if (unreadText) unreadText.textContent = `${unreadCount} Unread`;
+    const tabUnreadNum = document.getElementById("notifTabUnreadNum");
+    if (tabUnreadNum) tabUnreadNum.textContent = unreadCount;
+    const tabAllNum = document.getElementById("notifTabAllNum");
+    if (tabAllNum) tabAllNum.textContent = cachedNotifications.length;
+    renderNotificationsList(cachedNotifications);
+
+    try {
+        await fetch("/api/notifications/dismiss", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify({ notif_id: notifId, role: currentRole })
+        });
+        await fetchNotifications(true);
+    } catch (err) {
+        console.error("Failed to dismiss notification:", err);
+    }
+}
+
 async function markAllNotificationsAsRead(e) {
     if (e) {
         if (typeof e.preventDefault === "function") e.preventDefault();
         if (typeof e.stopPropagation === "function") e.stopPropagation();
     }
 
-    // Immediate optimistic UI response
+    // Immediate optimistic UI response: mark all items read
+    cachedNotifications.forEach(n => {
+        n.is_read = true;
+    });
+
     const badge = document.getElementById("notifBadge");
     if (badge) {
         badge.textContent = "0";
@@ -7401,12 +9248,11 @@ async function markAllNotificationsAsRead(e) {
     if (unreadCountEl) {
         unreadCountEl.textContent = "0 Unread";
     }
-    const listEl = document.getElementById("notifPanelList");
-    if (listEl) {
-        listEl.querySelectorAll(".notif-item").forEach(item => {
-            item.classList.remove("unread");
-        });
-    }
+    const tabUnreadNum = document.getElementById("notifTabUnreadNum");
+    if (tabUnreadNum) tabUnreadNum.textContent = 0;
+
+    // Immediately re-render (which will show 'All Caught Up!' if in unread tab)
+    renderNotificationsList(cachedNotifications);
 
     try {
         await fetch("/api/notifications/mark-read", {
@@ -7423,6 +9269,45 @@ async function markAllNotificationsAsRead(e) {
     }
 }
 
+async function clearAllNotifications(e) {
+    if (e) {
+        if (typeof e.preventDefault === "function") e.preventDefault();
+        if (typeof e.stopPropagation === "function") e.stopPropagation();
+    }
+
+    // Optimistically clear all notifications from dropdown
+    cachedNotifications = [];
+    const badge = document.getElementById("notifBadge");
+    if (badge) {
+        badge.textContent = "0";
+        badge.style.display = "none";
+    }
+    const unreadCountEl = document.getElementById("notifUnreadCount");
+    if (unreadCountEl) {
+        unreadCountEl.textContent = "0 Unread";
+    }
+    const tabUnreadNum = document.getElementById("notifTabUnreadNum");
+    if (tabUnreadNum) tabUnreadNum.textContent = 0;
+    const tabAllNum = document.getElementById("notifTabAllNum");
+    if (tabAllNum) tabAllNum.textContent = 0;
+
+    renderNotificationsList(cachedNotifications);
+
+    try {
+        await fetch("/api/notifications/clear", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify({ role: currentRole })
+        });
+        await fetchNotifications(true);
+    } catch (err) {
+        console.error("Failed to clear all notifications:", err);
+    }
+}
+
 function startNotificationsPolling() {
     if (notificationsPollInterval) clearInterval(notificationsPollInterval);
     fetchNotifications();
@@ -7433,7 +9318,10 @@ function startNotificationsPolling() {
 
 // Window bindings for notification center
 window.toggleNotificationsDropdown = toggleNotificationsDropdown;
+window.switchNotifTab = switchNotifTab;
 window.markAllNotificationsAsRead = markAllNotificationsAsRead;
+window.clearAllNotifications = clearAllNotifications;
+window.dismissNotification = dismissNotification;
 window.onNotificationClick = onNotificationClick;
 window.fetchNotifications = fetchNotifications;
 window.startNotificationsPolling = startNotificationsPolling;
@@ -7458,7 +9346,7 @@ function addNonStdPartRow(defaultPart = null) {
     if (!container) return;
 
     const row = document.createElement("div");
-    row.className = "eb-part-card-row";
+    row.className = "eb-part-card-row has-blank-per-strip";
     row.id = `nonStdPartRow_${rowId}`;
     row.dataset.rowId = rowId;
 
@@ -7482,6 +9370,10 @@ function addNonStdPartRow(defaultPart = null) {
         <div class="form-group">
             <label>No. of Parts <span class="required">*</span></label>
             <input type="number" min="1" step="1" value="1" class="nonstd-part-qty" id="nonStdPartQty_${rowId}" required oninput="onNonStdQtyChange(${rowId})">
+        </div>
+        <div class="form-group">
+            <label>Blank Per Strip <span class="required">*</span></label>
+            <input type="number" min="1" step="1" value="1" class="nonstd-blank-per-strip" id="nonStdBlankPerStrip_${rowId}" placeholder="1" required oninput="onNonStdQtyChange(${rowId})">
         </div>
         <div class="form-group">
             <label><i class="fa-solid fa-chart-pie"></i> Yield %</label>
@@ -7631,6 +9523,10 @@ function onSelectNonStdRowPart(rowId, part) {
     if (part.qty && document.getElementById(`nonStdPartQty_${rowId}`)) {
         document.getElementById(`nonStdPartQty_${rowId}`).value = part.qty;
     }
+    const blankStripInput = document.getElementById(`nonStdBlankPerStrip_${rowId}`);
+    if (blankStripInput) {
+        blankStripInput.value = part.blank_per_strip || part.blank_qty || 1;
+    }
 
     const dropdown = document.getElementById(`nonStdDropdown_${rowId}`);
     if (dropdown) dropdown.style.display = "none";
@@ -7775,14 +9671,21 @@ function checkRowNonStdCapacity(rowId, autoApply = false) {
     const totalSheetArea = sheetLen * sheetWid * sheetsCount;
     const maxCapacityYield = Math.min(100, Math.round(((totalMaxParts * cutLen * cutWid) / totalSheetArea) * 1000) / 10);
 
-    let enteredQty = Math.max(1, parseInt(qtyInput?.value) || 1);
+    const noOfParts = Math.max(1, parseInt(document.getElementById(`nonStdPartQty_${rowId}`)?.value) || 1);
+    const blanksPerStrip = Math.max(1, parseInt(document.getElementById(`nonStdBlankPerStrip_${rowId}`)?.value) || 1);
+    const partsPerSheetConfig = noOfParts * blanksPerStrip;
+    let enteredQty = partsPerSheetConfig * sheetsCount;
 
     if (autoApply) {
         enteredQty = totalMaxParts;
         if (qtyInput) {
-            qtyInput.value = totalMaxParts;
+            qtyInput.value = Math.max(1, partsPerSheet);
             qtyInput.style.borderColor = "";
             qtyInput.style.backgroundColor = "";
+        }
+        const bInput = document.getElementById(`nonStdBlankPerStrip_${rowId}`);
+        if (bInput) {
+            bInput.value = 1;
         }
         if (yieldInput) {
             yieldInput.value = `${maxCapacityYield}%`;
@@ -7808,7 +9711,7 @@ function checkRowNonStdCapacity(rowId, autoApply = false) {
             <div style="display: flex; align-items: center; justify-content: space-between; background: #fffbeb; border: 1.5px solid #fcd34d; border-radius: 6px; padding: 6px 12px; font-size: 0.78rem; color: #92400e;">
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <i class="fa-solid fa-circle-exclamation" style="color: #d97706; font-size: 0.95rem;"></i>
-                    <span>Requested <strong>${enteredQty} parts</strong> exceeds sheet capacity (Max: <strong>${totalMaxParts} parts</strong> @ ${partsPerSheet} blanks/sheet).</span>
+                    <span>Config <strong>${noOfParts} × ${blanksPerStrip} = ${partsPerSheetConfig}/sheet (${enteredQty} parts total)</strong> exceeds sheet capacity (Max: <strong>${totalMaxParts} parts</strong> @ ${partsPerSheet} blanks/sheet).</span>
                 </div>
                 <button type="button" class="btn btn-sm" onclick="capNonStdPartQty(${rowId}, ${totalMaxParts})" style="background: #d97706; color: #fff; font-weight: 700; font-size: 0.72rem; padding: 2px 8px; border-radius: 4px; border: none; cursor: pointer;">
                     Cap to ${totalMaxParts} Parts
@@ -7824,7 +9727,7 @@ function checkRowNonStdCapacity(rowId, autoApply = false) {
             <div style="display: flex; align-items: center; justify-content: space-between; background: #f0fdf4; border: 1px solid #86efac; border-radius: 6px; padding: 5px 12px; font-size: 0.78rem; color: #166534;">
                 <div style="display: flex; align-items: center; gap: 6px;">
                     <i class="fa-solid fa-circle-check" style="color: #16a34a;"></i>
-                    <span>Fits <strong>${partsPerSheet} blanks/sheet</strong> • Total Max: <strong>${totalMaxParts} parts</strong> from ${sheetsCount} sheet(s) (${actualRowYield}% yield).</span>
+                    <span>Config: <strong>${noOfParts} parts × ${blanksPerStrip} blanks/strip = ${partsPerSheetConfig} units/sheet</strong> • Total: <strong>${enteredQty} units</strong> from ${sheetsCount} sheet(s) (${actualRowYield}% yield).</span>
                 </div>
             </div>
         `;
@@ -7894,29 +9797,38 @@ function recalculateAllNonStdTotals() {
             if (d.w > 0) cutWid = d.w;
         }
 
-        const qty = Math.max(1, parseInt(document.getElementById(`nonStdPartQty_${rowId}`)?.value) || 1);
+        const noOfParts = Math.max(1, parseInt(document.getElementById(`nonStdPartQty_${rowId}`)?.value) || 1);
+        const blankPerStrip = Math.max(1, parseInt(document.getElementById(`nonStdBlankPerStrip_${rowId}`)?.value) || 1);
+        
+        // Total for part = multiplication of no of parts and blank per strip
+        const partUnitsPerSheet = noOfParts * blankPerStrip;
+        const partTotalUnits = partUnitsPerSheet * sheetsCount;
+
         const capRes = checkRowNonStdCapacity(rowId, false);
         if (capRes.exceeds) anyBoundaryError = true;
 
         const yieldVal = document.getElementById(`nonStdPartYield_${rowId}`)?.value || "";
 
-        if (pNo) {
-            partsList.push({
-                part_no: pNo,
-                base_part: bPart,
-                part_size: pSize,
-                cut_length: cutLen,
-                cut_width: cutWid,
-                thickness: thick,
-                no_of_parts: qty,
-                target_qty: qty,
-                yield_pct: yieldVal,
-                is_primary: idx === 0
-            });
-            grandTotalParts += qty;
-            if (cutLen > 0 && cutWid > 0) {
-                grandTotalCutArea += (cutLen * cutWid * qty);
-            }
+        const fallbackPNo = pNo || (idx === 0 ? (document.getElementById("partNoInput")?.value?.trim() || "Part 1") : `Part ${idx + 1}`);
+
+        partsList.push({
+            part_no: fallbackPNo,
+            label: `Part ${idx + 1}`,
+            base_part: bPart,
+            part_size: pSize,
+            cut_length: cutLen,
+            cut_width: cutWid,
+            thickness: thick,
+            no_of_parts: noOfParts,
+            blank_per_strip: blankPerStrip,
+            blanks_per_sheet: partUnitsPerSheet,
+            target_qty: partTotalUnits,
+            yield_pct: yieldVal,
+            is_primary: idx === 0
+        });
+        grandTotalParts += partTotalUnits;
+        if (cutLen > 0 && cutWid > 0) {
+            grandTotalCutArea += (cutLen * cutWid * partTotalUnits);
         }
     });
 
@@ -7936,7 +9848,12 @@ function recalculateAllNonStdTotals() {
     const totalYieldDisplay = document.getElementById("nonStdTotalYieldDisplay");
 
     if (totalOutputDisplay) {
-        totalOutputDisplay.textContent = `${grandTotalParts} Units`;
+        if (partsList.length > 1) {
+            const partsBreakdownStr = partsList.map((p, idx) => `P${idx + 1}: ${p.target_qty.toLocaleString()}`).join(" + ");
+            totalOutputDisplay.innerHTML = `${partsBreakdownStr} = <strong>${grandTotalParts.toLocaleString()} Units</strong>`;
+        } else {
+            totalOutputDisplay.textContent = `${grandTotalParts.toLocaleString()} Units`;
+        }
     }
     if (totalYieldDisplay) {
         totalYieldDisplay.textContent = `${combinedYieldPct}%`;
@@ -7951,10 +9868,37 @@ function recalculateAllNonStdTotals() {
     if (manualQtyInput && grandTotalParts > 0) {
         manualQtyInput.value = grandTotalParts;
     }
+
+    // Current Plan Auto-Calculated Display Box (shows each part total separately and total sum, identical to Standard Layout)
     const autoQtyDisplay = document.getElementById("autoTargetQtyDisplay");
-    if (autoQtyDisplay && grandTotalParts > 0) {
-        autoQtyDisplay.textContent = `${grandTotalParts} Units`;
+    if (autoQtyDisplay) {
+        if (grandTotalParts > 0) {
+            if (partsList.length > 1) {
+                const partsBreakdownStr = partsList.map((p, idx) => `P${idx + 1}: ${p.target_qty.toLocaleString()}`).join(" + ");
+                autoQtyDisplay.innerHTML = `${partsBreakdownStr} = <strong>${grandTotalParts.toLocaleString()}</strong> <small>Units</small>`;
+            } else {
+                autoQtyDisplay.innerHTML = `${grandTotalParts.toLocaleString()} <small>Units</small>`;
+            }
+        } else {
+            autoQtyDisplay.textContent = "- Units";
+        }
     }
+    const autoQtyHint = document.getElementById("autoQtyHint");
+    if (autoQtyHint) {
+        if (grandTotalParts > 0) {
+            if (partsList.length > 1) {
+                const formulaStr = partsList.map((p, idx) => `P${idx + 1}: ${p.target_qty.toLocaleString()}`).join(" + ");
+                autoQtyHint.textContent = `Sum of ${partsList.length} parts: ${formulaStr} (${sheetsCount} sheet(s) × part qty × blank per strip)`;
+                autoQtyHint.title = partsList.map((p, idx) => `Part ${idx + 1} (${p.part_no}): ${sheetsCount} sheet(s) × ${p.no_of_parts} part qty × ${p.blank_per_strip} blank/strip = ${p.target_qty.toLocaleString()} units`).join("\n") + `\nTotal across all parts: ${grandTotalParts.toLocaleString()} units`;
+            } else {
+                autoQtyHint.textContent = `${sheetsCount} sheet(s) × ${partsList[0].no_of_parts} part qty × ${partsList[0].blank_per_strip} blank per strip`;
+                autoQtyHint.title = `${sheetsCount} sheet(s) × ${partsList[0].no_of_parts} part qty × ${partsList[0].blank_per_strip} blank per strip = ${grandTotalParts.toLocaleString()} units`;
+            }
+        } else {
+            autoQtyHint.textContent = "Select part & layout";
+        }
+    }
+
     const yieldInput = document.getElementById("yieldPctInput");
     if (yieldInput && combinedYieldPct > 0) {
         yieldInput.value = `${combinedYieldPct}%`;
@@ -8025,7 +9969,8 @@ function initNonStdPartsRows() {
                 blank_length: initL || "",
                 blank_width: initW || "",
                 thickness: initT,
-                qty: curQty
+                qty: 1,
+                blank_per_strip: 1
             });
         } else {
             addNonStdPartRow();
@@ -8057,7 +10002,7 @@ function renderReviewParts(mo) {
 
     grid.innerHTML = partsList.map((p, idx) => {
         const sizeStr = p.part_size || `${p.thickness || mo.thickness || '-'}*${p.cut_length || p.blank_length || '-'}*${p.cut_width || p.blank_width || '-'}`;
-        const pQty = p.no_of_parts || p.target_qty || 1;
+        const pQty = p.target_qty || (p.no_of_parts * (p.blank_per_strip || 1)) || 1;
         const isPrimary = p.is_primary || idx === 0;
         return `
             <div style="background: #ffffff; border: 1.5px solid ${isPrimary ? '#0284c7' : '#e2e8f0'}; border-radius: 8px; padding: 12px 14px; position: relative; box-shadow: 0 1px 3px rgba(0,0,0,0.04);">
@@ -8077,6 +10022,7 @@ function renderReviewParts(mo) {
                 <div style="font-size: 0.76rem; color: #475569; display: flex; flex-direction: column; gap: 3px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed #e2e8f0;">
                     <div><strong>Base Part:</strong> ${escapeHtml(p.base_part || '-')}</div>
                     <div><strong>Blank Size:</strong> ${escapeHtml(sizeStr)} mm</div>
+                    ${p.blank_per_strip ? `<div><strong>Config:</strong> ${p.no_of_parts || 1} parts × ${p.blank_per_strip} blanks/strip</div>` : ''}
                     ${p.yield_pct ? `<div><strong>Yield:</strong> <span style="color: #059669; font-weight: 700;">${escapeHtml(p.yield_pct)}</span></div>` : ''}
                 </div>
             </div>

@@ -17,7 +17,7 @@ import math
 import re
 from typing import Dict, List, Any, Optional, Tuple
 
-from cut_optimizer import CUT_OPTIMIZER_2D
+from cut_optimizer import CUT_OPTIMIZER_2D, calculate_max_guillotine_capacity
 
 
 def norm_key(s):
@@ -156,16 +156,21 @@ class EndbitCapacityAgent:
             blank_length=b_l,
             blank_width=b_w,
             part_no=resolved_part_no,
-            can_rotate=False,
+            can_rotate=True,
             kerf=kerf
         )
 
         parts_per_eb = nest_res.get("total_blanks", 0)
 
+        # Ensure optimal 2D guillotine nesting capacity matching OptiCutter
+        guillotine_cap = calculate_max_guillotine_capacity(eb_l, eb_w, b_l, b_w, kerf)
+        parts_per_eb = max(parts_per_eb, guillotine_cap)
+
         # Fallback to direct analytical orientation if optimizer returned 0 despite fitting
         if parts_per_eb == 0 and fits_in_endbit:
             opt1 = int(eb_l // b_l) * int(eb_w // b_w)
-            parts_per_eb = max(opt1, 1)
+            opt2 = int(eb_l // b_w) * int(eb_w // b_l)
+            parts_per_eb = max(opt1, opt2, 1)
 
         # 6. Multi-Endbit Calculation
         total_parts_produced = parts_per_eb * eb_count

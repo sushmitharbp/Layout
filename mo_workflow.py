@@ -19,72 +19,120 @@ SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
 LOCAL_MO_FILE = "data_mo_store.json"
 LOCAL_ENDBITS_FILE = "data_endbits_store.json"
+from cut_optimizer import calculate_max_guillotine_capacity
+
+
+def format_endbit_name(grade, thickness=None, length=None, width=None, dim_str=None):
+    """
+    Standardizes the endbit name as 'grade - size', e.g. 'hr - 3.8*140*2500'.
+    Size format: thickness * min(width, length) * max(width, length).
+    """
+    g = str(grade or "hr").strip().lower()
+
+    # Collect all available dimension numbers
+    nums = []
+    if dim_str:
+        nums = [float(x) for x in re.findall(r'[\d\.]+', str(dim_str)) if float(x) > 0]
+    if not nums:
+        for v in [thickness, length, width]:
+            try:
+                fv = float(v or 0)
+                if fv > 0: nums.append(fv)
+            except Exception:
+                pass
+    elif thickness and float(thickness) > 0:
+        t_val = float(thickness)
+        if t_val not in nums:
+            nums.append(t_val)
+
+    def clean_num(val):
+        if val is None or val == 0:
+            return "0"
+        return f"{int(val)}" if float(val) == int(val) else f"{float(val):g}"
+
+    if len(nums) >= 3:
+        # In sheet metal fabrication, thickness is the smallest dimension (<= 35mm)
+        sorted_dims = sorted(nums[:3])
+        t = sorted_dims[0]
+        min_p = sorted_dims[1]
+        max_p = sorted_dims[2]
+        return f"{g} - {clean_num(t)}*{clean_num(min_p)}*{clean_num(max_p)}"
+    elif len(nums) == 2:
+        return f"{g} - {clean_num(min(nums))}*{clean_num(max(nums))}"
+    elif dim_str:
+        return f"{g} - {str(dim_str).strip()}"
+    return f"{g} - endbit"
 
 DB_TABLES_CONFIG = {
-    "material_orders": {
-        "title": "Material Orders (MOs)",
-        "icon": "fa-clipboard-list",
-        "category": "Workflow",
-        "badge_class": "badge-workflow",
-        "description": "Active and completed Material Order workflows with approval audits",
-        "default_sort": "created_at.desc",
-        "search_fields": ["mo_number", "part_no", "base_part", "rm_erp", "layout_name"],
-        "display_columns": ["mo_number", "part_no", "rm_erp", "sheets_required", "target_qty", "current_stage", "status", "workflow_path", "created_on"]
-    },
-    "rm_main_store_stock": {
-        "title": "RM Main Store Stock",
+    "rm": {
+        "title": "Raw Material Master (RM)",
         "icon": "fa-layer-group",
         "category": "Inventory",
         "badge_class": "badge-inventory",
         "description": "Raw Material coil and sheet opening stock in Main Stores",
-        "default_sort": "onhand_stock.desc",
-        "search_fields": ["item_code", "item_desc", "store_desc", "category_desc"]
+        "default_sort": "available_sheets.desc",
+        "search_fields": ["rm_code"],
+        "display_columns": ["rm_code", "available_sheets", "weight_per_sheet", "total_stock_weight", "created_at"]
     },
-    "parts_fg_wip_stock": {
-        "title": "Parts FG & WIP Stock",
-        "icon": "fa-boxes-stacked",
-        "category": "Inventory",
-        "badge_class": "badge-inventory",
-        "description": "Finished goods and work-in-progress inventory (002 - FG & WIP)",
-        "default_sort": "onhand_stock.desc",
-        "search_fields": ["item_code", "item_desc", "category_desc"]
+    "parts": {
+        "title": "Parts Master",
+        "icon": "fa-puzzle-piece",
+        "category": "Engineering",
+        "badge_class": "badge-eng",
+        "description": "Master component specifications, dimensions, offtake, and standard RM",
+        "default_sort": "part_no.asc",
+        "search_fields": ["part_no", "part_desc", "grade", "standard_rm"],
+        "display_columns": ["part_no", "part_desc", "grade", "thickness", "length", "width", "offtake", "standard_rm"]
     },
-    "endbit_records": {
-        "title": "End Bits & Offcuts Store",
-        "icon": "fa-scissors",
-        "category": "Inventory",
-        "badge_class": "badge-inventory",
-        "description": "Recorded end bits & offcuts generated from MO sheet cutting, available to produce parts",
-        "default_sort": "created_at.desc",
-        "search_fields": ["endbit_id", "mo_number", "parent_part_no", "base_part", "rm_erp", "grade", "dim", "status"],
-        "display_columns": ["endbit_id", "mo_number", "parent_part_no", "dim", "grade", "available_qty", "used_qty", "status", "created_at"]
+    "mrp": {
+        "title": "MRP Schedule & Demand",
+        "icon": "fa-chart-line",
+        "category": "Planning",
+        "badge_class": "badge-mrp",
+        "description": "Monthly production targets, live ERP stock, and net quantities to produce",
+        "default_sort": "id.desc",
+        "search_fields": ["part_no", "month_year", "status"],
+        "display_columns": ["id", "month_year", "part_no", "monthly_schedule", "current_stock", "qty_to_produce", "status"]
     },
-    "erp_mo_reports": {
-        "title": "ERP MO Reports",
+    "mos": {
+        "title": "ERP MO History",
         "icon": "fa-receipt",
         "category": "ERP Records",
         "badge_class": "badge-erp",
-        "description": "Historical ERP Cutting Orders and newly executed production orders",
+        "description": "Historical ERP Cutting Orders and production executions",
         "default_sort": "id.desc",
-        "search_fields": ["mo_doc_no", "parent_code", "rm_code", "cutting_plan_no"]
+        "search_fields": ["mo_number", "part_no"],
+        "display_columns": ["id", "date", "mo_number", "part_no", "already_produced_stock", "rem_stock_toproduce"]
     },
-    "layout_records": {
-        "title": "Layout Records",
-        "icon": "fa-compass-drafting",
-        "category": "Engineering",
-        "badge_class": "badge-eng",
-        "description": "Master standardized sheet metal nesting layouts and CAD drawings",
-        "default_sort": "row_id.asc",
-        "search_fields": ["part_no", "base_part", "rm_erp", "layout_name"]
+    "app_mo": {
+        "title": "Application MOs (Approval Workflow)",
+        "icon": "fa-clipboard-list",
+        "category": "Workflow",
+        "badge_class": "badge-workflow",
+        "description": "Active Material Order workflows with multi-part cuts and approval audits",
+        "default_sort": "id.desc",
+        "search_fields": ["mo_no", "rm_code", "workflow_path", "current_stage", "status"],
+        "display_columns": ["id", "date", "mo_no", "rm_code", "no_of_rm_sheets", "parts_qty", "yield_pct", "current_stage", "status"]
     },
-    "mrp_rm_sheet_bom": {
-        "title": "MRP RM Sheet BOM",
-        "icon": "fa-sitemap",
-        "category": "Planning",
-        "badge_class": "badge-mrp",
-        "description": "Bill of Materials mapping parent assemblies to child parts, MRP schedule targets, and RM sheets",
-        "default_sort": "id.asc",
-        "search_fields": ["parent_part_no", "child_part_no", "erp_part_no", "existing_sheet_used"]
+    "endbits": {
+        "title": "End Bits Store (Batches)",
+        "icon": "fa-scissors",
+        "category": "Inventory",
+        "badge_class": "badge-inventory",
+        "description": "Batch-wise offcut and remnant sheet inventory generated from cutting",
+        "default_sort": "id.desc",
+        "search_fields": ["mo_no", "endbit"],
+        "display_columns": ["id", "date", "mo_no", "endbit", "quantity", "weight", "created_at"]
+    },
+    "endbit_mo": {
+        "title": "Endbit Cutting Orders",
+        "icon": "fa-industry",
+        "category": "Workflow",
+        "badge_class": "badge-workflow",
+        "description": "Production cutting orders executed directly from offcut batches",
+        "default_sort": "id.desc",
+        "search_fields": ["eb_mo_no", "endbit_code", "status"],
+        "display_columns": ["id", "date", "eb_mo_no", "endbit_id", "endbit_code", "no_of_eb_sheets", "parts_qty", "status"]
     }
 }
 
@@ -157,7 +205,52 @@ class MOWorkflowEngine:
         self._ensure_local_endbits_store()
         try:
             with open(LOCAL_ENDBITS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                records = json.load(f)
+            # Ensure name follows grade - size convention (e.g. hr - 3.8*140*2500)
+            modified = False
+            for r in records:
+                cur_name = str(r.get("name") or "").strip()
+                if (
+                    not cur_name or
+                    cur_name.lower().startswith("end bit") or
+                    cur_name.lower().startswith("offcut remnant") or
+                    cur_name.lower().startswith("manual") or
+                    cur_name.lower().startswith("test ") or
+                    " - " not in cur_name
+                ):
+                    new_name = format_endbit_name(
+                        grade=r.get("grade"),
+                        thickness=r.get("thickness"),
+                        length=r.get("length"),
+                        width=r.get("width"),
+                        dim_str=r.get("dim")
+                    )
+                    if new_name != cur_name:
+                        r["name"] = new_name
+                        modified = True
+
+                # Ensure weight_kg is calculated strictly in the form of (thickness*length*width*7.85)/1000000
+                t = float(r.get("thickness") or 0)
+                l = float(r.get("length") or 0)
+                w = float(r.get("width") or 0)
+                if (t <= 0 or l <= 0 or w <= 0) and r.get("dim"):
+                    nums = [float(x) for x in re.findall(r'[\d\.]+', str(r.get("dim"))) if float(x) > 0]
+                    if len(nums) >= 3:
+                        sorted_d = sorted(nums[:3])
+                        t, w, l = sorted_d[0], sorted_d[1], sorted_d[2]
+                        r["thickness"] = t
+                        r["width"] = w
+                        r["length"] = l
+                        modified = True
+                if t > 0 and l > 0 and w > 0:
+                    unit_wt = round((t * l * w * 7.85) / 1000000.0, 3)
+                    if r.get("weight_kg") != unit_wt or r.get("total_weight_kg") is None:
+                        r["weight_kg"] = unit_wt
+                        r["total_weight_kg"] = round(unit_wt * float(r.get("initial_qty") or r.get("available_qty") or 1), 3)
+                        modified = True
+            if modified:
+                self._save_endbits_local(records)
+            return records
         except Exception:
             return []
 
@@ -179,7 +272,7 @@ class MOWorkflowEngine:
         "is_standard_layout", "layout_name", "thickness", "length", "width",
         "target_qty", "sheets_required", "layout_doc_url", "layout_doc_filename",
         "constraints_status", "workflow_path", "current_stage", "status",
-        "audit_trail", "endbits", "created_by", "created_at", "updated_at"
+        "audit_trail", "created_by", "created_at", "updated_at"
     }
 
     def _sanitize_mo_for_db(self, mo_dict):
@@ -187,7 +280,16 @@ class MOWorkflowEngine:
         if not isinstance(mo_dict, dict):
             return {}
         # Keep only columns that match allowed set
-        return {k: v for k, v in mo_dict.items() if k in self.ALLOWED_MO_COLS}
+        clean = {k: v for k, v in mo_dict.items() if k in self.ALLOWED_MO_COLS}
+        # Ensure endbits and parts are preserved inside constraints_status (JSONB)
+        if "constraints_status" in clean and isinstance(clean["constraints_status"], dict):
+            cs = dict(clean["constraints_status"])
+            if mo_dict.get("endbits") and not cs.get("endbits"):
+                cs["endbits"] = mo_dict.get("endbits")
+            if mo_dict.get("parts") and not cs.get("parts"):
+                cs["parts"] = mo_dict.get("parts")
+            clean["constraints_status"] = cs
+        return clean
 
     def set_layout_records(self, records):
         """Builds in-memory lookup caches to resolve yield_pct and endbits for parts and layouts."""
@@ -255,6 +357,35 @@ class MOWorkflowEngine:
         """Ensures yield_pct and endbits are exposed at the top level of the MO record."""
         if not isinstance(mo, dict):
             return mo
+
+        # Map app_mo schema fields to frontend fields
+        if not mo.get("mo_number") and mo.get("mo_no"):
+            mo["mo_number"] = mo["mo_no"]
+        if not mo.get("rm_erp") and mo.get("rm_code"):
+            mo["rm_erp"] = mo["rm_code"]
+        if not mo.get("parts") and mo.get("parts_produced"):
+            mo["parts"] = mo["parts_produced"]
+        if isinstance(mo.get("parts"), str):
+            try:
+                mo["parts"] = json.loads(mo["parts"])
+            except Exception:
+                pass
+        if isinstance(mo.get("parts_produced"), str):
+            try:
+                mo["parts_produced"] = json.loads(mo["parts_produced"])
+            except Exception:
+                pass
+        if not mo.get("target_qty") and mo.get("parts_qty"):
+            mo["target_qty"] = mo["parts_qty"]
+        if not mo.get("sheets_required") and mo.get("no_of_rm_sheets"):
+            mo["sheets_required"] = mo["no_of_rm_sheets"]
+        if not mo.get("notes") and mo.get("remarks"):
+            mo["notes"] = mo["remarks"]
+        if not mo.get("part_no") and mo.get("parts") and isinstance(mo["parts"], list) and len(mo["parts"]) > 0:
+            p0 = mo["parts"][0]
+            mo["part_no"] = p0.get("part_no") if isinstance(p0, dict) else str(p0)
+            mo["base_part"] = mo["part_no"].split(" - ")[0] if " - " in mo["part_no"] else mo["part_no"]
+
         if mo.get("yield_pct") is None:
             c_status = mo.get("constraints_status")
             if isinstance(c_status, dict):
@@ -324,7 +455,13 @@ class MOWorkflowEngine:
                     pass
 
         # Standard layout parts, drawing, and sizes resolution
-        if getattr(self, "_raw_layout_records", None):
+        # ONLY attach master layout drawings/parts for Standard layouts. Non-Standard layouts must not have extra images attached!
+        is_mo_std = mo.get("is_standard_layout") is not False and str(mo.get("is_standard_layout", "")).lower() not in ("false", "0", "no")
+        if not is_mo_std:
+            mo["image_url"] = None
+            mo["layout_record"] = None
+
+        if is_mo_std and getattr(self, "_raw_layout_records", None):
             p_no = (mo.get("part_no") or "").strip().lower()
             rm_code = (mo.get("rm_erp") or "").strip().lower()
             matched_rec = None
@@ -407,6 +544,16 @@ class MOWorkflowEngine:
         if created_by_role != "shearing":
             raise PermissionError("Unauthorized: Only the Shearing Production team can create Material Orders.")
         is_std = bool(mo_data.get("is_standard_layout", True))
+        rm_str_check = str(mo_data.get("rm_erp", "")).upper()
+        layout_str_check = str(mo_data.get("layout_name", "")).upper()
+        if (
+            "CUSTOM" in rm_str_check or 
+            "CUSTOM" in layout_str_check or 
+            mo_data.get("is_custom") or 
+            rm_str_check == "__CUSTOM__" or
+            str(mo_data.get("is_standard_layout", "")).lower() in ("false", "0", "no")
+        ):
+            is_std = False
         constraints = mo_data.get("constraints_status", {})
         constraints_satisfied = bool(constraints.get("all_satisfied", True))
         yield_pct = mo_data.get("yield_pct")
@@ -479,34 +626,43 @@ class MOWorkflowEngine:
             if isinstance(record.get("constraints_status"), dict):
                 record["constraints_status"]["parts"] = parsed_parts
 
-        # Process and save end bits (offcuts) produced from this MO layout
+        # 1. Save to clean Supabase app_mo table FIRST so foreign keys exist
+        saved = False
+        if self.use_supabase:
+            try:
+                import db_clean as clean_db
+                app_mo_data = {
+                    "mo_no": record.get("mo_number"),
+                    "rm_code": record.get("rm_erp"),
+                    "no_of_rm_sheets": record.get("sheets_required", 1),
+                    "parts_produced": record.get("parts", []),
+                    "parts_qty": record.get("target_qty", 0),
+                    "endbits": str(record.get("endbits", "")),
+                    "endbit_weight": record.get("endbit_weight", 0),
+                    "yield_pct": record.get("yield_pct", 0),
+                    "workflow_path": record.get("workflow_path", "DIRECT_ERP"),
+                    "current_stage": record.get("current_stage", "KRYSALIS"),
+                    "status": record.get("status", "PENDING_KRYSALIS"),
+                    "remarks": record.get("notes", ""),
+                    "created_by": record.get("created_by_role", "shearing"),
+                    "audit_trail": record.get("audit_trail", [])
+                }
+                res = clean_db.create_app_mo(app_mo_data)
+                if res.get("success"):
+                    saved = True
+                    print(f"[MO Workflow] Successfully added {record.get('mo_number')} to clean app_mo table")
+                else:
+                    print(f"[MO Workflow] app_mo insert notice: {res.get('error')}")
+            except Exception as e:
+                print(f"[MO Workflow] Error saving to app_mo: {e}")
+
+        # 2. Process and save end bits (offcuts) produced from this MO layout
         created_endbits = self.save_endbits_from_mo(record, mo_data.get("endbits"))
         record["endbits"] = created_endbits
         if "constraints_status" in record and isinstance(record["constraints_status"], dict):
             record["constraints_status"]["endbits"] = created_endbits
         if created_endbits:
             audit_entry["remarks"] = f"{audit_entry['remarks']} [End Bits Configured: {len(created_endbits)} offcut types]"
-
-        # Save directly to Supabase material_orders table
-        saved = False
-        if self.use_supabase:
-            clean_record = self._sanitize_mo_for_db(record)
-            for tbl in ["material_orders"]:
-                try:
-                    res = requests.post(
-                        f"{SUPABASE_URL}/rest/v1/{tbl}",
-                        headers=self._get_supabase_headers(),
-                        json=clean_record,
-                        timeout=10
-                    )
-                    if res.status_code in (200, 201):
-                        saved = True
-                        print(f"[MO Workflow] Successfully added {record.get('mo_number')} to Supabase {tbl}")
-                        break
-                    else:
-                        print(f"[MO Workflow] Supabase insert returned {res.status_code} on {tbl}: {res.text}")
-                except Exception as e:
-                    print(f"[MO Workflow] Supabase insert error on {tbl}: {e}")
 
         # Always keep local backup store synchronized
         self._save_local(record)
@@ -531,17 +687,17 @@ class MOWorkflowEngine:
         return record
 
     def list_mos(self, role=None, stage=None, status=None):
-        """List MOs with optional filtering and in-memory short TTL cache"""
+        """List MOs with optional filtering and in-memory short TTL cache (Detached legacy material_orders; uses clean app_mo & fresh local store)"""
         now = time.time()
         if self._cached_mos is not None and (now - self._cache_time) < self._cache_ttl:
             all_mos = self._cached_mos
         else:
             all_mos = []
             if self.use_supabase:
-                for tbl in ["material_orders", "manufacturing_orders"]:
+                for tbl in ["app_mo"]:
                     try:
                         res = self.session.get(
-                            f"{SUPABASE_URL}/rest/v1/{tbl}?select=*&order=created_at.desc",
+                            f"{SUPABASE_URL}/rest/v1/{tbl}?select=*&order=id.desc",
                             headers=self._get_supabase_headers(),
                             timeout=6
                         )
@@ -570,12 +726,12 @@ class MOWorkflowEngine:
 
 
     def get_mo(self, mo_number):
-        """Get single MO by MO number"""
+        """Get single MO by MO number from clean app_mo or local store"""
         if self.use_supabase:
-            for tbl in ["material_orders", "manufacturing_orders"]:
+            for tbl in ["app_mo"]:
                 try:
                     res = requests.get(
-                        f"{SUPABASE_URL}/rest/v1/{tbl}?mo_number=eq.{mo_number}&select=*",
+                        f"{SUPABASE_URL}/rest/v1/{tbl}?or=(mo_no.eq.{mo_number},mo_number.eq.{mo_number})&select=*",
                         headers=self._get_supabase_headers(),
                         timeout=10
                     )
@@ -588,7 +744,7 @@ class MOWorkflowEngine:
 
         mos = self._load_local()
         for m in mos:
-            if m.get("mo_number") == mo_number:
+            if m.get("mo_number") == mo_number or m.get("mo_no") == mo_number:
                 return self._normalize_mo(m)
         return None
 
@@ -907,7 +1063,7 @@ class MOWorkflowEngine:
                     p_item = (itm.get("part_no") or "").strip()
                     if not p_item:
                         continue
-                    p_prod = float(itm.get("no_of_parts") or itm.get("target_qty") or 1)
+                    p_prod = float(itm.get("target_qty") or (float(itm.get("no_of_parts", 1)) * float(itm.get("blank_per_strip", 1))) or 1)
                     sub_order_no = f"CUT-{mo_num}-{idx+1}" if len(parts_list) > 1 else f"CUT-{mo_num}"
                     try:
                         erp_mo_id = mo.get("erp_mo_number") or mo_num
@@ -1012,7 +1168,7 @@ class MOWorkflowEngine:
                     p_code = (itm.get("part_no") or "").strip()
                     if not p_code:
                         continue
-                    p_qty = float(itm.get("no_of_parts") or itm.get("target_qty") or target_qty)
+                    p_qty = float(itm.get("target_qty") or (float(itm.get("no_of_parts", 1)) * float(itm.get("blank_per_strip", 1)) * sheets) or target_qty)
                     fg_row = None
                     base_p = itm.get("base_part") or (p_code.split(" - ")[0].strip() if p_code else "")
                     item_match = re.search(r'item\s*(\d+)', p_code, re.IGNORECASE)
@@ -1281,19 +1437,30 @@ class MOWorkflowEngine:
                 total_qty = int(total_qty)
 
             # Parse dimensions: e.g. "730.0*60.9*5.8" or "730*60.9"
-            dim_parts = re.findall(r'[\d\.]+', dim_str)
-            eb_len = float(dim_parts[0]) if len(dim_parts) > 0 else (mo_record.get("length") or 0.0)
-            eb_wid = float(dim_parts[1]) if len(dim_parts) > 1 else (mo_record.get("width") or 0.0)
-            eb_thk = float(dim_parts[2]) if len(dim_parts) > 2 else (mo_record.get("thickness") or 0.0)
+            nums = [float(x) for x in re.findall(r'[\d\.]+', dim_str) if float(x) > 0]
+            if len(nums) >= 3:
+                sorted_d = sorted(nums[:3])
+                eb_thk = sorted_d[0]
+                eb_wid = sorted_d[1]
+                eb_len = sorted_d[2]
+            elif len(nums) == 2:
+                eb_thk = float(mo_record.get("thickness") or 0.0)
+                eb_wid = min(nums[0], nums[1])
+                eb_len = max(nums[0], nums[1])
+            else:
+                eb_len = float(mo_record.get("length") or 0.0)
+                eb_wid = float(mo_record.get("width") or 0.0)
+                eb_thk = float(mo_record.get("thickness") or 0.0)
 
-            # Calculate estimated weight (mild steel density ~ 7.85 g/cm^3)
-            eb_wt = eb.get("weight_kg")
-            if eb_wt is None and eb_len and eb_wid and eb_thk:
-                single_wt = (eb_len * eb_wid * eb_thk * 7.85) / 1000000.0
-                eb_wt = round(single_wt * total_qty, 3)
+            # Calculate estimated weight strictly as (thickness * length * width * 7.85) / 1000000
+            single_wt = round((eb_thk * eb_len * eb_wid * 7.85) / 1000000.0, 3) if (eb_thk and eb_len and eb_wid) else 0.0
+            eb_wt = single_wt
+            total_wt = round(single_wt * total_qty, 3)
 
             eb_id = eb.get("endbit_id") or f"EB-{mo_id}-{idx+1}"
-            eb_name = eb.get("name") or f"End bit - {idx+1}"
+            eb_name = eb.get("name")
+            if not eb_name or eb_name.lower().startswith("end bit") or eb_name.lower().startswith("offcut") or " - " not in eb_name:
+                eb_name = format_endbit_name(grade, eb_thk, eb_len, eb_wid, dim_str)
 
             eb_record = {
                 "id": eb_id,
@@ -1314,6 +1481,7 @@ class MOWorkflowEngine:
                 "available_qty": total_qty,
                 "used_qty": 0,
                 "weight_kg": eb_wt,
+                "total_weight_kg": total_wt,
                 "status": "AVAILABLE",
                 "parts_created": [],
                 "created_at": now_iso,
@@ -1329,16 +1497,15 @@ class MOWorkflowEngine:
             self._save_endbits_local(all_ebs)
 
             if self.use_supabase:
+                import db_clean as clean_db
                 for eb_r in processed_endbits:
                     try:
-                        self.session.post(
-                            f"{SUPABASE_URL}/rest/v1/endbit_records",
-                            headers=self._get_supabase_headers(),
-                            json=eb_r,
-                            timeout=4
-                        )
-                    except Exception:
-                        pass
+                        dim_desc = eb_r.get("dim") or eb_r.get("name") or "Offcut"
+                        qty = float(eb_r.get("available_qty") or eb_r.get("initial_qty") or 1)
+                        wt = float(eb_r.get("weight_kg") or 0)
+                        clean_db.log_endbit_batch(mo_id, dim_desc, qty, wt)
+                    except Exception as e:
+                        print(f"[MO Workflow] Supabase endbit log error: {e}")
 
         return processed_endbits
 
@@ -1352,8 +1519,6 @@ class MOWorkflowEngine:
         eb_id = (data.get("endbit_id") or "").strip()
         if not eb_id:
             eb_id = f"EB-MAN-{now_ts}"
-
-        name = (data.get("name") or "Manual End bit").strip()
 
         try:
             thickness = float(data.get("thickness") or 4.8)
@@ -1384,12 +1549,15 @@ class MOWorkflowEngine:
         grade = str(data.get("grade") or "YS").strip() or "YS"
         notes = str(data.get("notes") or "").strip()
         parent_part = str(data.get("parent_part_no") or data.get("part_no") or "Shop Floor Offcut").strip()
-
-        # Calculate weight in kg: Length * Width * Thickness * 7.85e-6 * qty
-        volume_mm3 = length * width * thickness
-        single_wt = round(volume_mm3 * 7.85e-6, 3) if volume_mm3 > 0 else 0.0
-        total_wt = round(single_wt * qty, 3)
         dim_str = f"{thickness}*{length}*{width}"
+
+        name = (data.get("name") or "").strip()
+        if not name or name.lower().startswith("end bit") or name.lower().startswith("manual") or " - " not in name:
+            name = format_endbit_name(grade, thickness, length, width, dim_str)
+
+        # Calculate weight strictly using (thickness * length * width * 7.85) / 1000000
+        single_wt = round((thickness * length * width * 7.85) / 1000000.0, 3) if (thickness and length and width) else 0.0
+        total_wt = round(single_wt * qty, 3)
 
         record = {
             "id": eb_id,
@@ -1428,12 +1596,20 @@ class MOWorkflowEngine:
 
         if self.use_supabase:
             try:
-                self.session.post(
-                    f"{SUPABASE_URL}/rest/v1/endbit_records",
-                    headers=self._get_supabase_headers(),
-                    json=record,
-                    timeout=5
-                )
+                import db_clean as clean_db
+                mo_num = record.get("mo_number") or f"MANUAL-{now_ts}"
+                # Ensure parent record exists in app_mo for foreign key integrity
+                clean_db.create_app_mo({
+                    "mo_no": mo_num,
+                    "rm_code": "CRCA-2.0-1250-2500",
+                    "no_of_rm_sheets": 0,
+                    "parts_produced": [],
+                    "parts_qty": 0,
+                    "remarks": f"Manual Endbit parent record for {eb_id}",
+                    "status": "APPROVED",
+                    "current_stage": "COMPLETED"
+                })
+                clean_db.log_endbit_batch(mo_num, dim_str, qty, single_wt)
             except Exception as e:
                 print(f"[Manual Endbit] Supabase write notice: {e}")
 
@@ -1441,8 +1617,43 @@ class MOWorkflowEngine:
         return record, None
 
     def list_endbits(self, status=None, grade=None, mo_number=None, search=None):
-        """List recorded end bits with optional filters"""
-        all_ebs = self._load_endbits_local()
+        """List recorded end bits with optional filters, prioritizing Supabase endbits table"""
+        all_ebs = []
+        if self.use_supabase:
+            try:
+                res = self.session.get(
+                    f"{SUPABASE_URL}/rest/v1/endbits?select=*&order=id.desc",
+                    headers=self._get_supabase_headers(),
+                    timeout=5
+                )
+                if res.status_code == 200:
+                    for r in res.json():
+                        qty = float(r.get("quantity") or 0)
+                        eb_desc = r.get("endbit") or ""
+                        nums = [float(x) for x in re.findall(r'[\d\.]+', eb_desc) if float(x) > 0]
+                        thk = nums[0] if len(nums) > 0 else 0
+                        all_ebs.append({
+                            "id": r.get("id"),
+                            "endbit_id": f"EB-{r.get('id')}",
+                            "mo_number": r.get("mo_no") or "-",
+                            "source_mo_number": r.get("mo_no") or "-",
+                            "name": eb_desc or f"Endbit #{r.get('id')}",
+                            "dim": eb_desc or "-",
+                            "thickness": thk,
+                            "grade": eb_desc.split("-")[1] if "-" in eb_desc else "YS",
+                            "available_qty": qty,
+                            "initial_qty": qty,
+                            "weight_kg": float(r.get("weight") or 0),
+                            "status": "AVAILABLE" if qty > 0 else "CONSUMED",
+                            "created_at": r.get("created_at")
+                        })
+            except Exception as e:
+                print(f"[Endbits] Supabase read error: {e}")
+
+        # Fallback to local store if Supabase returned 0 and not configured or empty
+        if not all_ebs:
+            all_ebs = self._load_endbits_local()
+
         filtered = all_ebs
         if status and status.upper() != "ALL":
             filtered = [e for e in filtered if (e.get("status") or "").upper() == status.upper()]
@@ -1466,9 +1677,9 @@ class MOWorkflowEngine:
 
     def get_endbit(self, endbit_id):
         """Get a single end bit record by endbit_id"""
-        all_ebs = self._load_endbits_local()
+        all_ebs = self.list_endbits()
         for eb in all_ebs:
-            if eb.get("endbit_id") == endbit_id or eb.get("id") == endbit_id:
+            if str(eb.get("endbit_id")) == str(endbit_id) or str(eb.get("id")) == str(endbit_id):
                 return eb
         return None
 
@@ -1778,12 +1989,24 @@ class MOWorkflowEngine:
                             f"exceeds the selected end-bit size ({eb_max:g} × {eb_min:g} mm). "
                             f"Cannot cut this part from this offcut."
                         )
+                    guillotine_cap = calculate_max_guillotine_capacity(eb_max, eb_min, p_l, p_w)
                     opt1 = int(eb_max // p_l) * int(eb_min // p_w)
                     opt2 = int(eb_max // p_w) * int(eb_min // p_l)
-                    parts_per_eb = max(opt1, opt2, 1)
+                    parts_per_eb = max(guillotine_cap, opt1, opt2, 1)
+
+                    # Also check if blanks_per_endbit was explicitly passed from OptiCutter or form
+                    specified_blanks_per_eb = int(float(form_data.get("blanks_per_endbit") or 0))
+                    if specified_blanks_per_eb > 0:
+                        parts_per_eb = max(parts_per_eb, specified_blanks_per_eb)
+
                     max_allowed = parts_per_eb * int(endbits_used)
                     req_qty = int(cp.get("no_of_parts") or cp.get("target_qty") or 1)
-                    if req_qty > max_allowed:
+
+                    part_total_area = p_l * p_w * req_qty
+                    total_eb_area = eb_max * eb_min * endbits_used
+
+                    # Strictly only block if requested qty exceeds both guillotine layout capacity and physical raw plate area
+                    if req_qty > max_allowed and (part_total_area > total_eb_area or req_qty > int(total_eb_area // (p_l * p_w))):
                         needed = math.ceil(req_qty / parts_per_eb) if parts_per_eb > 0 else 999
                         return None, (
                             f"Capacity Error: Requested {req_qty} parts for '{cp.get('part_no')}' "
@@ -1799,18 +2022,22 @@ class MOWorkflowEngine:
                     f"Capacity Error: Total blanks cut area ({total_part_cut_area:,.0f} mm²) exceeds "
                     f"total end-bit area ({total_eb_area:,.0f} mm²). Without sufficient raw material, cannot produce parts."
                 )
+            if total_eb_area > 0 and total_part_cut_area <= total_eb_area and (yield_val is None or yield_val == 0):
+                yield_val = round(min(100.0, (total_part_cut_area / total_eb_area) * 100.0), 2)
+
+        # Build offcut dimension string
+        dim_str = f"{thickness}*{offcut_length}*{offcut_width}" if (offcut_length and offcut_width) else form_data.get("endbit_dim", "")
+        cut_blank_str = f"{cut_length}*{cut_width}*{thickness}" if (cut_length and cut_width) else form_data.get("cut_blank", "")
 
         endbit_id = (form_data.get("endbit_id") or "").strip()
         endbit_name = (form_data.get("endbit_name") or "").strip()
+        if not endbit_name or endbit_name.lower().startswith("end bit") or endbit_name.lower().startswith("shop floor") or " - " not in endbit_name:
+            endbit_name = format_endbit_name(grade, thickness, offcut_length, offcut_width, dim_str)
         source_mo = (form_data.get("source_mo_number") or "").strip()
         work_center = (form_data.get("work_center") or "Shearing Guillotine").strip()
         notes = (form_data.get("notes") or "").strip()
         doc_url = (form_data.get("layout_doc_url") or "").strip()
         doc_filename = (form_data.get("layout_doc_filename") or "").strip()
-
-        # Build offcut dimension string
-        dim_str = f"{thickness}*{offcut_length}*{offcut_width}" if (offcut_length and offcut_width) else form_data.get("endbit_dim", "")
-        cut_blank_str = f"{cut_length}*{cut_width}*{thickness}" if (cut_length and cut_width) else form_data.get("cut_blank", "")
 
         # Items to record for FG inventory and ERP cutting reports
         items_to_credit = parts_list if parts_list else [{
@@ -1921,7 +2148,7 @@ class MOWorkflowEngine:
 
     def get_endbit_stats(self):
         """Returns summary statistics for the End Bits Store"""
-        all_ebs = self._load_endbits_local()
+        all_ebs = self.list_endbits()
         total_items = len(all_ebs)
         avail_items = sum(1 for e in all_ebs if (e.get("status") or "").upper() == "AVAILABLE")
         partial_items = sum(1 for e in all_ebs if (e.get("status") or "").upper() == "PARTIALLY_USED")
@@ -1949,14 +2176,13 @@ class MOWorkflowEngine:
         headers = {**self._get_supabase_headers(), "Range": "0-0", "Prefer": "count=exact"}
         for tbl_id, cfg in DB_TABLES_CONFIG.items():
             count = 0
-            if tbl_id == "endbit_records":
-                count = len(self._load_endbits_local())
-            elif self.use_supabase:
+            if self.use_supabase:
                 try:
-                    res = self.session.get(f"{SUPABASE_URL}/rest/v1/{tbl_id}?select=id", headers=headers, timeout=4)
+                    res = self.session.get(f"{SUPABASE_URL}/rest/v1/{tbl_id}?limit=1", headers=headers, timeout=4)
                     cr = res.headers.get("content-range")
                     if cr and "/" in cr:
-                        count = int(cr.split("/")[1])
+                        part = cr.split("/")[1]
+                        count = int(part) if part.isdigit() else 0
                 except Exception:
                     pass
             tables.append({
@@ -1980,38 +2206,6 @@ class MOWorkflowEngine:
         page = max(1, int(page))
         start_idx = (page - 1) * limit
         end_idx = start_idx + limit - 1
-
-        # Local fallback handler for endbit_records
-        if table_name == "endbit_records":
-            all_ebs = self._load_endbits_local()
-            if search_query and search_query.strip():
-                sq = search_query.strip().lower()
-                all_ebs = [
-                    e for e in all_ebs
-                    if sq in (e.get("endbit_id") or "").lower() or
-                       sq in (e.get("mo_number") or "").lower() or
-                       sq in (e.get("parent_part_no") or "").lower() or
-                       sq in (e.get("base_part") or "").lower() or
-                       sq in (e.get("grade") or "").lower() or
-                       sq in (e.get("dim") or "").lower() or
-                       sq in (e.get("status") or "").lower()
-                ]
-            total_count = len(all_ebs)
-            total_pages = math.ceil(total_count / limit) if total_count > 0 else 1
-            rows = all_ebs[start_idx:end_idx + 1]
-            columns = cfg.get("display_columns", self._get_table_all_columns("endbit_records"))
-            return {
-                "table_name": table_name,
-                "title": cfg["title"],
-                "category": cfg["category"],
-                "description": cfg["description"],
-                "page": page,
-                "limit": limit,
-                "total_rows": total_count,
-                "total_pages": total_pages,
-                "columns": columns,
-                "rows": rows
-            }, None
 
         headers = {
             **self._get_supabase_headers(),
@@ -2037,24 +2231,10 @@ class MOWorkflowEngine:
             total_count = int(cr.split("/")[1]) if (cr and "/" in cr and cr.split("/")[1].isdigit()) else len(rows)
             total_pages = math.ceil(total_count / limit) if total_count > 0 else 1
 
-            if table_name == "material_orders":
-                columns = cfg.get("display_columns", ["mo_number", "part_no", "rm_erp", "sheets_required", "target_qty", "current_stage", "status", "workflow_path", "created_on"])
-                for r in rows:
-                    raw_dt = r.get("created_at") or r.get("created_on") or ""
-                    r["created_on"] = str(raw_dt).split("T")[0].split(" ")[0] if raw_dt else "-"
+            if rows:
+                columns = list(rows[0].keys())
             else:
-                # Except material_orders, all other tables show all columns!
-                if rows:
-                    columns = list(rows[0].keys())
-                else:
-                    columns = self._get_table_all_columns(table_name)
-
-                # Filter out separate sl_no column (since the default index column serves as Sl. No.)
-                columns = [c for c in columns if c.lower() not in ("sl_no", "slno", "s_no")]
-
-                # In ERP MO reports, don't add or show created_at / created_on
-                if table_name == "erp_mo_reports":
-                    columns = [c for c in columns if c not in ("created_at", "created_on")]
+                columns = cfg.get("display_columns", self._get_table_all_columns(table_name))
 
             return {
                 "table_name": table_name,
@@ -2073,12 +2253,13 @@ class MOWorkflowEngine:
 
     def _get_table_all_columns(self, table_name):
         known = {
-            "rm_main_store_stock": ['id', 'item_code', 'item_desc', 'uom', 'store_desc', 'onhand_stock', 'category_desc', 'weight', 'total_weight', 'std_cost', 'last_po_price', 'stock_value', 'created_at'],
-            "parts_fg_wip_stock": ['id', 'item_code', 'item_desc', 'uom', 'store_desc', 'onhand_stock', 'category_desc', 'weight', 'total_weight', 'std_cost', 'std_stock_value', 'details', 'created_at'],
-            "endbit_records": ['id', 'endbit_id', 'mo_number', 'parent_part_no', 'base_part', 'grade', 'name', 'dim', 'thickness', 'length', 'width', 'available_qty', 'used_qty', 'initial_qty', 'weight_kg', 'status', 'created_at'],
-            "erp_mo_reports": ['id', 'mo_doc_no', 'doc_date', 'order_status', 'cutting_order_no', 'cutting_order_date', 'rm_code', 'rm_desc', 'uom', 'number_of_sheets', 'reference_date', 'reference_no', 'start_date', 'due_date', 'cutting_plan_no', 'parent_code', 'parent_desc', 'uom_code', 'parent_qty_per_sheet', 'total_parent_qty', 'rm_weight'],
-            "layout_records": ['id', 'row_id', 'base_part', 'part_no', 'status', 'layout_name', 'rm_erp', 'cut_blank', 'grade', 'no_of_sheets', 'cutting_plan', 'thickness', 'length', 'width', 'rm_weight', 'part1', 'part2', 'part3', 'part4', 'per_sheet', 'total_sheet', 'endbits', 'po_price', 'wastage_cost', 'image_url', 'created_at', 'updated_at'],
-            "mrp_rm_sheet_bom": ['id', 'parent_part_no', 'child_part_no', 'os_part', 'erp_part_no', 'scope', 'offtake', 'grade', 'blank_length', 'blank_width', 'blank_thickness', 'blank_weight', 'sheet_length', 'sheet_width', 'sheet_thickness', 'sheet_weight', 'existing_sheet_used', 'components_per_sheet', 'schedule_qty', 'total_qty', 'inhouse_erp_qty', 'outsource_erp_qty', 'balance_qty', 'sheet_working', 'no_of_sheets', 'total_sheet_weight', 'remarks', 'remarks_2', 'created_at']
+            "rm": ['rm_code', 'available_sheets', 'weight_per_sheet', 'total_stock_weight', 'created_at', 'updated_at'],
+            "parts": ['part_no', 'part_desc', 'grade', 'thickness', 'length', 'width', 'weight', 'offtake', 'strip_per_blank_qty', 'standard_rm', 'created_at', 'updated_at'],
+            "mrp": ['id', 'month_year', 'part_no', 'monthly_schedule', 'current_stock', 'qty_to_produce', 'status', 'created_at', 'updated_at'],
+            "mos": ['id', 'date', 'mo_number', 'part_no', 'already_produced_stock', 'rem_stock_toproduce', 'created_at'],
+            "app_mo": ['id', 'date', 'mo_no', 'rm_code', 'no_of_rm_sheets', 'parts_produced', 'parts_qty', 'endbits', 'endbit_weight', 'yield_pct', 'workflow_path', 'current_stage', 'status', 'remarks', 'audit_trail', 'created_at', 'updated_at'],
+            "endbits": ['id', 'date', 'mo_no', 'endbit', 'quantity', 'weight', 'created_at', 'updated_at'],
+            "endbit_mo": ['id', 'date', 'eb_mo_no', 'endbit_id', 'endbit_code', 'no_of_eb_sheets', 'parts_produced', 'parts_qty', 'scrap_weight', 'yield_pct', 'current_stage', 'status', 'remarks', 'created_at']
         }
         return known.get(table_name, [])
 
@@ -2318,29 +2499,17 @@ class MOWorkflowEngine:
     def _update_mo(self, mo):
         self._cached_mos = None  # Invalidate cache on updates
         if self.use_supabase:
-            clean_mo = self._sanitize_mo_for_db(mo)
-            for tbl in ["material_orders"]:
-                try:
-                    res = self.session.patch(
-                        f"{SUPABASE_URL}/rest/v1/{tbl}?mo_number=eq.{mo['mo_number']}",
-                        headers=self._get_supabase_headers(),
-                        json=clean_mo,
-                        timeout=6
-                    )
-                    if res.status_code in (200, 204):
-                        # If 0 rows matched on patch, insert it
-                        updated_rows = res.json() if res.status_code == 200 else []
-                        if not updated_rows:
-                            self.session.post(
-                                f"{SUPABASE_URL}/rest/v1/{tbl}",
-                                headers=self._get_supabase_headers(),
-                                json=clean_mo,
-                                timeout=6
-                            )
-                        break
-                    else:
-                        print(f"[MO Workflow] Supabase patch returned {res.status_code} on {tbl}: {res.text}")
-                except Exception as e:
-                    print(f"[MO Workflow] Supabase patch error on {tbl}: {e}")
+            try:
+                mo_num = mo.get("mo_number") or mo.get("mo_no")
+                url = f"{SUPABASE_URL}/rest/v1/app_mo?mo_no=eq.{mo_num}"
+                patch_payload = {
+                    "current_stage": mo.get("current_stage"),
+                    "status": mo.get("status"),
+                    "audit_trail": mo.get("audit_trail", []),
+                    "updated_at": datetime.utcnow().isoformat()
+                }
+                self.session.patch(url, headers=self._get_supabase_headers(), json=patch_payload, timeout=6)
+            except Exception as e:
+                print(f"[MO Workflow] Error updating app_mo: {e}")
         self._save_local(mo)
 

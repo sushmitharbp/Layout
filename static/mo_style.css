@@ -1240,7 +1240,7 @@ body {
     border-radius: var(--radius-lg);
     box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.08);
     width: 100%;
-    max-width: 760px;
+    max-width: 900px;
     max-height: calc(100vh - 40px);
     height: auto;
     display: flex;
@@ -1251,8 +1251,94 @@ body {
     animation: modalScaleIn 0.2s ease-out;
 }
 
+.modal-add-part-card {
+    background: #f8fafc;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    box-sizing: border-box;
+    width: 100%;
+}
+
+.modal-add-part-grid {
+    display: grid;
+    grid-template-columns: 2.1fr 0.8fr 1.5fr 1fr 1fr 1fr 38px;
+    gap: 10px;
+    align-items: end;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.modal-add-part-grid .form-col {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.modal-add-part-grid .form-col label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #475569;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.modal-add-part-grid input {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    height: 38px !important;
+    display: block !important;
+}
+
+.modal-add-part-mrp-tabs {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+    padding-top: 2px;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.modal-add-part-mrp-card {
+    border-radius: 6px;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.modal-add-part-mrp-card .card-info {
+    min-width: 0;
+    overflow: hidden;
+}
+
+.modal-add-part-mrp-card .card-title {
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    display: block;
+    line-height: 1.2;
+}
+
+.modal-add-part-mrp-card .card-val {
+    font-size: 0.95rem;
+    font-weight: 800;
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
 .mo-modal-dialog.review-dialog {
-    max-width: 840px;
+    max-width: 900px;
     max-height: 90vh;
 }
 
@@ -1506,10 +1592,17 @@ body {
     font-weight: 700;
     color: #15803d;
     font-family: 'Outfit', sans-serif;
-    line-height: 1.1;
+    line-height: 1.2;
     display: flex;
     align-items: baseline;
+    flex-wrap: wrap;
     gap: 4px;
+}
+
+.auto-qty-val strong {
+    font-size: 1.22rem;
+    font-weight: 800;
+    color: #047857;
 }
 
 .auto-qty-val small {
@@ -1520,13 +1613,12 @@ body {
 }
 
 .auto-qty-hint {
-    font-size: 0.7rem;
+    font-size: 0.72rem;
     color: #16a34a;
     margin-top: 2px;
     font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    line-height: 1.3;
+    word-break: break-word;
 }
 
 /* Layout Parts & Off-take Banner in Modal */
@@ -1947,6 +2039,14 @@ body {
     background: #ffffff;
 }
 
+.radio-card.disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    background: #f8fafc;
+    border-color: #cbd5e1;
+    pointer-events: none;
+}
+
 .radio-card input {
     margin-top: 3px;
 }
@@ -2325,6 +2425,147 @@ body {
     font-size: 0.88rem;
     font-weight: 600;
     color: var(--text-main);
+}
+
+/* 1. Review RM & Sheet Summary Bar (First Line) */
+.review-rm-summary-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.review-rm-col {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.review-rm-label {
+    font-size: 0.72rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #64748b;
+}
+
+.review-rm-val {
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: #0f172a;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.review-rm-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.92rem;
+    font-weight: 700;
+    color: #0369a1;
+    background: #f0f9ff;
+    padding: 3px 8px;
+    border-radius: 5px;
+    border: 1px solid #bae6fd;
+    display: inline-block;
+    word-break: break-all;
+}
+
+/* 2. Review Part Details Card & Table */
+.review-part-details-card {
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 14px 16px;
+    margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+}
+
+.review-part-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #f1f5f9;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.review-part-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+    font-size: 0.94rem;
+    color: #0f172a;
+}
+
+.review-part-count-badge {
+    background: #f1f5f9;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+
+.review-parts-table {
+    width: 100%;
+    margin-bottom: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+}
+
+.review-parts-table th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 0.74rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    padding: 9px 12px;
+    border-bottom: 1.5px solid #e2e8f0;
+}
+
+.review-parts-table td {
+    padding: 10px 12px;
+    vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+    font-size: 0.88rem;
+}
+
+.review-parts-table tr:last-child td {
+    border-bottom: none;
+}
+
+.review-part-code {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    color: #0f172a;
+    font-size: 0.88rem;
+    word-break: break-all;
+}
+
+.review-part-dim {
+    font-family: 'JetBrains Mono', monospace;
+    color: #334155;
+    font-size: 0.85rem;
+    background: #f8fafc;
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+    .review-rm-summary-bar {
+        grid-template-columns: 1fr 1fr;
+    }
 }
 
 /* Document Preview Card */
@@ -3743,6 +3984,11 @@ body {
     position: relative;
 }
 
+.eb-part-card-row.has-blank-per-strip {
+    grid-template-columns: minmax(160px, 2.2fr) minmax(125px, 1.4fr) minmax(85px, 0.9fr) minmax(105px, 1.1fr) minmax(80px, 0.8fr) 34px;
+    gap: 8px;
+}
+
 .eb-part-card-row:hover {
     background: #ffffff;
     border-color: #cbd5e1;
@@ -4512,6 +4758,64 @@ body {
     text-decoration: underline;
 }
 
+.notif-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.btn-clear-all-notifs {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    font-size: 0.8rem;
+    cursor: pointer;
+    padding: 3px 6px;
+    border-radius: 4px;
+    transition: all 0.15s ease;
+}
+
+.btn-clear-all-notifs:hover {
+    color: #ef4444;
+    background: #fee2e2;
+}
+
+.notif-tabs-bar {
+    display: flex;
+    align-items: center;
+    background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+    padding: 4px 10px;
+    gap: 4px;
+}
+
+.notif-tab-btn {
+    background: transparent;
+    border: none;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: #64748b;
+    padding: 4px 8px;
+    border-radius: 5px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    transition: all 0.15s ease;
+}
+
+.notif-tab-btn.active {
+    background: #ffffff;
+    color: #0284c7;
+    font-weight: 700;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+
+.notif-tab-btn:hover:not(.active) {
+    color: #1e293b;
+    background: #f1f5f9;
+}
+
 .notif-panel-body {
     max-height: 400px;
     overflow-y: auto;
@@ -4520,14 +4824,17 @@ body {
 }
 
 .notif-item {
-    padding: 12px 16px;
+    padding: 11px 14px;
     border-bottom: 1px solid #f1f5f9;
     cursor: pointer;
-    transition: background 0.15s ease;
+    transition: background 0.15s ease, opacity 0.15s ease;
     display: flex;
-    gap: 12px;
+    gap: 10px;
     align-items: flex-start;
     text-decoration: none;
+    position: relative;
+    background: #ffffff;
+    border-left: 3.5px solid transparent;
 }
 
 .notif-item:hover {
@@ -4539,14 +4846,52 @@ body {
     border-left: 3.5px solid #0284c7;
 }
 
-.notif-item.urgent {
+.notif-item.unread.urgent {
     border-left-color: #ef4444;
     background: #fff5f5;
 }
 
-.notif-item.success {
+.notif-item.unread.success {
     border-left-color: #10b981;
     background: #f0fdf4;
+}
+
+.notif-item.read {
+    opacity: 0.82;
+    background: #ffffff;
+    border-left: 3.5px solid #e2e8f0;
+}
+
+.notif-done-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    background: #ecfdf5;
+    color: #059669;
+    border: 1px solid #a7f3d0;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 999px;
+}
+
+.notif-dismiss-btn {
+    background: none;
+    border: none;
+    color: #94a3b8;
+    padding: 2px 5px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.72rem;
+    line-height: 1;
+    transition: all 0.15s ease;
+    opacity: 0.5;
+}
+
+.notif-dismiss-btn:hover {
+    color: #ef4444;
+    background: #fee2e2;
+    opacity: 1;
 }
 
 .notif-icon-col {
