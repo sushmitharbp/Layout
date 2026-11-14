@@ -19,6 +19,7 @@ app.secret_key = os.getenv("SECRET_KEY", "sheetlayout-super-secret-key-2026")
 # Register Clean v2 Database & Workflow API Blueprint
 from api_clean_v2 import api_v2_bp
 import db_clean as clean_db
+import user_db
 app.register_blueprint(api_v2_bp)
 
 # Load data store from Supabase database (with fallback to local data_store.json)
@@ -135,6 +136,62 @@ DEPARTMENT_CREDENTIALS = {
     }
 }
 
+# Multi-Client Registered Companies Directory
+CLIENT_COMPANIES = {
+    "PEPIPL": {
+        "company_id": "PEPIPL",
+        "branch_code": "PEPIPL",
+        "company_name": "Praveen Engineering Products India Pvt. Ltd. (Unit 1)",
+        "short_name": "Praveen Unit 1",
+        "unit_name": "Unit 1 (Main Stores)",
+        "logo_icon": "fa-industry",
+        "branches": [
+            {"code": "PEPIPL", "name": "Praveen Unit 1 (PEPIPL)"}
+        ],
+        "departments": DEPARTMENT_CREDENTIALS
+    },
+    "PEI2": {
+        "company_id": "PEI2",
+        "branch_code": "PEI2",
+        "company_name": "Praveen Engineering Products India Pvt. Ltd. - Unit 2",
+        "short_name": "Praveen Unit 2",
+        "unit_name": "Unit 2 (Stores & Shearing)",
+        "logo_icon": "fa-industry",
+        "branches": [
+            {"code": "PEI2", "name": "Praveen Unit 2 (PEI2)"}
+        ],
+        "departments": DEPARTMENT_CREDENTIALS
+    },
+    "DEMO": {
+        "company_id": "DEMO",
+        "branch_code": "DEMO-U1",
+        "company_name": "Demo Engineering Industries Ltd.",
+        "short_name": "Demo Client",
+        "logo_icon": "fa-building",
+        "branches": [
+            {"code": "DEMO-U1", "name": "Plant 1 (Main Works)"}
+        ],
+        "departments": {
+            "shearing": {
+                **DEPARTMENT_CREDENTIALS["shearing"],
+                "password": "demo123"
+            },
+            "krysalis": {
+                **DEPARTMENT_CREDENTIALS["krysalis"],
+                "password": "demo123"
+            },
+            "purchase": {
+                **DEPARTMENT_CREDENTIALS["purchase"],
+                "password": "demo123"
+            },
+            "erp": {
+                **DEPARTMENT_CREDENTIALS["erp"],
+                "password": "demo123"
+            }
+        }
+    }
+}
+
 
 @app.after_request
 def add_cache_headers(response):
@@ -154,52 +211,108 @@ def index():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
-    """Department Login page with username and password authentication"""
+    """Multi-Client Department Login: Company ID, Department (1 in 4), and Password"""
     error = None
     if request.method == "POST":
         req_data = request.json if request.is_json else request.form
-        username = (req_data.get("username") or "").strip().lower()
+        raw_company = (req_data.get("company_id") or "PEPIPL").strip().upper()
+        
+        # Support aliases for Praveen Engineers Unit 1 & Unit 2
+        if raw_company in ("PEPIPL", "UNIT1", "UNIT-1", "U1", "PRAVEEN1", "PRAVEEN", "PRAVEEN ENGINEERS"):
+            company_id = "PEPIPL"
+        elif raw_company in ("PEI2", "PEPIPL2", "UNIT2", "UNIT-2", "U2", "PRAVEEN2"):
+            company_id = "PEI2"
+        elif raw_company == "DEMO":
+            company_id = "DEMO"
+        else:
+            company_id = raw_company
+
+        department = (req_data.get("department") or req_data.get("role") or req_data.get("username") or "shearing").strip().lower()
         password = (req_data.get("password") or "").strip()
-        selected_role = (req_data.get("role") or "").strip().lower()
 
-        matched_dept = None
-        matched_key = None
+        if company_id not in CLIENT_COMPANIES or department not in DEPARTMENT_CREDENTIALS:
+            error = "Invalid Company ID, Department, or Password."
+        else:
+            # Authenticate against Supabase public.app_users database table (with local fallback)
+            is_valid, user_rec = user_db.verify_user(company_id, department, password)
+            
+            if is_valid and user_rec:
+                company = CLIENT_COMPANIES[company_id]
+                branch_code = user_rec.get("branch_code") or company.get("branch_code", company_id)
+                session["company_id"] = company["company_id"]
+                session["branch_code"] = branch_code
+                session["company_name"] = company["company_name"]
+                session["company_short"] = company.get("short_name", company["company_id"])
+                session["role"] = department
+                session["user_name"] = user_rec.get("display_name") or company["departments"][department]["name"]
+                
+                if request.is_json:
+                    return jsonify({
+                        "success": True,
+                        "redirect": url_for("dashboard"),
+                        "company_id": company_id,
+                        "branch_code": branch_code,
+                        "company_name": company["company_name"],
+                        "role": department
+                    })
+                return redirect(url_for("dashboard"))
+            else:
+                error = "Invalid Company ID, Department, or Password."
 
-        if selected_role in DEPARTMENT_CREDENTIALS:
-            dept = DEPARTMENT_CREDENTIALS[selected_role]
-            if (not username or username == dept["username"].lower()) and password == dept["password"]:
-                matched_dept = dept
-                matched_key = selected_role
-
-        if not matched_dept and username:
-            for k, dept in DEPARTMENT_CREDENTIALS.items():
-                if dept["username"].lower() == username and dept["password"] == password:
-                    matched_dept = dept
-                    matched_key = k
-                    break
-
-        if matched_dept:
-            session["role"] = matched_key
-            session["user_name"] = matched_dept["name"]
-            if request.is_json:
-                return jsonify({"success": True, "redirect": url_for("dashboard"), "role": matched_key})
-            return redirect(url_for("dashboard"))
-
-        error = "Invalid department credentials. Please verify your username and password."
-        if request.is_json:
+        if request.is_json and error:
             return jsonify({"success": False, "error": error}), 401
 
     if session.get("role") in DEPARTMENT_CREDENTIALS:
         return redirect(url_for("dashboard"))
 
-    return render_template("login.html", departments=DEPARTMENT_CREDENTIALS, error=error)
+    return render_template(
+        "login.html",
+        departments=DEPARTMENT_CREDENTIALS,
+        error=error
+    )
 
 
 @app.route("/logout")
 def logout():
-    """Sign out of current department"""
+    """Sign out of current department & company"""
     session.clear()
     return redirect(url_for("login"))
+
+
+@app.route("/api/user/set-password", methods=["POST"])
+def api_set_password():
+    """
+    Sets or updates a department password in the database (public.app_users)
+    and synchronizes the local fallback store.
+    """
+    data = request.json or request.form or {}
+    company_id = (data.get("company_id") or session.get("company_id") or "").strip().upper()
+    department = (data.get("department") or session.get("role") or "").strip().lower()
+    new_password = (data.get("new_password") or data.get("password") or "").strip()
+
+    if not company_id or not department or not new_password:
+        return jsonify({"success": False, "error": "Company ID, Department, and New Password are required."}), 400
+
+    if len(new_password) < 4:
+        return jsonify({"success": False, "error": "Password must be at least 4 characters long."}), 400
+
+    ok, msg = user_db.set_user_password(company_id, department, new_password)
+    if ok:
+        return jsonify({
+            "success": True,
+            "message": msg,
+            "company_id": company_id,
+            "department": department
+        })
+    return jsonify({"success": False, "error": msg}), 400
+
+
+@app.route("/api/user/list", methods=["GET"])
+def api_list_users():
+    """List users for the active company with passwords masked"""
+    company_id = request.args.get("company_id") or session.get("company_id")
+    users = user_db.list_users(company_id=company_id)
+    return jsonify({"success": True, "users": users})
 
 
 @app.route("/dashboard")
@@ -212,10 +325,19 @@ def dashboard():
     if not role or role not in DEPARTMENT_CREDENTIALS:
         return redirect(url_for("login"))
 
-    user_info = DEPARTMENT_CREDENTIALS[role]
+    company_id = session.get("company_id", "PEPIPL")
+    company = CLIENT_COMPANIES.get(company_id, CLIENT_COMPANIES["PEPIPL"])
+    branch_code = session.get("branch_code", company.get("branch_code", company_id))
+    user_info = company["departments"].get(role, DEPARTMENT_CREDENTIALS[role])
+
     return render_template(
         "mo_portal.html",
         current_role=role,
+        current_company_id=company_id,
+        current_branch_code=branch_code,
+        current_company_name=company.get("company_name", "Praveen Engineering"),
+        current_company_short=company.get("short_name", company_id),
+        company=company,
         user_info=user_info,
         roles=ROLES,
         stats=STATS,
@@ -248,7 +370,8 @@ def search_parts():
     # 1. Prioritize clean 7-table Supabase DB
     if clean_db.SUPABASE_URL and clean_db.SUPABASE_KEY:
         try:
-            db_parts = clean_db.search_parts(query=q, limit=20)
+            company_id = session.get("company_id") or request.args.get("company_id") or "PEI2"
+            db_parts = clean_db.search_parts(query=q, limit=20, company_id=company_id)
             results = []
             for p in (db_parts or []):
                 results.append({
@@ -322,13 +445,15 @@ def search_all_layouts():
 @app.route("/api/part/<path:part_no>")
 def get_part_details(part_no):
     part_clean = part_no.strip()
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEI2"
+    branch = request.args.get("branch") or company_id
 
     # 1. Prioritize clean 7-table Supabase DB
     try:
-        db_part = clean_db.get_part(part_clean)
+        db_part = clean_db.get_part(part_clean, company_id=company_id)
         if db_part:
-            matching_rms = clean_db.get_rms_by_spec(grade=db_part.get("grade"), thickness=db_part.get("thickness"))
-            mrp_rec = clean_db.get_mrp_for_part(part_clean) or {}
+            matching_rms = clean_db.get_rms_by_spec(grade=db_part.get("grade"), thickness=db_part.get("thickness"), branch=branch, company_id=company_id)
+            mrp_rec = clean_db.get_mrp_for_part(part_clean, company_id=company_id) or {}
             records = []
             for rm in matching_rms:
                 rm_grade = rm.get("grade") or db_part.get("grade") or "YS"
@@ -362,7 +487,7 @@ def get_part_details(part_no):
                         }
                     },
                     "per_sheet": {
-                        "yield_pct": 94.2
+                        "yield_pct": None
                     }
                 })
             return jsonify({
@@ -380,6 +505,8 @@ def get_part_details(part_no):
                 "matching_rms": matching_rms,
                 "mrp": {
                     "monthly_schedule": mrp_rec.get("monthly_schedule", 0),
+                    "initial_stock": mrp_rec.get("initial_stock", mrp_rec.get("current_stock", 0)),
+                    "app_mo_produced": mrp_rec.get("app_mo_produced", 0),
                     "current_stock": mrp_rec.get("current_stock", 0),
                     "qty_to_produce": mrp_rec.get("qty_to_produce", 0)
                 }
@@ -726,7 +853,7 @@ PRODUCTION_PLANNER_AGENT = ProductionPlannerAgent(DATA_STORE, ERP_STOCK_SERVICE,
 from endbit_capacity_agent import EndbitCapacityAgent
 ENDBIT_CAPACITY_AGENT = EndbitCapacityAgent(DATA_STORE, MO_ENGINE)
 from part_coproduction_agent import PartCoProductionAgent
-CO_PRODUCTION_AGENT = PartCoProductionAgent(data_store=DATA_STORE, erp_service=ERP_STOCK_SERVICE)
+CO_PRODUCTION_AGENT = PartCoProductionAgent()
 SHEET_AI.set_services(ERP_STOCK_SERVICE, MO_ENGINE, PRODUCTION_PLANNER_AGENT, ENDBIT_CAPACITY_AGENT)
 from cut_optimizer import CUT_OPTIMIZER_2D
 MO_UPLOAD_DIR = os.path.join(app.root_path, "static", "uploads", "mo_documents")
@@ -879,6 +1006,7 @@ def get_part_intelligence(part_no):
     """
     part_clean = part_no.strip()
     rm_code = request.args.get("rm")
+    branch = request.args.get("branch")
     
     raw_extra = request.args.getlist("parts") or request.args.getlist("extra_parts")
     extra_parts = []
@@ -893,21 +1021,24 @@ def get_part_intelligence(part_no):
         if ep and ep != part_clean and ep not in all_req_parts:
             all_req_parts.append(ep)
 
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEI2"
+    branch = request.args.get("branch") or company_id
+
     # 1. Prioritize clean 7-table Supabase DB (with fallback to ERP service for additional parts)
     try:
-        db_part = clean_db.get_part(part_clean)
+        db_part = clean_db.get_part(part_clean, company_id=company_id)
         if db_part:
             target_rm = rm_code or db_part.get("standard_rm")
-            rm_rec = clean_db.get_rm(target_rm) if target_rm else None
+            rm_rec = clean_db.get_rm(target_rm, branch=branch, company_id=company_id) if target_rm else None
             rm_sheets = rm_rec.get("available_sheets", 0) if rm_rec else 0
 
             parts_planning_list = []
             all_mos_list = []
 
             for p_name in all_req_parts:
-                p_part = db_part if p_name == part_clean else (clean_db.get_part(p_name) or {})
-                p_mrp = clean_db.get_mrp_for_part(p_name) or {}
-                p_mos = clean_db.get_mos_for_part(p_name) or []
+                p_part = db_part if p_name == part_clean else (clean_db.get_part(p_name, company_id=company_id) or {})
+                p_mrp = clean_db.get_mrp_for_part(p_name, company_id=company_id) or {}
+                p_mos = clean_db.get_mos_for_part(p_name, branch=branch, company_id=company_id) or []
 
                 p_produced_erp = 0
                 if not p_mrp and ERP_STOCK_SERVICE:
@@ -1110,7 +1241,10 @@ def suggest_coproduction_parts():
         grade = data.get("grade")
         thickness = data.get("thickness")
         base_blanks = data.get("base_blanks")
+        base_blank_len = data.get("base_blank_length")
+        base_blank_wid = data.get("base_blank_width")
         current_parts = data.get("current_parts") or []
+        existing_parts = data.get("existing_parts") or []
         filter_mode = data.get("filter_mode") or "all"
     else:
         base_part = request.args.get("base_part") or request.args.get("part_no")
@@ -1119,12 +1253,22 @@ def suggest_coproduction_parts():
         grade = request.args.get("grade")
         thickness = request.args.get("thickness")
         base_blanks = request.args.get("base_blanks")
+        base_blank_len = request.args.get("base_blank_length")
+        base_blank_wid = request.args.get("base_blank_width")
         raw_parts = request.args.getlist("current_parts") or request.args.getlist("parts")
         current_parts = []
         for p in raw_parts:
             for s in str(p).split(","):
                 if s.strip() and s.strip() not in current_parts:
                     current_parts.append(s.strip())
+        raw_existing = request.args.get("existing_parts")
+        existing_parts = []
+        if raw_existing:
+            try:
+                import json
+                existing_parts = json.loads(raw_existing)
+            except Exception:
+                pass
         filter_mode = request.args.get("filter_mode") or "all"
 
     if not base_part:
@@ -1146,6 +1290,18 @@ def suggest_coproduction_parts():
     except (ValueError, TypeError):
         b_blanks = None
 
+    try:
+        b_len = float(base_blank_len) if base_blank_len else None
+    except (ValueError, TypeError):
+        b_len = None
+
+    try:
+        b_wid = float(base_blank_wid) if base_blank_wid else None
+    except (ValueError, TypeError):
+        b_wid = None
+
+    company_id = session.get("company_id") or request.args.get("company_id") or (data.get("company_id") if request.method == "POST" else None) or "PEPIPL"
+
     result = CO_PRODUCTION_AGENT.suggest_parts(
         base_part_no=base_part,
         sheet_length=s_len,
@@ -1154,7 +1310,11 @@ def suggest_coproduction_parts():
         thickness=thk,
         base_blanks_qty=b_blanks,
         current_parts=current_parts,
-        filter_mode=filter_mode
+        filter_mode=filter_mode,
+        base_blank_length=b_len,
+        base_blank_width=b_wid,
+        existing_parts=existing_parts,
+        company_id=company_id
     )
     return jsonify(result)
 
@@ -1167,17 +1327,19 @@ def get_mo_roles():
 
 @app.route("/api/mo/stats")
 def get_mo_stats():
-    """Get pending counts for all departments"""
-    return jsonify(MO_ENGINE.get_stats())
+    """Get pending counts for all departments filtered strictly by company_id"""
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
+    return jsonify(MO_ENGINE.get_stats(company_id=company_id))
 
 
 @app.route("/api/mo/list")
 def list_mos():
-    """List MOs with optional filters for role, stage, status"""
+    """List MOs with optional filters for role, stage, status, scoped by company_id"""
     role = request.args.get("role")
     stage = request.args.get("stage")
     status = request.args.get("status")
-    mos = MO_ENGINE.list_mos(role=role, stage=stage, status=status)
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
+    mos = MO_ENGINE.list_mos(role=role, stage=stage, status=status, company_id=company_id)
     return jsonify(mos)
 
 
@@ -1313,6 +1475,12 @@ def create_mo():
     created_by = request.headers.get("X-Role") or session.get("role") or ""
     if created_by != "shearing":
         return jsonify({"error": "Unauthorized: Only the Shearing Production team can create or produce Material Orders. Other departments have view-only access."}), 403
+
+    company_id = session.get("company_id") or data.get("company_id") or "PEPIPL"
+    branch_code = session.get("branch_code") or data.get("branch_code") or data.get("branch") or company_id
+    data["company_id"] = company_id
+    data["branch_code"] = branch_code
+
     record = MO_ENGINE.create_mo(data, created_by_role=created_by)
     return jsonify(record), 201
 
@@ -1432,6 +1600,8 @@ def suggest_rm_alternatives():
         except Exception:
             current_onhand = None
 
+    company_id = session.get("company_id") or request.args.get("company_id") or params.get("company_id") or "PEPIPL"
+    branch = params.get("branch") or session.get("branch_code") or company_id
     analysis = RM_ADVISOR_AGENT.analyze_rm_shortage_and_suggest(
         part_no=part_no,
         current_rm=current_rm,
@@ -1439,7 +1609,9 @@ def suggest_rm_alternatives():
         sheets_needed=sheets_needed,
         thickness=thickness,
         grade=grade,
-        current_onhand=current_onhand
+        current_onhand=current_onhand,
+        branch=branch,
+        company_id=company_id
     )
     if isinstance(analysis, dict) and "recommendations" in analysis:
         analysis["recommendations"] = [
@@ -1624,19 +1796,21 @@ def complete_mo_endpoint(mo_number):
 # =====================================================================
 @app.route("/api/endbits")
 def get_endbits():
-    """List recorded end bits / offcuts with optional filters"""
+    """List recorded end bits / offcuts with optional filters and company_id scoping"""
     status = request.args.get("status")
     grade = request.args.get("grade")
     mo = request.args.get("mo")
     q = request.args.get("q")
-    endbits = MO_ENGINE.list_endbits(status=status, grade=grade, mo_number=mo, search=q)
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
+    endbits = MO_ENGINE.list_endbits(status=status, grade=grade, mo_number=mo, search=q, company_id=company_id)
     return jsonify(endbits)
 
 
 @app.route("/api/endbits/stats")
 def get_endbit_stats():
-    """Get KPI summary statistics for the End Bits Store"""
-    stats = MO_ENGINE.get_endbit_stats()
+    """Get KPI summary statistics for the End Bits Store scoped by company_id"""
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
+    stats = MO_ENGINE.get_endbit_stats(company_id=company_id)
     return jsonify(stats)
 
 
@@ -1799,6 +1973,7 @@ def search_parts_blank():
 @app.route("/api/db/tables")
 def get_db_tables():
     """Get real-time list of all 7 database tables with live row counts"""
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
     tables = MO_ENGINE.get_db_tables_overview()
     return jsonify({"tables": tables})
 
@@ -1809,6 +1984,7 @@ def get_db_table_records(table_name):
     page = request.args.get("page", 1)
     limit = request.args.get("limit", 25)
     query = request.args.get("q", "")
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
     data, err = MO_ENGINE.get_db_table_data(table_name, page=page, limit=limit, search_query=query)
     if err:
         return jsonify({"error": err}), 400
@@ -1828,8 +2004,9 @@ def export_mos():
     from_date = request.args.get("from_date")
     to_date = request.args.get("to_date")
     search = (request.args.get("q") or "").strip().lower()
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
 
-    mos = MO_ENGINE.list_mos(role=role, stage=stage, status=status)
+    mos = MO_ENGINE.list_mos(role=role, stage=stage, status=status, company_id=company_id)
 
     if search:
         mos = [
@@ -2028,11 +2205,12 @@ def export_mos():
 
 @app.route("/api/notifications", methods=["GET"])
 def get_notifications_endpoint():
-    """Returns real-time notifications for the active authenticated department"""
+    """Returns real-time notifications for the active authenticated department and company"""
     role = request.headers.get("X-Role") or request.args.get("role") or session.get("role") or "shearing"
     limit = int(request.args.get("limit", 50))
     unread_only = request.args.get("unread_only", "").lower() in ("true", "1", "yes")
-    res = MO_ENGINE.notification_engine.get_notifications_for_role(role, limit=limit, unread_only=unread_only)
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
+    res = MO_ENGINE.notification_engine.get_notifications_for_role(role, limit=limit, unread_only=unread_only, company_id=company_id)
     return jsonify(res)
 
 
@@ -2066,6 +2244,41 @@ def clear_notifications_endpoint():
     role = request.headers.get("X-Role") or body.get("role") or session.get("role") or "shearing"
     MO_ENGINE.notification_engine.clear_notifications_for_role(role)
     return jsonify({"success": True})
+
+
+# ==========================================
+# TARA ERP LIVE API ENDPOINTS
+# ==========================================
+
+@app.route("/api/erp/test", methods=["GET"])
+def erp_test_connection():
+    """Tests connection to Tara ERP (Oracle ORDS) API"""
+    from tara_erp_client import tara_erp_client
+    res = tara_erp_client.test_connection()
+    return jsonify(res)
+
+
+@app.route("/api/erp/rm-sheets", methods=["GET"])
+def erp_get_rm_sheets():
+    """Fetches live RM sheet stock from Tara ERP API by thickness and optional grade"""
+    from tara_erp_client import tara_erp_client
+    thk = float(request.args.get("thickness", 4.8))
+    grade = request.args.get("grade")
+    branch = request.args.get("branch")
+    sheets = tara_erp_client.fetch_rm_sheet_details(thickness=thk, grade=grade, branch_code=branch)
+    return jsonify({"success": True, "count": len(sheets), "sheets": sheets})
+
+
+@app.route("/api/erp/cutting-orders", methods=["GET"])
+def erp_get_cutting_orders():
+    """Fetches sheet cutting orders / MO history for a part from Tara ERP API"""
+    from tara_erp_client import tara_erp_client
+    part_no = request.args.get("part_no", "")
+    month = request.args.get("month")
+    year = int(request.args.get("year", 0)) if request.args.get("year") else None
+    branch = request.args.get("branch")
+    res = tara_erp_client.fetch_sheet_cutting_orders(part_no=part_no, month=month, year=year, branch_code=branch)
+    return jsonify({"success": True, **res})
 
 
 if __name__ == "__main__":

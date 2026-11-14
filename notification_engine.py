@@ -82,16 +82,23 @@ class NotificationEngine:
         self._save_notifications(notifs)
         return record
 
-    def get_notifications_for_role(self, role, limit=50, unread_only=False):
+    def get_notifications_for_role(self, role, limit=50, unread_only=False, company_id=None):
         """
-        Fetches notifications intended for the given role, along with live unread counts.
-        Excludes notifications that the role has dismissed / cleared.
+        Fetches notifications intended for the given role and company, along with live unread counts.
+        Excludes notifications that the role has dismissed / cleared or belong to another company.
         """
         role_lower = (role or "").lower().strip()
+        c_id = str(company_id).strip().upper() if company_id else None
         all_notifs = self._load_notifications()
         filtered = []
 
         for n in all_notifs:
+            # Check company isolation if company_id is provided
+            if c_id:
+                notif_company = n.get("company_id") or n.get("branch_code") or (n.get("extra_data") or {}).get("company_id") or "PEI2"
+                if str(notif_company).strip().upper() != c_id:
+                    continue
+
             tgt = (n.get("target_role") or "").lower()
             if tgt == role_lower or tgt == "all":
                 # If dismissed by this role, do not show

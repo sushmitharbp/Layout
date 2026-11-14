@@ -27,12 +27,80 @@ def _get_headers():
         "Prefer": "return=representation"
     }
 
+def _safe_supabase_get(endpoint_url, company_id=None, timeout=10):
+    """
+    Executes a GET query to Supabase PostgREST with company_id tenant isolation.
+    If company_id is provided, appends company_id=eq.{company_id}.
+    If the remote table does not yet have the company_id column (HTTP 400),
+    gracefully falls back:
+    - For PEI2: returns existing rows (all legacy Supabase rows belong to PEI2).
+    - For PEPIPL (or other tenants): returns [] to ensure zero data leakage.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return []
+
+    c_id = (company_id or "").strip().upper() if company_id else None
+
+    if c_id:
+        separator = "&" if "?" in endpoint_url else "?"
+        tenant_url = f"{endpoint_url}{separator}company_id=eq.{c_id}"
+        try:
+            res = requests.get(tenant_url, headers=_get_headers(), timeout=timeout)
+            if res.status_code == 200:
+                return res.json()
+            if res.status_code == 400 and ("company_id" in res.text or "column" in res.text):
+                # Migration script not yet executed in Supabase SQL editor
+                logger.debug(f"company_id column not present on table yet; applying fallback for {c_id}")
+                if c_id == "PEI2":
+                    fb = requests.get(endpoint_url, headers=_get_headers(), timeout=timeout)
+                    if fb.status_code == 200:
+                        return fb.json()
+                else:
+                    return []
+            else:
+                logger.warning(f"Supabase GET status {res.status_code}: {res.text}")
+        except Exception as e:
+            logger.error(f"Supabase GET exception on {tenant_url}: {e}")
+            return []
+
+    try:
+        res = requests.get(endpoint_url, headers=_get_headers(), timeout=timeout)
+        if res.status_code == 200:
+            return res.json()
+        return []
+    except Exception as e:
+        logger.error(f"Supabase GET exception on {endpoint_url}: {e}")
+        return []
+
+def _safe_supabase_post(endpoint_url, payload, timeout=10):
+    """
+    Executes a POST insert into Supabase table.
+    If table does not yet have company_id column, strips it and retries safely.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return False, "Database not configured", None
+    try:
+        res = requests.post(endpoint_url, headers=_get_headers(), json=payload, timeout=timeout)
+        if res.status_code in (200, 201):
+            return True, None, (res.json()[0] if res.json() else payload)
+        if res.status_code == 400 and "company_id" in res.text:
+            cleaned = dict(payload)
+            cleaned.pop("company_id", None)
+            cleaned.pop("branch_code", None)
+            res2 = requests.post(endpoint_url, headers=_get_headers(), json=cleaned, timeout=timeout)
+            if res2.status_code in (200, 201):
+                return True, None, (res2.json()[0] if res2.json() else cleaned)
+            return False, res2.text, None
+        return False, res.text, None
+    except Exception as e:
+        return False, str(e), None
+
 # ============================================================================
 # 1. PARTS MASTER
 # ============================================================================
 
-def search_parts(query="", limit=30):
-    """Search parts by part_no or part_desc"""
+def search_parts(query="", limit=30, company_id=None):
+    """Search parts by part_no or part_desc scoped by company_id"""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
     
@@ -42,34 +110,19 @@ def search_parts(query="", limit=30):
         url += f"&or=(part_no.ilike.*{q}*,part_desc.ilike.*{q}*)"
     url += "&order=part_no.asc"
 
-    try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            return res.json()
-        logger.error(f"search_parts error: {res.status_code} - {res.text}")
-        return []
-    except Exception as e:
-        logger.error(f"search_parts exception: {e}")
-        return []
+    return _safe_supabase_get(url, company_id=company_id)
 
-def get_part(part_no):
-    """Fetch a single part by part_no"""
+def get_part(part_no, company_id=None):
+    """Fetch a single part by part_no scoped by company_id"""
     if not SUPABASE_URL or not SUPABASE_KEY or not part_no:
         return None
     url = f"{SUPABASE_URL}/rest/v1/parts?part_no=eq.{part_no}&limit=1"
-    try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            return data[0] if data else None
-        return None
-    except Exception as e:
-        logger.error(f"get_part exception: {e}")
-        return None
+    rows = _safe_supabase_get(url, company_id=company_id)
+    return rows[0] if rows else None
 
-def get_parts_by_spec(grade=None, thickness=None, limit=60):
+def get_parts_by_spec(grade=None, thickness=None, limit=60, company_id=None):
     """
-    Fetch parts with matching grade and thickness from the parts master.
+    Fetch parts with matching grade and thickness from the parts master scoped by company_id.
     """
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
@@ -82,14 +135,7 @@ def get_parts_by_spec(grade=None, thickness=None, limit=60):
             url += f"&thickness=eq.{thk_val}"
         except Exception:
             pass
-    try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            return res.json()
-        return []
-    except Exception as e:
-        logger.error(f"get_parts_by_spec exception: {e}")
-        return []
+    return _safe_supabase_get(url, company_id=company_id)
 
 def create_part(data):
     """
@@ -223,22 +269,45 @@ def parse_rm_specs(rm_dict):
     rm_dict["thickness"] = thk
     rm_dict["length"] = l
     rm_dict["width"] = w
+    if "stores" not in rm_dict:
+        rm_dict["stores"] = {"Main Stores": rm_dict.get("available_sheets", 0)}
+    if "branch_code" not in rm_dict:
+        rm_dict["branch_code"] = "ALL"
     return rm_dict
 
-def get_rms_by_spec(grade=None, thickness=None):
+def get_all_rms(company_id=None):
+    """Fetch all RM sheets from store scoped by company_id"""
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return []
+    url = f"{SUPABASE_URL}/rest/v1/rm?select=*&order=available_sheets.desc"
+    rows = _safe_supabase_get(url, company_id=company_id)
+    return [parse_rm_specs(r) for r in rows]
+
+def get_rms_by_spec(grade=None, thickness=None, branch=None, company_id=None):
     """
-    Fetch RM sheets from rm table with strict grade and thickness parsing.
+    Fetch RM sheets matching grade and thickness:
+    1. Try live Tara ERP ORDS API first (with optional branch filter e.g. PEPIPL, PEI2).
+    2. Fallback to Supabase rm table scoped by company_id.
     """
+    target_tenant = (branch or company_id or "").strip()
+    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else None
+
+    if thickness is not None:
+        try:
+            from tara_erp_client import tara_erp_client
+            erp_sheets = tara_erp_client.fetch_rm_sheet_details(thickness=float(thickness), grade=grade, branch_code=b_code)
+            if erp_sheets:
+                return erp_sheets
+        except Exception as e:
+            logger.warning(f"Tara ERP live RM fetch fallback: {e}")
+
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
     
     url = f"{SUPABASE_URL}/rest/v1/rm?select=*&order=available_sheets.desc"
     try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code != 200:
-            return []
-        
-        all_rms = [parse_rm_specs(r) for r in res.json()]
+        raw_rows = _safe_supabase_get(url, company_id=target_tenant)
+        all_rms = [parse_rm_specs(r) for r in raw_rows]
         target_thk = float(thickness) if thickness is not None else None
         target_grade = str(grade).strip().upper() if grade else None
         
@@ -263,20 +332,36 @@ def get_rms_by_spec(grade=None, thickness=None):
         logger.error(f"get_rms_by_spec exception: {e}")
         return []
 
-def get_rm(rm_code):
-    """Fetch single RM sheet details by rm_code"""
-    if not SUPABASE_URL or not SUPABASE_KEY or not rm_code:
+def get_rm(rm_code, branch=None, company_id=None):
+    """Fetch single RM sheet details by rm_code (Tara ERP Live First, then Supabase)"""
+    if not rm_code:
+        return None
+
+    target_tenant = (branch or company_id or "").strip()
+    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else None
+
+    # 1. Try Tara ERP Live API
+    try:
+        from tara_erp_client import tara_erp_client, extract_grade_from_text
+        thk_match = re.search(r'[-*](\d+(?:\.\d+)?)[-*]', rm_code)
+        if thk_match:
+            thk_val = float(thk_match.group(1))
+            grd = extract_grade_from_text(rm_code)
+            erp_sheets = tara_erp_client.fetch_rm_sheet_details(thickness=thk_val, grade=grd, branch_code=b_code, include_zero_stock=True)
+            for s in erp_sheets:
+                if s["rm_code"].upper() == rm_code.upper():
+                    return s
+    except Exception as e:
+        logger.warning(f"Tara ERP single RM fetch fallback: {e}")
+
+    # 2. Supabase rm table fallback
+    if not SUPABASE_URL or not SUPABASE_KEY:
         return None
     url = f"{SUPABASE_URL}/rest/v1/rm?rm_code=eq.{rm_code}&limit=1"
-    try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            return parse_rm_specs(data[0]) if data else None
-        return None
-    except Exception as e:
-        logger.error(f"get_rm exception: {e}")
-        return None
+    rows = _safe_supabase_get(url, company_id=target_tenant)
+    if rows:
+        return parse_rm_specs(rows[0])
+    return None
 
 def update_rm_sheets(rm_code, delta_sheets):
     """Deduct (negative) or add (positive) available sheets in rm table"""
@@ -357,8 +442,53 @@ def create_rm(data):
 # 3. MRP (MONTHLY DEMAND & SCHEDULE)
 # ============================================================================
 
-def get_mrp_for_part(part_no, month_year=None):
-    """Fetch MRP record for a part (latest or specific month)"""
+def get_produced_qty_from_app_mo(part_no, company_id=None):
+    """
+    Computes total quantity already produced for this part across active MOs in app_mo scoped by company_id.
+    Excludes REJECTED MOs.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY or not part_no:
+        return 0.0
+
+    p_clean = str(part_no).strip().lower()
+    p_base = p_clean.split(" - ")[0].split(" / ")[0]
+
+    try:
+        mos = list_app_mos(limit=250, company_id=company_id)
+        total_produced = 0.0
+
+        for mo in mos:
+            if str(mo.get("status", "")).upper() == "REJECTED":
+                continue
+            parts = mo.get("parts_produced")
+            if isinstance(parts, str):
+                try:
+                    parts = json.loads(parts)
+                except Exception:
+                    parts = []
+            if isinstance(parts, list):
+                for p in parts:
+                    if isinstance(p, dict):
+                        cand = str(p.get("part_no") or p.get("base_part") or "").strip().lower()
+                        cand_base = cand.split(" - ")[0].split(" / ")[0]
+                        if cand == p_clean or cand_base == p_base or cand == p_base or cand_base == p_clean:
+                            q = float(p.get("qty") or p.get("target_qty") or p.get("blank_qty") or 0)
+                            total_produced += q
+
+        return total_produced
+    except Exception as e:
+        logger.error(f"get_produced_qty_from_app_mo exception: {e}")
+        return 0.0
+
+def get_mrp_for_part(part_no, month_year=None, company_id=None):
+    """
+    Fetch MRP record for a part (latest or specific month) scoped by company_id and incorporates
+    parts already produced from active app_mo records:
+    - initial_stock: original current_stock from MRP table
+    - app_mo_produced: sum of parts produced from active app_mo orders
+    - current_stock: initial_stock + app_mo_produced
+    - qty_to_produce: max(0, monthly_schedule - current_stock)
+    """
     if not SUPABASE_URL or not SUPABASE_KEY or not part_no:
         return None
     
@@ -368,32 +498,105 @@ def get_mrp_for_part(part_no, month_year=None):
     url += "&order=id.desc&limit=1"
 
     try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            data = res.json()
-            return data[0] if data else None
-        return None
+        rows = _safe_supabase_get(url, company_id=company_id)
+        if not rows:
+            return None
+        mrp_row = rows[0]
+
+        produced_mo_qty = get_produced_qty_from_app_mo(part_no, company_id=company_id)
+        initial_stock = float(mrp_row.get("current_stock") or 0)
+        monthly_sched = float(mrp_row.get("monthly_schedule") or 0)
+
+        effective_stock = initial_stock + produced_mo_qty
+        effective_qty_to_produce = max(0.0, monthly_sched - effective_stock)
+
+        return {
+            **mrp_row,
+            "initial_stock": initial_stock,
+            "app_mo_produced": produced_mo_qty,
+            "current_stock": effective_stock,
+            "qty_to_produce": effective_qty_to_produce
+        }
     except Exception as e:
         logger.error(f"get_mrp_for_part exception: {e}")
         return None
 
-# ============================================================================
-# 4. MOS (ERP MO HISTORY)
-# ============================================================================
+def get_mrp_for_parts_batch(part_nos, month_year=None, company_id=None):
+    """
+    Batch fetches MRP records for a list of part numbers from Supabase mrp table scoped by company_id.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY or not part_nos:
+        return {}
 
-def get_mos_for_part(part_no, limit=10):
-    """Fetch ERP historical cutting orders for this part"""
-    if not SUPABASE_URL or not SUPABASE_KEY or not part_no:
+    clean_parts = list({str(p).strip() for p in part_nos if str(p).strip()})
+    if not clean_parts:
+        return {}
+
+    results = {}
+    chunk_size = 50
+    for i in range(0, len(clean_parts), chunk_size):
+        chunk = clean_parts[i:i + chunk_size]
+        joined = ",".join([f'"{p}"' for p in chunk])
+        url = f"{SUPABASE_URL}/rest/v1/mrp?part_no=in.({joined})&select=*"
+        if month_year:
+            url += f"&month_year=eq.{month_year}"
+
+        try:
+            rows = _safe_supabase_get(url, company_id=company_id)
+            for row in rows:
+                p_no = row.get("part_no")
+                if p_no and p_no not in results:
+                    init_stock = float(row.get("current_stock") or 0)
+                    sched = float(row.get("monthly_schedule") or 0)
+                    mo_prod = get_produced_qty_from_app_mo(p_no, company_id=company_id)
+                    eff_stock = init_stock + mo_prod
+                    eff_to_prod = max(0.0, sched - eff_stock)
+                    results[p_no] = {
+                        **row,
+                        "initial_stock": init_stock,
+                        "app_mo_produced": mo_prod,
+                        "current_stock": eff_stock,
+                        "qty_to_produce": eff_to_prod
+                    }
+        except Exception as e:
+            logger.error(f"get_mrp_for_parts_batch exception: {e}")
+
+    return results
+
+def get_mos_for_part(part_no, limit=10, branch=None, company_id=None):
+    """Fetch ERP historical cutting orders for this part (Tara ERP Live First, then Supabase) scoped by tenant"""
+    if not part_no:
+        return []
+
+    target_tenant = (branch or company_id or "").strip()
+    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else None
+
+    # 1. Try Tara ERP Live API
+    try:
+        from tara_erp_client import tara_erp_client
+        mo_res = tara_erp_client.fetch_sheet_cutting_orders(part_no=part_no, branch_code=b_code)
+        orders = mo_res.get("orders", [])
+        if orders:
+            formatted = []
+            for o in orders[:limit]:
+                formatted.append({
+                    "mo_number": o.get("cutting_order_no"),
+                    "date": (o.get("cutting_order_date") or "")[:10],
+                    "part_no": part_no,
+                    "already_produced_stock": o.get("parent_qty", 0),
+                    "rem_stock_toproduce": 0,
+                    "rm_item_code": o.get("rm_item_code"),
+                    "no_of_sets": o.get("no_of_sets")
+                })
+            return formatted
+    except Exception as e:
+        logger.warning(f"Tara ERP live MO fetch fallback: {e}")
+
+    # 2. Supabase mos table fallback
+    if not SUPABASE_URL or not SUPABASE_KEY:
         return []
     url = f"{SUPABASE_URL}/rest/v1/mos?part_no=eq.{part_no}&order=date.desc&limit={limit}"
-    try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            return res.json()
-        return []
-    except Exception as e:
-        logger.error(f"get_mos_for_part exception: {e}")
-        return []
+    return _safe_supabase_get(url, company_id=target_tenant)
 
 # ============================================================================
 # 5. APP_MO (APPLICATION MO WORKFLOW)
@@ -433,7 +636,7 @@ def generate_next_mo_number():
     # Fallback with timestamp
     return f"{prefix}{int(datetime.now().timestamp()) % 10000:04d}"
 
-def create_app_mo(data):
+def create_app_mo(data, company_id=None):
     """
     Creates an MO record, deducts RM sheets, logs generated endbits, and records audit trail.
     Assigns explicit ID to prevent PostgreSQL sequence permission errors with anon keys.
@@ -441,11 +644,33 @@ def create_app_mo(data):
     if not SUPABASE_URL or not SUPABASE_KEY:
         return {"success": False, "error": "Database not configured"}
 
+    if company_id:
+        data["company_id"] = data.get("company_id") or company_id
+
     mo_no = data.get("mo_no") or generate_next_mo_number()
     rm_code = data.get("rm_code")
     no_of_rm_sheets = float(data.get("no_of_rm_sheets", 0))
     parts_produced = data.get("parts_produced", [])
     parts_qty = float(data.get("parts_qty", 0))
+
+    # Ensure parts_qty represents the complete sum of all parts produced (not just base part)
+    if isinstance(parts_produced, str):
+        try:
+            parts_produced = json.loads(parts_produced)
+        except Exception:
+            pass
+
+    sum_from_parts = 0.0
+    if isinstance(parts_produced, list):
+        for p in parts_produced:
+            if isinstance(p, dict):
+                sum_from_parts += float(p.get("qty") or p.get("target_qty") or p.get("blank_qty") or 0)
+            elif isinstance(p, (int, float)):
+                sum_from_parts += float(p)
+
+    if sum_from_parts > 0 and (parts_qty == 0 or sum_from_parts != parts_qty):
+        parts_qty = sum_from_parts
+
     endbits_desc = data.get("endbits", "")
     endbit_weight = float(data.get("endbit_weight", 0))
     yield_pct = float(data.get("yield_pct", 0))
@@ -461,8 +686,11 @@ def create_app_mo(data):
         "notes": remarks
     }]
 
+    company_id = data.get("company_id") or "PEI2"
     record = {
         "id": row_id,
+        "company_id": company_id,
+        "branch_code": data.get("branch_code") or company_id,
         "mo_no": mo_no,
         "rm_code": rm_code,
         "no_of_rm_sheets": no_of_rm_sheets,
@@ -479,24 +707,19 @@ def create_app_mo(data):
     }
 
     url = f"{SUPABASE_URL}/rest/v1/app_mo"
-    try:
-        res = requests.post(url, headers=_get_headers(), json=record, timeout=10)
-        if res.status_code not in (200, 201):
-            return {"success": False, "error": f"Failed to insert MO: {res.text}"}
+    ok, err, inserted = _safe_supabase_post(url, record, timeout=10)
+    if not ok:
+        return {"success": False, "error": f"Failed to insert MO: {err}"}
 
-        # 1. Deduct sheets from RM stock
-        if rm_code and no_of_rm_sheets > 0:
-            update_rm_sheets(rm_code, -no_of_rm_sheets)
+    # 1. Deduct sheets from RM stock
+    if rm_code and no_of_rm_sheets > 0:
+        update_rm_sheets(rm_code, -no_of_rm_sheets)
 
-        # 2. Log generated endbit into endbits table if applicable
-        if endbits_desc and no_of_rm_sheets > 0:
-            log_endbit_batch(mo_no, endbits_desc, no_of_rm_sheets, endbit_weight)
+    # 2. Log generated endbit into endbits table if applicable
+    if endbits_desc and no_of_rm_sheets > 0:
+        log_endbit_batch(mo_no, endbits_desc, no_of_rm_sheets, endbit_weight, company_id=company_id)
 
-        return {"success": True, "mo_no": mo_no, "data": res.json()[0] if res.json() else record}
-
-    except Exception as e:
-        logger.error(f"create_app_mo exception: {e}")
-        return {"success": False, "error": str(e)}
+    return {"success": True, "mo_no": mo_no, "data": inserted or record}
 
 def update_app_mo_status(mo_no, current_stage=None, status=None, audit_entry=None):
     """Updates approval status/stage in Supabase app_mo table"""
@@ -527,8 +750,8 @@ def update_app_mo_status(mo_no, current_stage=None, status=None, audit_entry=Non
         logger.error(f"update_app_mo_status exception: {e}")
         return False
 
-def list_app_mos(status=None, stage=None, limit=50):
-    """List application MOs with optional status or stage filters"""
+def list_app_mos(status=None, stage=None, limit=50, company_id=None):
+    """List application MOs with optional status, stage, and company_id tenant filters"""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
     url = f"{SUPABASE_URL}/rest/v1/app_mo?select=*&order=id.desc&limit={limit}"
@@ -536,59 +759,43 @@ def list_app_mos(status=None, stage=None, limit=50):
         url += f"&status=eq.{status}"
     if stage:
         url += f"&current_stage=eq.{stage}"
-    try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            return res.json()
-        return []
-    except Exception as e:
-        logger.error(f"list_app_mos exception: {e}")
-        return []
+    return _safe_supabase_get(url, company_id=company_id)
 
 # ============================================================================
 # 6. ENDBITS (OFFCUT BATCH STORE)
 # ============================================================================
 
-def log_endbit_batch(mo_no, endbit_desc, quantity, weight, endbit_id_num=None):
-    """Logs a new endbit batch generated from an MO with explicit ID"""
+def log_endbit_batch(mo_no, endbit_desc, quantity, weight, endbit_id_num=None, company_id=None):
+    """Logs a new endbit batch generated from an MO with explicit ID and company_id"""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return None
     url = f"{SUPABASE_URL}/rest/v1/endbits"
     eb_id = endbit_id_num or get_next_id("endbits")
+    c_id = company_id or "PEI2"
     payload = {
         "id": eb_id,
+        "company_id": c_id,
         "mo_no": mo_no,
         "endbit": endbit_desc,
         "quantity": float(quantity),
         "weight": float(weight)
     }
-    try:
-        res = requests.post(url, headers=_get_headers(), json=payload, timeout=10)
-        return res.status_code in (200, 201)
-    except Exception as e:
-        logger.error(f"log_endbit_batch exception: {e}")
-        return False
+    ok, err, inserted = _safe_supabase_post(url, payload, timeout=10)
+    return ok
 
-def get_available_endbits():
-    """Fetch all available endbit batches with stock > 0"""
+def get_available_endbits(company_id=None):
+    """Fetch all available endbit batches with stock > 0 scoped by company_id"""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
     url = f"{SUPABASE_URL}/rest/v1/endbits?quantity=gt.0&order=id.desc"
-    try:
-        res = requests.get(url, headers=_get_headers(), timeout=10)
-        if res.status_code == 200:
-            return res.json()
-        return []
-    except Exception as e:
-        logger.error(f"get_available_endbits exception: {e}")
-        return []
+    return _safe_supabase_get(url, company_id=company_id)
 
 # ============================================================================
 # 7. ENDBIT_MO (CUTTING FROM ENDBITS)
 # ============================================================================
 
-def create_endbit_mo(data):
-    """Create order cutting parts from an existing endbit batch with explicit ID"""
+def create_endbit_mo(data, company_id=None):
+    """Create order cutting parts from an existing endbit batch with explicit ID and company_id"""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return {"success": False, "error": "Database not configured"}
     
@@ -596,9 +803,11 @@ def create_endbit_mo(data):
     endbit_id = data.get("endbit_id")
     no_of_eb_sheets = float(data.get("no_of_eb_sheets", 0))
     row_id = data.get("id") or get_next_id("endbit_mo")
+    c_id = data.get("company_id") or company_id or "PEI2"
 
     record = {
         "id": row_id,
+        "company_id": c_id,
         "eb_mo_no": eb_mo_no,
         "endbit_id": endbit_id,
         "endbit_code": data.get("endbit_code", ""),
@@ -613,26 +822,22 @@ def create_endbit_mo(data):
     }
 
     url = f"{SUPABASE_URL}/rest/v1/endbit_mo"
-    try:
-        res = requests.post(url, headers=_get_headers(), json=record, timeout=10)
-        if res.status_code not in (200, 201):
-            return {"success": False, "error": res.text}
+    ok, err, inserted = _safe_supabase_post(url, record, timeout=10)
+    if not ok:
+        return {"success": False, "error": f"Failed to insert Endbit MO: {err}"}
         
-        # Deduct quantity from endbits batch
-        if endbit_id and no_of_eb_sheets > 0:
-            get_eb_url = f"{SUPABASE_URL}/rest/v1/endbits?id=eq.{endbit_id}"
-            eb_res = requests.get(get_eb_url, headers=_get_headers(), timeout=10)
-            if eb_res.status_code == 200 and eb_res.json():
-                cur_eb = eb_res.json()[0]
-                new_eb_qty = max(0, float(cur_eb.get("quantity", 0)) - no_of_eb_sheets)
-                requests.patch(
-                    get_eb_url, 
-                    headers=_get_headers(), 
-                    json={"quantity": new_eb_qty, "updated_at": datetime.utcnow().isoformat()}, 
-                    timeout=10
-                )
+    # Deduct quantity from endbits batch
+    if endbit_id and no_of_eb_sheets > 0:
+        get_eb_url = f"{SUPABASE_URL}/rest/v1/endbits?id=eq.{endbit_id}"
+        eb_res = requests.get(get_eb_url, headers=_get_headers(), timeout=10)
+        if eb_res.status_code == 200 and eb_res.json():
+            cur_eb = eb_res.json()[0]
+            new_eb_qty = max(0, float(cur_eb.get("quantity", 0)) - no_of_eb_sheets)
+            requests.patch(
+                get_eb_url, 
+                headers=_get_headers(), 
+                json={"quantity": new_eb_qty, "updated_at": datetime.utcnow().isoformat()}, 
+                timeout=10
+            )
 
-        return {"success": True, "eb_mo_no": eb_mo_no, "data": record}
-    except Exception as e:
-        logger.error(f"create_endbit_mo exception: {e}")
-        return {"success": False, "error": str(e)}
+    return {"success": True, "eb_mo_no": eb_mo_no, "data": inserted or record}

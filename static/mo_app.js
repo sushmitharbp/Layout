@@ -54,6 +54,7 @@ const ROLE_CONFIGS = {
 
 document.addEventListener("DOMContentLoaded", () => {
     initRole();
+    initUnitSwitcher();
     Promise.all([loadStats(), loadOrders(), loadDbTablesOverview()]).catch(console.error);
     startNotificationsPolling();
 
@@ -151,9 +152,11 @@ function updateRoleUI() {
 // Stats & Orders Loading
 async function loadStats() {
     try {
+        const cid = window.AUTH_COMPANY_ID || "";
+        const q = cid ? `?company_id=${encodeURIComponent(cid)}` : "";
         const [resMo, resEb] = await Promise.all([
-            fetch("/api/mo/stats"),
-            fetch("/api/endbits/stats").catch(() => null)
+            fetch(`/api/mo/stats${q}`),
+            fetch(`/api/endbits/stats${q}`).catch(() => null)
         ]);
         if (resMo.ok) {
             const stats = await resMo.json();
@@ -185,7 +188,9 @@ async function loadStats() {
 
 async function loadOrders() {
     try {
-        const res = await fetch("/api/mo/list");
+        const cid = window.AUTH_COMPANY_ID || "";
+        const q = cid ? `?company_id=${encodeURIComponent(cid)}` : "";
+        const res = await fetch(`/api/mo/list${q}`);
         if (res.ok) {
             allOrders = await res.json();
             renderOrders();
@@ -223,6 +228,88 @@ function updateActionCount() {
 }
 
 
+// Active Unit & Plant State (Option A)
+let currentFilterUnit = localStorage.getItem("mo_active_unit") || "ALL";
+window._activeUnit = currentFilterUnit;
+
+function initUnitSwitcher() {
+    const authBranch = (window.AUTH_BRANCH_CODE || window.AUTH_COMPANY_ID || "").toUpperCase();
+    let savedUnit = "ALL";
+    if (authBranch === "PEPIPL" || authBranch === "PEI2") {
+        savedUnit = authBranch;
+        try { localStorage.setItem("mo_active_unit", savedUnit); } catch (e) {}
+    } else {
+        savedUnit = localStorage.getItem("mo_active_unit") || "ALL";
+    }
+    window._activeUnit = savedUnit;
+    currentFilterUnit = (savedUnit === "ALL" ? "all" : savedUnit);
+
+    const globalSel = document.getElementById("globalUnitSelect");
+    if (globalSel) globalSel.value = savedUnit;
+
+    const filterSel = document.getElementById("filterUnitSelect");
+    if (filterSel) filterSel.value = currentFilterUnit;
+
+    const modalSel = document.getElementById("modalUnitSelect");
+    if (modalSel) modalSel.value = savedUnit;
+}
+
+function onGlobalUnitChanged(newUnit) {
+    const unitVal = newUnit || "ALL";
+    window._activeUnit = unitVal;
+    currentFilterUnit = (unitVal === "ALL" ? "all" : unitVal);
+    try { localStorage.setItem("mo_active_unit", unitVal); } catch (e) {}
+
+    const filterSel = document.getElementById("filterUnitSelect");
+    if (filterSel) filterSel.value = currentFilterUnit;
+
+    const modalSel = document.getElementById("modalUnitSelect");
+    if (modalSel) modalSel.value = unitVal;
+
+    // Re-filter table
+    renderOrders();
+
+    // If modal is open and has part selected, refresh RM options for new unit
+    const partNo = document.getElementById("partNoInput")?.value?.trim();
+    if (partNo && typeof selectPartForModal === "function") {
+        selectPartForModal(partNo);
+    }
+}
+
+function onFilterUnitSelectChanged(newUnit) {
+    currentFilterUnit = newUnit || "all";
+    renderOrders();
+}
+
+function onModalUnitChanged(newUnit) {
+    const unitVal = newUnit || "ALL";
+    window._activeUnit = unitVal;
+    try { localStorage.setItem("mo_active_unit", unitVal); } catch (e) {}
+
+    const globalSel = document.getElementById("globalUnitSelect");
+    if (globalSel) globalSel.value = unitVal;
+
+    const filterSel = document.getElementById("filterUnitSelect");
+    if (filterSel) filterSel.value = (unitVal === "ALL" ? "all" : unitVal);
+
+    // Keep track of currently selected RM to restore selection if available in the new unit
+    const prevRm = document.getElementById("rmErpSelect")?.value;
+
+    const partNo = document.getElementById("partNoInput")?.value?.trim();
+    if (partNo && typeof selectPartForModal === "function") {
+        selectPartForModal(partNo).then(() => {
+            if (prevRm) {
+                const rmSelect = document.getElementById("rmErpSelect");
+                const matchingOpt = Array.from(rmSelect.options).find(o => o.value === prevRm);
+                if (matchingOpt) {
+                    rmSelect.value = prevRm;
+                    onRmErpChanged(prevRm);
+                }
+            }
+        });
+    }
+}
+
 // Filtering & Date State
 let currentSearchQuery = "";
 let currentDatePreset = "all";
@@ -247,13 +334,15 @@ function onDropdownFilterChange() {
     const statusSelect = document.getElementById("filterStatusSelect");
     const layoutSelect = document.getElementById("filterLayoutTypeSelect");
     const stageSelect = document.getElementById("filterStageSelect");
+    const unitSelect = document.getElementById("filterUnitSelect");
     const resetBtn = document.getElementById("resetFiltersBtn");
 
     currentFilterStatus = statusSelect?.value || "all";
     currentFilterLayout = layoutSelect?.value || "all";
     currentFilterStage = stageSelect?.value || "all";
+    currentFilterUnit = unitSelect?.value || "all";
 
-    const isFiltered = currentFilterStatus !== "all" || currentFilterLayout !== "all" || currentFilterStage !== "all" || (currentSearchQuery && currentSearchQuery.length > 0);
+    const isFiltered = currentFilterStatus !== "all" || currentFilterLayout !== "all" || currentFilterStage !== "all" || currentFilterUnit !== "all" || (currentSearchQuery && currentSearchQuery.length > 0);
     if (resetBtn) {
         resetBtn.style.display = isFiltered ? "inline-flex" : "none";
     }
@@ -265,17 +354,20 @@ function resetAllDropdownFilters() {
     currentFilterStatus = "all";
     currentFilterLayout = "all";
     currentFilterStage = "all";
+    currentFilterUnit = "all";
     currentSearchQuery = "";
 
     const statusSelect = document.getElementById("filterStatusSelect");
     const layoutSelect = document.getElementById("filterLayoutTypeSelect");
     const stageSelect = document.getElementById("filterStageSelect");
+    const unitSelect = document.getElementById("filterUnitSelect");
     const searchInput = document.getElementById("moSearchInput");
     const resetBtn = document.getElementById("resetFiltersBtn");
 
     if (statusSelect) statusSelect.value = "all";
     if (layoutSelect) layoutSelect.value = "all";
     if (stageSelect) stageSelect.value = "all";
+    if (unitSelect) unitSelect.value = "all";
     if (searchInput) searchInput.value = "";
     if (resetBtn) resetBtn.style.display = "none";
 
@@ -394,6 +486,14 @@ function renderOrders() {
     // 5. Current Stage Dropdown Filter
     if (currentFilterStage && currentFilterStage !== "all") {
         filtered = filtered.filter(o => o.current_stage === currentFilterStage);
+    }
+
+    // 6. Unit Dropdown Filter
+    if (currentFilterUnit && currentFilterUnit.toLowerCase() !== "all") {
+        filtered = filtered.filter(o => {
+            const b = (o.branch_code || o.branch || "").toUpperCase();
+            return !b || b === currentFilterUnit.toUpperCase();
+        });
     }
 
     filteredOrders = filtered;
@@ -1044,7 +1144,9 @@ async function selectPartForModal(partNo) {
     if (dropdown) dropdown.style.display = "none";
 
     try {
-        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}`);
+        const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
+        const unitParam = (modalUnit && modalUnit !== "ALL") ? `?branch=${encodeURIComponent(modalUnit)}` : "";
+        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
         if (res.ok) {
             selectedPartData = await res.json();
             populatePartTechnicalFields(selectedPartData);
@@ -1053,31 +1155,54 @@ async function selectPartForModal(partNo) {
             const mrp = selectedPartData.mrp || {};
             const mrpQty = (mrp.monthly_schedule !== undefined && mrp.monthly_schedule !== null) ? Number(mrp.monthly_schedule) : null;
             const curStock = (mrp.current_stock !== undefined && mrp.current_stock !== null) ? Number(mrp.current_stock) : null;
+            const initStock = mrp.initial_stock !== undefined ? Number(mrp.initial_stock) : curStock;
+            const producedMo = mrp.app_mo_produced !== undefined ? Number(mrp.app_mo_produced) : 0;
 
             const mrpQtyEl = document.getElementById("mrpMonthlyQtyVal");
             const curStockEl = document.getElementById("mrpCurrentStockVal");
+            const curStockSub = document.getElementById("mrpCurrentStockSub");
             const toProduceEl = document.getElementById("mrpQtyToProduceVal");
             const hintBox = document.getElementById("mrpStockHintBox");
             const hintVal = document.getElementById("mrpStockHintVal");
             const toProduceSub = document.getElementById("mrpQtyToProduceSub");
 
             if (mrpQtyEl) mrpQtyEl.textContent = mrpQty !== null ? `${mrpQty.toLocaleString()} Nos` : "- Nos";
-            if (curStockEl) curStockEl.textContent = curStock !== null ? `${curStock.toLocaleString()} Nos` : "- Nos";
+            
+            if (curStockEl) {
+                curStockEl.textContent = curStock !== null ? `${curStock.toLocaleString()} Nos` : "- Nos";
+            }
+            if (curStockSub) {
+                if (producedMo > 0) {
+                    curStockSub.innerHTML = `<span style="color:#047857; font-weight:600;">Stock ${initStock.toLocaleString()}</span> + <span style="color:#0284c7; font-weight:700;">${producedMo.toLocaleString()} MO</span>`;
+                } else {
+                    curStockSub.textContent = "In-House Stock";
+                }
+            }
 
             if (mrpQty !== null && curStock !== null) {
                 if (curStock >= mrpQty) {
-                    // In-house stock is higher or equal, remaining qty to produce is 0 and show hint box
+                    // In-house stock + app_mo produced is higher or equal, remaining qty to produce is 0
                     if (toProduceEl) toProduceEl.textContent = "0 Nos";
                     if (hintBox) {
                         hintBox.style.display = "inline-flex";
                         if (hintVal) hintVal.textContent = curStock.toLocaleString();
                     }
-                    if (toProduceSub) toProduceSub.textContent = "Fully Covered by Stock";
+                    if (toProduceSub) {
+                        toProduceSub.textContent = producedMo > 0
+                            ? `Covered (Stock ${initStock.toLocaleString()} + MO Produced ${producedMo.toLocaleString()})`
+                            : "Fully Covered by Stock";
+                    }
                 } else {
                     const remaining = mrpQty - curStock;
                     if (toProduceEl) toProduceEl.textContent = `${remaining.toLocaleString()} Nos`;
                     if (hintBox) hintBox.style.display = "none";
-                    if (toProduceSub) toProduceSub.textContent = `Net Requirement (${mrpQty.toLocaleString()} - ${curStock.toLocaleString()})`;
+                    if (toProduceSub) {
+                        if (producedMo > 0) {
+                            toProduceSub.textContent = `Net Requirement (${mrpQty.toLocaleString()} - ${initStock.toLocaleString()} Stock - ${producedMo.toLocaleString()} Produced)`;
+                        } else {
+                            toProduceSub.textContent = `Net Requirement (${mrpQty.toLocaleString()} - ${curStock.toLocaleString()})`;
+                        }
+                    }
                 }
             } else {
                 const toProduce = mrp.qty_to_produce !== undefined ? mrp.qty_to_produce : "-";
@@ -1099,11 +1224,38 @@ async function selectPartForModal(partNo) {
 function populatePartTechnicalFields(partData) {
     if (!partData) return;
 
+    // Cache the selected part's real blank specifications
+    window._activeBasePartData = {
+        part_no: partData.part_no,
+        base_part: partData.base_part,
+        grade: partData.grade,
+        thickness: partData.thickness,
+        length: partData.length,
+        width: partData.width,
+        offtake: partData.offtake,
+        strip_per_blank_qty: partData.strip_qty || partData.strip_per_blank_qty || 1
+    };
+
     document.getElementById("basePartInput").value = partData.base_part || "";
+
+    if (partData.grade) {
+        document.getElementById("gradeInput").value = partData.grade;
+    }
+    if (partData.thickness !== undefined && partData.length !== undefined && partData.width !== undefined) {
+        document.getElementById("thicknessInput").value = partData.thickness;
+        document.getElementById("lengthInput").value = partData.length;
+        document.getElementById("widthInput").value = partData.width;
+        document.getElementById("sheetSizeInput").value = `${partData.thickness} * ${partData.length} * ${partData.width}`;
+    }
 
     const offtakeInput = document.getElementById("offtakeInput");
     if (offtakeInput) {
         offtakeInput.value = `${partData.offtake || 1} Nos`;
+    }
+
+    const stripInput = document.getElementById("stripPerBlankInput");
+    if (stripInput) {
+        stripInput.value = `${partData.strip_qty || partData.strip_per_blank_qty || 1} Nos`;
     }
 
     const rmSelect = document.getElementById("rmErpSelect");
@@ -1226,29 +1378,50 @@ function onRmErpChanged(rmCode) {
     if (!opt || !opt.dataset.record) return;
 
     const record = JSON.parse(opt.dataset.record);
-    document.getElementById("gradeInput").value = record.grade || "YS";
-    document.getElementById("thicknessInput").value = record.thickness || "";
-    document.getElementById("lengthInput").value = record.length || "";
-    document.getElementById("widthInput").value = record.width || "";
+    if (record.grade) {
+        document.getElementById("gradeInput").value = record.grade;
+    }
 
-    // Blank / Part Size (T x L x W)
-    const p1CutBlank = record.part1?.cut_blank || record.cut_blank;
-    const partSizeStr = p1CutBlank ? p1CutBlank : `${record.thickness || '-'} * ${record.length || '-'} * ${record.width || '-'}`;
-    document.getElementById("sheetSizeInput").value = partSizeStr;
+    // Preserve the active Part Blank Size!
+    // #sheetSizeInput represents the Part Blank Size (T x L x W), NOT the RM sheet dimensions.
+    const basePart = window._activeBasePartData;
+    if (basePart && basePart.length && basePart.width) {
+        document.getElementById("thicknessInput").value = basePart.thickness !== undefined ? basePart.thickness : (record.thickness || "");
+        document.getElementById("lengthInput").value = basePart.length || "";
+        document.getElementById("widthInput").value = basePart.width || "";
+        document.getElementById("sheetSizeInput").value = `${basePart.thickness !== undefined ? basePart.thickness : (record.thickness || '-')} * ${basePart.length} * ${basePart.width}`;
+    } else {
+        const p1CutBlank = record.part1?.cut_blank || record.cut_blank;
+        if (p1CutBlank) {
+            document.getElementById("sheetSizeInput").value = p1CutBlank;
+        } else if (record.thickness && record.length && record.width) {
+            document.getElementById("sheetSizeInput").value = `${record.thickness} * ${record.length} * ${record.width}`;
+        }
+        if (record.thickness) document.getElementById("thicknessInput").value = record.thickness;
+        if (record.length) document.getElementById("lengthInput").value = record.length;
+        if (record.width) document.getElementById("widthInput").value = record.width;
+    }
 
     // Strip per blank quantity
     const stripVal = record.part1?.strip_qty || record.strip_qty || record.part1?.strip_per_blank_qty || record.strip_per_blank_qty || 1;
     const stripEl = document.getElementById("stripPerBlankInput");
     if (stripEl) stripEl.value = `${stripVal} Nos`;
 
-    // Live RM Available Stock
+    // Immediately display the available stock cached on the record for instant UI feedback
+    const quickStockEl = document.getElementById("rmStockBoxVal");
+    if (quickStockEl && record.available_sheets !== undefined && record.available_sheets !== null) {
+        quickStockEl.textContent = `${record.available_sheets} Sheets`;
+    }
+
+    // Live RM Available Stock with active unit branch filtering
     if (rmCode && rmCode !== "__custom__") {
-        fetch(`/api/v2/rm-stock/${encodeURIComponent(rmCode)}`)
+        const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
+        const unitParam = (activeUnit && activeUnit !== "ALL") ? `?branch=${encodeURIComponent(activeUnit)}` : "";
+        fetch(`/api/v2/rm-stock/${encodeURIComponent(rmCode)}${unitParam}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.available_sheets !== undefined) {
-                    const qStock = document.getElementById("rmStockBoxVal");
-                    if (qStock) qStock.textContent = `${data.available_sheets} Sheets`;
+                    if (quickStockEl) quickStockEl.textContent = `${data.available_sheets} Sheets`;
                 }
             })
             .catch(() => {});
@@ -1257,11 +1430,11 @@ function onRmErpChanged(rmCode) {
     const yieldInput = document.getElementById("yieldPctInput");
     if (yieldInput) {
         const yVal = record.per_sheet?.yield_pct ?? record.total_sheet?.yield_pct ?? record.yield_pct ?? record.material_yield_pct;
-        if (yVal !== undefined && yVal !== null && String(yVal).trim() !== "") {
+        if (yVal !== undefined && yVal !== null && String(yVal).trim() !== "" && String(yVal).trim() !== "N/A" && String(yVal).trim() !== "94.2") {
             const yNum = parseFloat(String(yVal).replace("%", "").trim());
-            yieldInput.value = !isNaN(yNum) ? `${yNum.toFixed(1)}%` : `${yVal}`;
+            yieldInput.value = !isNaN(yNum) && yNum > 0 ? `${yNum.toFixed(1)}%` : "";
         } else {
-            yieldInput.value = "N/A";
+            yieldInput.value = "";
         }
     }
 
@@ -2184,6 +2357,8 @@ function triggerRmAgentSuggestions(params) {
             if (params.thickness) qParams.set("thickness", params.thickness);
             if (params.grade) qParams.set("grade", params.grade);
             if (params.onhand_stock !== undefined) qParams.set("onhand_stock", params.onhand_stock);
+            const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
+            if (activeUnit && activeUnit !== "ALL") qParams.set("branch", activeUnit);
 
             const res = await fetch(`/api/agent/suggest-rm-alternatives?${qParams.toString()}`);
             if (!res.ok) {
@@ -2307,31 +2482,55 @@ function applyRmAgentRecommendation(idx) {
     const rmSelect = document.getElementById("rmErpSelect");
     if (!rmSelect) return;
 
+    // Cache the selected recommendation globally for OptiCutter and 2D nesting
+    window._selectedRmAgentRecord = rec;
+
     let targetOpt = Array.from(rmSelect.options).find(o => o.value === rec.rm_erp || (o.value && o.value.toLowerCase() === rec.rm_erp.toLowerCase()));
+
+    const basePart = window._activeBasePartData || {};
+    const pThk = basePart.thickness !== undefined ? basePart.thickness : rec.thickness;
+    const pLen = basePart.length !== undefined ? basePart.length : '';
+    const pWid = basePart.width !== undefined ? basePart.width : '';
+    const cutBlankStr = (pLen && pWid) ? `${pThk}*${pLen}*${pWid}` : (document.getElementById("sheetSizeInput")?.value || '');
+
+    const recordData = {
+        rm_erp: rec.rm_erp,
+        layout_name: rec.layout_name || 'Standard',
+        grade: rec.grade || basePart.grade || 'YS',
+        thickness: rec.thickness || pThk,
+        length: rec.length,
+        width: rec.width,
+        sheet_length: rec.length,
+        sheet_width: rec.width,
+        sheet_size: `${rec.thickness || pThk}*${rec.length}*${rec.width}`,
+        available_sheets: rec.onhand_stock,
+        onhand_stock: rec.onhand_stock,
+        status: rec.status || 'AI Recommended RM',
+        per_sheet: {
+            yield_pct: rec.yield_pct,
+            parts_produced: rec.parts_per_sheet
+        },
+        part1: {
+            total_blank_qty_sheet: rec.parts_per_sheet,
+            cut_blank: cutBlankStr,
+            blank_size: {
+                thickness: pThk,
+                length: pLen,
+                width: pWid
+            }
+        }
+    };
 
     if (!targetOpt) {
         targetOpt = document.createElement("option");
         targetOpt.value = rec.rm_erp;
-        targetOpt.textContent = `${rec.rm_erp} (${rec.grade || 'YS'}) - ${rec.status || 'AI Recommended RM'}`;
-        targetOpt.dataset.record = JSON.stringify({
-            rm_erp: rec.rm_erp,
-            layout_name: rec.layout_name,
-            grade: rec.grade,
-            thickness: rec.thickness,
-            length: rec.length,
-            width: rec.width,
-            status: rec.status,
-            per_sheet: {
-                yield_pct: rec.yield_pct,
-                parts_produced: rec.parts_per_sheet
-            },
-            part1: {
-                total_blank_qty_sheet: rec.parts_per_sheet
-            }
-        });
+        targetOpt.textContent = `${rec.rm_erp} (${rec.grade || basePart.grade || 'YS'}) - ${rec.status || 'AI Recommended RM'}`;
         // Insert right before custom option
         rmSelect.insertBefore(targetOpt, rmSelect.lastElementChild);
     }
+
+    // Always update targetOpt.dataset.record with the fresh recommendation specifications!
+    targetOpt.dataset.record = JSON.stringify(recordData);
 
     rmSelect.value = targetOpt.value;
     onRmErpChanged(targetOpt.value);
@@ -3548,6 +3747,7 @@ async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, len
     }
 
     try {
+        const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
         const params = new URLSearchParams({
             rm: rmCode || "",
             grade: grade || "",
@@ -3556,6 +3756,9 @@ async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, len
             width: width || "",
             sheets: sheetsNeeded || 1
         });
+        if (activeUnit && activeUnit !== "ALL") {
+            params.set("branch", activeUnit);
+        }
         if (allLayoutParts && allLayoutParts.length > 0) {
             allLayoutParts.forEach(p => {
                 if (p) params.append("parts", p);
@@ -3590,7 +3793,7 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
         : (isReview && activeReviewMo?.rm_erp ? `${activeReviewMo.rm_erp} (Main Store)` : "Select RM & part");
 
     const quickStockEl = document.getElementById("rmStockBoxVal");
-    if (quickStockEl && !isReview) {
+    if (quickStockEl && !isReview && rmOnHand !== null && rmOnHand !== undefined && String(rmOnHand).trim() !== "") {
         quickStockEl.textContent = rmValStr;
     }
 
@@ -4496,6 +4699,74 @@ function formatCellValue(col, val, row) {
         return !isNaN(n) ? `<span style="font-weight: 700; color: #0284c7; background: #f0fdf4; border: 1px solid #86efac; padding: 2px 8px; border-radius: 6px; font-size: 0.8rem;"><i class="fa-solid fa-shapes" style="font-size: 0.75rem; margin-right: 3px;"></i>${n.toLocaleString()} Nos</span>` : escapeHtml(String(val));
     }
 
+    // Special formatting for parts_produced in app_mo / endbit_mo
+    if (col === "parts_produced") {
+        let parts = val;
+        if (typeof parts === "string") {
+            try { parts = JSON.parse(parts); } catch(e) {}
+        }
+        if (Array.isArray(parts) && parts.length > 0) {
+            return `
+                <div style="display: flex; flex-direction: column; gap: 4px; min-width: 170px;">
+                    ${parts.map((p, i) => {
+                        const pNo = (typeof p === "object") ? (p.part_no || p.base_part || `Part ${i+1}`) : String(p);
+                        const isBase = (typeof p === "object") ? (p.is_base !== false && (p.is_base || i === 0)) : (i === 0);
+                        const tagHtml = isBase 
+                            ? `<span style="font-size: 0.65rem; background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; padding: 1px 5px; border-radius: 3px; font-weight: 700;">Base</span>` 
+                            : `<span style="font-size: 0.65rem; background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; padding: 1px 5px; border-radius: 3px;">Co-Part</span>`;
+                        return `
+                            <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px; background: #ffffff; border: 1px solid #e2e8f0; padding: 2px 7px; border-radius: 4px; font-size: 0.76rem;">
+                                <code style="font-weight: 700; color: #1e293b;">${escapeHtml(pNo)}</code>
+                                ${tagHtml}
+                            </div>
+                        `;
+                    }).join("")}
+                </div>
+            `;
+        }
+    }
+
+    // Special formatting for parts_qty in app_mo / endbit_mo: show breakdown for ALL parts + total
+    if (col === "parts_qty") {
+        let parts = row?.parts_produced;
+        if (typeof parts === "string") {
+            try { parts = JSON.parse(parts); } catch(e) {}
+        }
+        if (Array.isArray(parts) && parts.length > 0) {
+            const qtyItems = parts.map((p, i) => {
+                const pNo = (typeof p === "object") ? (p.part_no || p.base_part || `Part ${i+1}`) : `Part ${i+1}`;
+                const q = (typeof p === "object") ? (parseFloat(p.qty ?? p.target_qty ?? p.blank_qty) || 0) : 0;
+                const isBase = (typeof p === "object") ? (p.is_base !== false && (p.is_base || i === 0)) : (i === 0);
+                return { part_no: pNo, qty: q, is_base: isBase };
+            });
+            const partsSum = qtyItems.reduce((acc, itm) => acc + itm.qty, 0);
+            const totalVal = partsSum > 0 ? partsSum : (parseFloat(val) || 0);
+
+            if (qtyItems.length > 1 && partsSum > 0) {
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 3px; min-width: 160px; background: #f8fafc; border: 1px solid #e2e8f0; padding: 5px 8px; border-radius: 5px;">
+                        ${qtyItems.map(itm => `
+                            <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.74rem; color: #334155;">
+                                <span style="color: #64748b; font-size: 0.7rem; max-width: 95px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(itm.part_no)}">
+                                    ${escapeHtml(itm.part_no.split(' - ')[0])} ${itm.is_base ? '<span style="font-size: 0.62rem; color: #0284c7;">(Base)</span>' : ''}:
+                                </span>
+                                <strong style="color: #0369a1;">${itm.qty.toLocaleString()} Nos</strong>
+                            </div>
+                        `).join("")}
+                        <div style="border-top: 1.5px dashed #cbd5e1; padding-top: 3px; margin-top: 2px; display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 0.72rem; font-weight: 700; color: #0f172a;"><i class="fa-solid fa-calculator" style="font-size: 0.68rem; margin-right: 3px;"></i>Total:</span>
+                            <strong style="color: #059669; font-size: 0.84rem;">${totalVal.toLocaleString()} Nos</strong>
+                        </div>
+                    </div>
+                `;
+            } else {
+                return `<strong style="color: #059669; font-size: 0.88rem;"><i class="fa-solid fa-shapes" style="font-size: 0.75rem; margin-right: 4px;"></i>${totalVal.toLocaleString()} Nos</strong>`;
+            }
+        }
+        const n = parseFloat(val);
+        return !isNaN(n) ? `<strong style="color: #059669; font-size: 0.88rem;"><i class="fa-solid fa-shapes" style="font-size: 0.75rem; margin-right: 4px;"></i>${n.toLocaleString()} Nos</strong>` : escapeHtml(String(val));
+    }
+
     if (col === "target_qty" || col === "sheets_required" || col === "number_of_sheets" || col === "total_parent_qty" || col === "schedule_qty" || col === "total_qty" || col === "balance_qty" || col === "inhouse_erp_qty" || col === "outsource_erp_qty") {
         const n = parseFloat(val);
         return !isNaN(n) ? `<strong>${n.toLocaleString()}</strong>` : escapeHtml(String(val));
@@ -4584,6 +4855,85 @@ function exportCurrentDbTableCsv() {
     URL.revokeObjectURL(url);
 }
 
+function formatPdfCell(key, val, row) {
+    if (val === null || val === undefined || val === "") return "-";
+
+    // 1. parts_produced: format clean readable list of parts (no raw JSON)
+    if (key === "parts_produced") {
+        let parts = val;
+        if (typeof parts === "string") {
+            try { parts = JSON.parse(parts); } catch(e) {}
+        }
+        if (Array.isArray(parts) && parts.length > 0) {
+            return parts.map(p => {
+                const pNo = (typeof p === "object") ? (p.part_no || p.base_part || "Part") : String(p);
+                const q = (typeof p === "object") ? (p.qty ?? p.target_qty ?? p.blank_qty) : null;
+                const isBase = (typeof p === "object") ? (p.is_base !== false && (p.is_base || false)) : false;
+                const baseTag = isBase ? " [Base]" : "";
+                return q ? `${pNo}${baseTag} (${Number(q).toLocaleString()} Nos)` : `${pNo}${baseTag}`;
+            }).join("\n");
+        }
+        if (typeof val === "object") return JSON.stringify(val);
+        return String(val);
+    }
+
+    // 2. quantities: parts_qty / target_qty / monthly_schedule / current_stock
+    if (key === "parts_qty" || key === "target_qty" || key === "monthly_schedule" || key === "current_stock" || key === "qty_to_produce" || key === "offtake") {
+        const n = parseFloat(val);
+        return !isNaN(n) ? `${Number(n).toLocaleString()} Nos` : String(val);
+    }
+
+    // 3. sheet counts / quantities
+    if (key === "no_of_rm_sheets" || key === "no_of_eb_sheets" || key === "available_sheets" || key === "quantity") {
+        const n = parseFloat(val);
+        return !isNaN(n) ? `${Number(n).toLocaleString()}` : String(val);
+    }
+
+    // 4. yield_pct
+    if (key === "yield_pct") {
+        const n = parseFloat(val);
+        return !isNaN(n) ? `${n.toFixed(1)}%` : String(val);
+    }
+
+    // 5. weights
+    if (key.includes("weight") || key === "weight") {
+        const n = parseFloat(val);
+        return !isNaN(n) ? `${n.toFixed(2)} kg` : String(val);
+    }
+
+    // 6. Dates
+    if (key === "date" || key.endsWith("_date") || key === "created_at" || key === "created_on") {
+        return String(val).split("T")[0].split(" ")[0];
+    }
+
+    // 7. Status & Stage
+    if (key === "status" || key === "current_stage" || key === "workflow_path") {
+        return String(val).replace(/_/g, " ");
+    }
+
+    // 8. Endbits text
+    if (key === "endbits") {
+        if (!val || val === "[]" || val === "None" || val === "none") return "-";
+        if (typeof val === "string" && (val.startsWith("[") || val.startsWith("{"))) {
+            try {
+                const parsed = JSON.parse(val.replace(/'/g, '"'));
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    return parsed.map(eb => `${eb.dim || eb.name || eb.endbit_id || 'EB'} (${eb.available_qty || eb.qty_per_sheet || 1} pcs)`).join("\n");
+                }
+            } catch (e) {
+                return val.length > 30 ? val.slice(0, 28) + "..." : val;
+            }
+        }
+        return String(val);
+    }
+
+    if (typeof val === "object") {
+        return JSON.stringify(val);
+    }
+
+    return String(val);
+}
+
 function exportCurrentDbTablePdf() {
     if (!currentTableData || !currentTableData.rows || currentTableData.rows.length === 0) {
         alert("No table records to export.");
@@ -4609,48 +4959,121 @@ function exportCurrentDbTablePdf() {
         const tableName = currentTableData.title || currentDbTable || "Database Table";
 
         // Top Banner
-        doc.setFillColor(15, 23, 42); // Slate #0f172a
-        doc.rect(0, 0, pageWidth, 22, "F");
-        doc.setFillColor(37, 99, 235); // Blue accent
-        doc.rect(0, 22, pageWidth, 1.5, "F");
+        doc.setFillColor(15, 23, 42); // Deep Slate #0f172a
+        doc.rect(0, 0, pageWidth, 20, "F");
+        doc.setFillColor(37, 99, 235); // Blue accent line
+        doc.rect(0, 20, pageWidth, 1.2, "F");
 
         doc.setTextColor(255, 255, 255);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        doc.text("SheetLayout AI", margin, 10);
+        doc.setFontSize(13);
+        doc.text("SheetLayout AI", margin, 9);
 
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(8.5);
+        doc.setFontSize(8);
         doc.setTextColor(148, 163, 184);
-        doc.text(`DATABASE TABLE REPORT — ${String(tableName).toUpperCase()}`, margin, 16);
+        doc.text(`DATABASE TABLE REPORT — ${String(tableName).toUpperCase()}`, margin, 15);
 
         const nowStr = new Date().toLocaleString("en-IN", {
             day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit"
         });
-        doc.setFontSize(8);
-        doc.text(`Generated: ${nowStr} | Total Rows: ${currentTableData.total_rows || currentTableData.rows.length}`, pageWidth - margin, 14, { align: "right" });
+        doc.setFontSize(7.5);
+        doc.text(`Generated: ${nowStr} | Total Rows: ${currentTableData.total_rows || currentTableData.rows.length}`, pageWidth - margin, 13, { align: "right" });
 
-        // Filter columns
-        let cols = (currentTableData.columns || Object.keys(currentTableData.rows[0]))
-            .filter(c => !["sl_no", "slno", "s_no"].includes(c.toLowerCase()));
-        if (currentDbTable === "erp_mo_reports") {
-            cols = cols.filter(c => c !== "created_at" && c !== "created_on");
+        // Curated column schemas with dedicated widths (Total 281mm for A4 landscape)
+        const tableSpecs = {
+            app_mo: [
+                { dataKey: "date", header: "Date", cellWidth: 22, halign: "center" },
+                { dataKey: "mo_no", header: "MO Number", cellWidth: 26, fontStyle: "bold" },
+                { dataKey: "rm_code", header: "Raw Material", cellWidth: 34 },
+                { dataKey: "no_of_rm_sheets", header: "Sheets", cellWidth: 15, halign: "center" },
+                { dataKey: "parts_produced", header: "Parts Produced", cellWidth: 60 },
+                { dataKey: "parts_qty", header: "Parts Qty", cellWidth: 22, halign: "center", fontStyle: "bold" },
+                { dataKey: "yield_pct", header: "Yield %", cellWidth: 18, halign: "center" },
+                { dataKey: "current_stage", header: "Stage", cellWidth: 22, halign: "center" },
+                { dataKey: "status", header: "Status", cellWidth: 24, halign: "center" },
+                { dataKey: "remarks", header: "Remarks", cellWidth: 26 }
+            ],
+            endbit_mo: [
+                { dataKey: "date", header: "Date", cellWidth: 24, halign: "center" },
+                { dataKey: "eb_mo_no", header: "EB MO No", cellWidth: 28, fontStyle: "bold" },
+                { dataKey: "endbit_code", header: "Endbit Used", cellWidth: 40 },
+                { dataKey: "no_of_eb_sheets", header: "EB Qty", cellWidth: 18, halign: "center" },
+                { dataKey: "parts_produced", header: "Parts Produced", cellWidth: 65 },
+                { dataKey: "parts_qty", header: "Parts Qty", cellWidth: 24, halign: "center", fontStyle: "bold" },
+                { dataKey: "yield_pct", header: "Yield %", cellWidth: 20, halign: "center" },
+                { dataKey: "status", header: "Status", cellWidth: 28, halign: "center" },
+                { dataKey: "remarks", header: "Remarks", cellWidth: 24 }
+            ],
+            rm: [
+                { dataKey: "rm_code", header: "RM Sheet Code", cellWidth: 55, fontStyle: "bold" },
+                { dataKey: "available_sheets", header: "Available Sheets", cellWidth: 40, halign: "center" },
+                { dataKey: "weight_per_sheet", header: "Weight / Sheet (kg)", cellWidth: 45, halign: "right" },
+                { dataKey: "total_stock_weight", header: "Total Weight (kg)", cellWidth: 50, halign: "right", fontStyle: "bold" },
+                { dataKey: "created_at", header: "Registered Date", cellWidth: 40, halign: "center" }
+            ],
+            parts: [
+                { dataKey: "part_no", header: "Part Number", cellWidth: 38, fontStyle: "bold" },
+                { dataKey: "part_desc", header: "Description", cellWidth: 46 },
+                { dataKey: "grade", header: "Grade", cellWidth: 20, halign: "center" },
+                { dataKey: "thickness", header: "Thick", cellWidth: 18, halign: "center" },
+                { dataKey: "length", header: "Length", cellWidth: 18, halign: "center" },
+                { dataKey: "width", header: "Width", cellWidth: 18, halign: "center" },
+                { dataKey: "offtake", header: "Offtake", cellWidth: 20, halign: "center" },
+                { dataKey: "weight", header: "Weight", cellWidth: 22, halign: "right" },
+                { dataKey: "standard_rm", header: "Standard RM", cellWidth: 50 }
+            ],
+            mrp: [
+                { dataKey: "month_year", header: "Month-Year", cellWidth: 30, halign: "center" },
+                { dataKey: "part_no", header: "Part Number", cellWidth: 48, fontStyle: "bold" },
+                { dataKey: "monthly_schedule", header: "Monthly Schedule", cellWidth: 38, halign: "right" },
+                { dataKey: "current_stock", header: "Current Stock", cellWidth: 38, halign: "right" },
+                { dataKey: "qty_to_produce", header: "Qty to Produce", cellWidth: 40, halign: "right", fontStyle: "bold" },
+                { dataKey: "status", header: "Status", cellWidth: 35, halign: "center" }
+            ],
+            endbits: [
+                { dataKey: "date", header: "Date", cellWidth: 30, halign: "center" },
+                { dataKey: "mo_no", header: "Source MO", cellWidth: 40, fontStyle: "bold" },
+                { dataKey: "endbit", header: "Endbit Spec / Dimension", cellWidth: 90 },
+                { dataKey: "quantity", header: "Available Qty", cellWidth: 35, halign: "center" },
+                { dataKey: "weight", header: "Weight (kg)", cellWidth: 35, halign: "right" }
+            ]
+        };
+
+        let selectedColsConfig = tableSpecs[currentDbTable];
+        if (!selectedColsConfig) {
+            // Fallback for custom or unknown tables: exclude technical columns
+            const allCols = (currentTableData.columns || Object.keys(currentTableData.rows[0]))
+                .filter(c => !["id", "audit_trail", "created_at", "updated_at", "layout_doc_url", "sl_no", "slno", "s_no"].includes(c.toLowerCase()));
+            const colWidth = Math.max(20, Math.floor(269 / Math.max(1, allCols.length)));
+            selectedColsConfig = allCols.map(c => ({
+                dataKey: c,
+                header: formatColumnName(c),
+                cellWidth: colWidth
+            }));
         }
 
         const tableColumns = [
-            { header: "Sl. No.", dataKey: "_row_num" },
-            ...cols.map(c => ({ header: formatColumnName(c), dataKey: c }))
+            { header: "Sl.", dataKey: "_row_num" },
+            ...selectedColsConfig.map(c => ({ header: c.header, dataKey: c.dataKey }))
         ];
+
+        const columnStyles = {
+            _row_num: { cellWidth: 12, halign: "center", fontStyle: "bold" }
+        };
+        selectedColsConfig.forEach(c => {
+            columnStyles[c.dataKey] = {
+                cellWidth: c.cellWidth || "auto",
+                halign: c.halign || "left",
+                fontStyle: c.fontStyle || "normal"
+            };
+        });
 
         const tableRows = currentTableData.rows.map((r, idx) => {
             const rowNum = (currentTableData.page - 1) * currentTableData.limit + idx + 1;
             const rowObj = { _row_num: String(rowNum) };
-            cols.forEach(c => {
-                let val = r[c];
-                if (val === null || val === undefined) val = "-";
-                else if (typeof val === "object") val = JSON.stringify(val);
-                else val = String(val);
-                rowObj[c] = val;
+            selectedColsConfig.forEach(c => {
+                rowObj[c.dataKey] = formatPdfCell(c.dataKey, r[c.dataKey], r);
             });
             return rowObj;
         });
@@ -4658,31 +5081,43 @@ function exportCurrentDbTablePdf() {
         doc.autoTable({
             columns: tableColumns,
             body: tableRows,
-            startY: 28,
-            margin: { left: margin, right: margin },
+            startY: 25,
+            margin: { left: margin, right: margin, bottom: 12 },
             theme: "grid",
+            columnStyles: columnStyles,
             styles: {
-                fontSize: 7,
-                cellPadding: 2.2,
+                font: "helvetica",
+                fontSize: 7.5,
+                cellPadding: { top: 2.2, bottom: 2.2, left: 2, right: 2 },
                 textColor: [30, 41, 59],
-                lineColor: [226, 232, 240],
-                lineWidth: 0.1,
-                overflow: "linebreak"
+                lineColor: [203, 213, 225],
+                lineWidth: 0.15,
+                overflow: "linebreak",
+                valign: "middle"
             },
             headStyles: {
-                fillColor: [241, 245, 249],
-                textColor: [15, 23, 42],
+                fillColor: [15, 23, 42],
+                textColor: [255, 255, 255],
                 fontStyle: "bold",
-                fontSize: 7.5
+                fontSize: 8,
+                halign: "center",
+                valign: "middle",
+                minCellHeight: 8
             },
             alternateRowStyles: {
                 fillColor: [248, 250, 252]
             },
             didDrawPage: function(data) {
                 const pageCount = doc.internal.getNumberOfPages();
-                doc.setFontSize(7.5);
+                const pageHeight = doc.internal.pageSize.height;
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.3);
+                doc.line(margin, pageHeight - 8, pageWidth - margin, pageHeight - 8);
+
+                doc.setFontSize(7);
                 doc.setTextColor(148, 163, 184);
-                doc.text(`Page ${data.pageNumber} of ${pageCount}`, pageWidth - margin, doc.internal.pageSize.height - 6, { align: "right" });
+                doc.text("SheetLayout AI — Confidential Production Report", margin, pageHeight - 4);
+                doc.text(`Page ${data.pageNumber} of ${pageCount}`, pageWidth - margin, pageHeight - 4, { align: "right" });
             }
         });
 
@@ -7201,7 +7636,9 @@ async function selectAdditionalPartForModal(rowIdx, partNo) {
     if (dropdown) dropdown.style.display = "none";
 
     try {
-        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}`);
+        const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
+        const unitParam = (modalUnit && modalUnit !== "ALL") ? `?branch=${encodeURIComponent(modalUnit)}` : "";
+        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
         if (!res.ok) return;
         const data = await res.json();
         const records = data.records || [];
@@ -7348,6 +7785,42 @@ let activeAiFilterMode = "all";
 let currentAiSuggestionsData = null;
 let isAiSuggestionsLoading = false;
 
+function getActiveMoSheetDimensions() {
+    let sLen = 0;
+    let sWid = 0;
+    const thickVal = parseFloat(document.getElementById("thicknessInput")?.value) || 0;
+    const rmSelect = document.getElementById("rmErpSelect");
+    const selOpt = rmSelect?.selectedOptions[0];
+    let rmRec = selOpt?.dataset?.record ? JSON.parse(selOpt.dataset.record) : null;
+    if (window._selectedRmAgentRecord && (!rmRec || rmRec.rm_erp === window._selectedRmAgentRecord.rm_erp)) {
+        rmRec = { ...(rmRec || {}), ...window._selectedRmAgentRecord };
+    }
+    if (!rmRec && window._selectedCustomRmRecord) {
+        rmRec = window._selectedCustomRmRecord;
+    }
+    if (rmRec) {
+        sLen = parseFloat(rmRec.sheet_length || rmRec.length || 0);
+        sWid = parseFloat(rmRec.sheet_width || rmRec.width || 0);
+        if ((!sLen || !sWid) && rmRec.sheet_size) {
+            const sd = parseDimString(rmRec.sheet_size, thickVal);
+            if (sd.l > 0 && sd.w > 0) { sLen = sd.l; sWid = sd.w; }
+        }
+        if ((!sLen || !sWid) && (rmRec.rm_erp || rmRec.item_code)) {
+            const sd = parseDimString(rmRec.rm_erp || rmRec.item_code, thickVal);
+            if (sd.l > 0 && sd.w > 0) { sLen = sd.l; sWid = sd.w; }
+        }
+    }
+    if ((!sLen || !sWid) && selOpt && selOpt.value) {
+        const sd = parseDimString(selOpt.value, thickVal);
+        if (sd.l > 0 && sd.w > 0) { sLen = sd.l; sWid = sd.w; }
+    }
+    if (!sLen || !sWid) {
+        sLen = 2500;
+        sWid = 1250;
+    }
+    return { length: Math.max(sLen, sWid), width: Math.min(sLen, sWid) };
+}
+
 async function fetchAiPartSuggestions(filterMode = "all") {
     activeAiFilterMode = filterMode;
     const basePartNo = document.getElementById("partNoInput")?.value?.trim();
@@ -7357,17 +7830,59 @@ async function fetchAiPartSuggestions(filterMode = "all") {
         return;
     }
 
-    const sLen = parseFloat(document.getElementById("sheetLengthInput")?.value) || 2500;
-    const sWid = parseFloat(document.getElementById("sheetWidthInput")?.value) || 1250;
+    const sheetDims = getActiveMoSheetDimensions();
+    const sLen = sheetDims.length;
+    const sWid = sheetDims.width;
     const grade = document.getElementById("gradeInput")?.value?.trim() || "";
     const thickness = parseFloat(document.getElementById("thicknessInput")?.value) || 0;
-    const baseBlanks = parseInt(document.getElementById("autoTargetQtyDisplay")?.textContent) || 1;
+
+    const basePart = window._activeBasePartData || {};
+    const bLen = parseFloat(document.getElementById("lengthInput")?.value) || parseFloat(basePart.length) || 0;
+    const bWid = parseFloat(document.getElementById("widthInput")?.value) || parseFloat(basePart.width) || 0;
+
+    const rmSelect = document.getElementById("rmErpSelect");
+    const selOpt = rmSelect?.selectedOptions[0];
+    let rmRec = selOpt?.dataset?.record ? JSON.parse(selOpt.dataset.record) : null;
+    if (window._selectedRmAgentRecord && (!rmRec || rmRec.rm_erp === window._selectedRmAgentRecord.rm_erp)) {
+        rmRec = { ...(rmRec || {}), ...window._selectedRmAgentRecord };
+    }
+
+    let baseBlanks = 0;
+    if (rmRec?.part1?.total_blank_qty_sheet) {
+        baseBlanks = parseInt(rmRec.part1.total_blank_qty_sheet, 10);
+    } else if (rmRec?.parts_per_sheet) {
+        baseBlanks = parseInt(rmRec.parts_per_sheet, 10);
+    } else if (window._selectedRmAgentRecord?.parts_per_sheet) {
+        baseBlanks = parseInt(window._selectedRmAgentRecord.parts_per_sheet, 10);
+    }
+    if (!baseBlanks || baseBlanks < 1) {
+        const autoDisp = parseInt(document.getElementById("autoTargetQtyDisplay")?.textContent, 10);
+        if (!isNaN(autoDisp) && autoDisp > 0) baseBlanks = autoDisp;
+    }
 
     // Collect all currently added parts so we don't suggest duplicates
     const currentParts = [basePartNo];
-    document.querySelectorAll("#modalAdditionalPartsList .add-part-no").forEach(inp => {
-        const val = inp.value?.trim();
-        if (val && !currentParts.includes(val)) currentParts.push(val);
+    const existingParts = [];
+    document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row").forEach((r, idx) => {
+        const pNo = r.querySelector(".add-part-no")?.value?.trim();
+        let pL = parseFloat(r.querySelector(".add-part-len")?.value) || 0;
+        let pW = parseFloat(r.querySelector(".add-part-wid")?.value) || 0;
+        const pThick = parseFloat(r.querySelector(".add-part-thick")?.value) || thickness || 0;
+        const sizeVal = r.querySelector(".add-part-size")?.value?.trim() || "";
+        if ((!pL || !pW) && sizeVal) {
+            const d = parseDimString(sizeVal, pThick);
+            if (d.l > 0 && d.w > 0) { pL = d.l; pW = d.w; }
+        }
+        const pQty = Math.max(1, parseInt(r.querySelector(".add-part-qty")?.value) || 1);
+        if (pNo && !currentParts.includes(pNo)) currentParts.push(pNo);
+        if (pNo && pL > 0 && pW > 0) {
+            existingParts.push({
+                part_no: pNo,
+                length: Math.max(pL, pW),
+                width: Math.min(pL, pW),
+                qty: pQty
+            });
+        }
     });
 
     isAiSuggestionsLoading = true;
@@ -7377,7 +7892,7 @@ async function fetchAiPartSuggestions(filterMode = "all") {
             <div style="padding: 30px; text-align: center; color: #6d28d9;">
                 <i class="fa-solid fa-spinner fa-spin fa-2x" style="margin-bottom: 10px;"></i>
                 <div style="font-weight: 700;">AI Agent Nesting Simulator Running...</div>
-                <small style="color: #64748b;">Evaluating 2D guillotine cut yield and MRP inventory for companion parts</small>
+                <small style="color: #64748b;">Evaluating 2D guillotine cut yield and MRP inventory for companion parts in remaining sheet space</small>
             </div>
         `;
     }
@@ -7390,8 +7905,11 @@ async function fetchAiPartSuggestions(filterMode = "all") {
             grade: grade,
             thickness: thickness,
             base_blanks: baseBlanks,
+            base_blank_length: bLen,
+            base_blank_width: bWid,
             filter_mode: filterMode,
-            current_parts: currentParts.join(",")
+            current_parts: currentParts.join(","),
+            existing_parts: JSON.stringify(existingParts)
         });
 
         const res = await fetch(`/api/intelligence/suggest-parts?${params.toString()}`);
@@ -7498,11 +8016,12 @@ function openAiPartSuggestionsModal() {
     const modal = document.getElementById("modalAiPartSuggestions");
     if (!modal) return;
 
-    // Populate Context Ribbon
+    // Populate Context Ribbon with actual sheet dimensions
     const grade = document.getElementById("gradeInput")?.value?.trim() || "HR";
     const thickness = document.getElementById("thicknessInput")?.value?.trim() || "0";
-    const sLen = document.getElementById("sheetLengthInput")?.value?.trim() || "2500";
-    const sWid = document.getElementById("sheetWidthInput")?.value?.trim() || "1250";
+    const sheetDims = getActiveMoSheetDimensions();
+    const sLen = sheetDims.length;
+    const sWid = sheetDims.width;
 
     const baseEl = document.getElementById("aiAdvisorBasePartDisplay");
     const gradeEl = document.getElementById("aiAdvisorGradeDisplay");
@@ -7755,22 +8274,33 @@ async function openCutOptimizerForModal() {
     const sheetSizeStr = document.getElementById("sheetSizeInput")?.value || "";
     const thickVal = parseFloat(document.getElementById("thicknessInput")?.value) || 0;
 
-    // Determine Sheet Dimensions from selected RM Sheet (Standard or Custom RM)
+    // Determine Sheet Dimensions from selected RM Sheet (Standard, Agent Recommended, or Custom RM)
     let sLen = 0;
     let sWid = 0;
     const rmSelect = document.getElementById("rmErpSelect");
     const selOpt = rmSelect?.selectedOptions[0];
     let rmRec = selOpt?.dataset?.record ? JSON.parse(selOpt.dataset.record) : null;
+    if (window._selectedRmAgentRecord && (!rmRec || rmRec.rm_erp === window._selectedRmAgentRecord.rm_erp)) {
+        rmRec = { ...(rmRec || {}), ...window._selectedRmAgentRecord };
+    }
     if (!rmRec && window._selectedCustomRmRecord) {
         rmRec = window._selectedCustomRmRecord;
     }
     if (rmRec) {
-        sLen = parseFloat(rmRec.length) || 0;
-        sWid = parseFloat(rmRec.width) || 0;
+        sLen = parseFloat(rmRec.sheet_length || rmRec.length || 0);
+        sWid = parseFloat(rmRec.sheet_width || rmRec.width || 0);
         if ((!sLen || !sWid) && rmRec.sheet_size) {
             const sd = parseDimString(rmRec.sheet_size, thickVal);
             if (sd.l > 0 && sd.w > 0) { sLen = sd.l; sWid = sd.w; }
         }
+        if ((!sLen || !sWid) && (rmRec.rm_erp || rmRec.item_code)) {
+            const sd = parseDimString(rmRec.rm_erp || rmRec.item_code, thickVal);
+            if (sd.l > 0 && sd.w > 0) { sLen = sd.l; sWid = sd.w; }
+        }
+    }
+    if ((!sLen || !sWid) && selOpt && selOpt.value) {
+        const sd = parseDimString(selOpt.value, thickVal);
+        if (sd.l > 0 && sd.w > 0) { sLen = sd.l; sWid = sd.w; }
     }
     if (!sLen || !sWid) {
         sLen = 2500;

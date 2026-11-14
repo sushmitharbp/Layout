@@ -3,30 +3,35 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login — SheetLayout AI & MO Approval System</title>
-    <meta name="description" content="Department Login with credentials for Shearing Production, Krysalis Consultants, Purchase, and ERP Approval Workflow.">
-    <!-- Non-blocking Google Fonts with instant native fallback -->
+    <title>Enterprise Sign In — SheetLayout AI</title>
+    <meta name="description" content="Multi-Tenant Material Order (MO) Approval Portal for Shearing Production, Krysalis Consultants, Purchase, and ERP Teams.">
+    
+    <!-- Non-blocking Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700;800&display=swap">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800&display=swap">
 
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
     <style>
         :root {
-            --bg-page: #0b0f19;
+            --bg-page: #0a0f1d;
             --bg-card: #ffffff;
             --border: #e2e8f0;
             --primary: #0f172a;
+            --accent: #0284c7;
             --text-main: #0f172a;
             --text-muted: #64748b;
-            --shearing-color: #2563eb;
-            --krysalis-color: #7c3aed;
-            --purchase-color: #d97706;
-            --erp-color: #059669;
+            
+            --color-shearing: #2563eb;
+            --color-krysalis: #7c3aed;
+            --color-purchase: #d97706;
+            --color-erp: #059669;
+
             --radius-md: 12px;
             --radius-lg: 20px;
-            --shadow-card: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+            --shadow-card: 0 25px 60px -15px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
         }
 
         * {
@@ -37,32 +42,32 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: radial-gradient(circle at 50% 20%, #1e293b 0%, #0b0f19 80%);
+            background: radial-gradient(circle at 50% 10%, #1e293b 0%, #0a0f1d 75%);
             color: var(--text-main);
             min-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 24px;
+            padding: 30px 20px;
         }
 
-        .login-wrapper {
+        .auth-container {
             width: 100%;
             max-width: 960px;
             background: var(--bg-card);
-            border: 1px solid rgba(255, 255, 255, 0.12);
             border-radius: var(--radius-lg);
             box-shadow: var(--shadow-card);
             overflow: hidden;
             display: grid;
-            grid-template-columns: 1fr 1.15fr;
+            grid-template-columns: 1fr 1.25fr;
+            min-height: 600px;
         }
 
-        /* Left Side: Brand & Department Directory */
-        .brand-side {
-            background: linear-gradient(145deg, #0f172a 0%, #1e293b 60%, #0f172a 100%);
+        /* ─── LEFT BRAND & PLATFORM SECURITY PANEL ─── */
+        .brand-panel {
+            background: linear-gradient(160deg, #090e1a 0%, #0f172a 50%, #172554 100%);
             color: #ffffff;
-            padding: 40px 32px;
+            padding: 44px 36px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -74,157 +79,147 @@
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            background: rgba(56, 189, 248, 0.15);
+            background: rgba(56, 189, 248, 0.12);
             border: 1px solid rgba(56, 189, 248, 0.3);
             color: #38bdf8;
-            padding: 4px 12px;
+            padding: 5px 12px;
             border-radius: 9999px;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 0.5px;
-            text-transform: uppercase;
-            width: fit-content;
-            margin-bottom: 12px;
-        }
-
-        .brand-side h1 {
-            font-family: 'Outfit', sans-serif;
-            font-size: 1.85rem;
+            font-size: 0.72rem;
             font-weight: 700;
+            letter-spacing: 0.6px;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .brand-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
             letter-spacing: -0.5px;
-            line-height: 1.2;
+            line-height: 1.15;
+            color: #ffffff;
         }
 
-        .brand-side h1 span {
-            color: #38bdf8;
+        .brand-title span {
+            background: linear-gradient(135deg, #38bdf8 0%, #60a5fa 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .brand-side .subtitle {
+        .brand-sub {
             font-size: 0.88rem;
             color: #94a3b8;
-            margin-top: 8px;
+            margin-top: 10px;
             line-height: 1.5;
         }
 
-        /* 4 Department Select Cards (Left Panel) */
-        .dept-selection-title {
-            font-size: 0.78rem;
-            font-weight: 700;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 0.8px;
-            margin: 24px 0 12px 0;
-        }
-
-        .dept-pills-list {
+        /* Platform Architecture Highlights */
+        .platform-highlights {
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
+            margin: 28px 0;
         }
 
-        .dept-item-btn {
+        .highlight-item {
             background: rgba(255, 255, 255, 0.04);
-            border: 1.5px solid rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: var(--radius-md);
             padding: 12px 14px;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            text-align: left;
-            color: #ffffff;
-            width: 100%;
         }
 
-        .dept-item-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateX(3px);
-        }
-
-        .dept-item-btn.active {
-            background: rgba(255, 255, 255, 0.12);
-        }
-
-        .dept-item-btn.active.shearing { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.3); }
-        .dept-item-btn.active.krysalis { border-color: #8b5cf6; box-shadow: 0 0 15px rgba(139, 92, 246, 0.3); }
-        .dept-item-btn.active.purchase { border-color: #f59e0b; box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); }
-        .dept-item-btn.active.erp { border-color: #10b981; box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
-
-        .dept-mini-icon {
-            width: 36px;
-            height: 36px;
+        .highlight-icon {
+            width: 32px;
+            height: 32px;
             border-radius: 8px;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.05rem;
+            font-size: 0.95rem;
             flex-shrink: 0;
+            margin-top: 2px;
         }
 
-        .shearing .dept-mini-icon { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
-        .krysalis .dept-mini-icon { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
-        .purchase .dept-mini-icon { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
-        .erp .dept-mini-icon { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-
-        .dept-mini-text {
-            flex: 1;
-        }
-
-        .dept-mini-text strong {
+        .highlight-text strong {
             display: block;
-            font-size: 0.88rem;
-            color: #f1f5f9;
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: #f8fafc;
         }
 
-        .dept-mini-text span {
+        .highlight-text span {
             font-size: 0.74rem;
             color: #94a3b8;
+            line-height: 1.35;
         }
 
-        .dept-quick-tag {
-            font-size: 0.7rem;
-            padding: 3px 8px;
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.08);
-            color: #94a3b8;
-            font-family: monospace;
-        }
-
-        .brand-side-footer {
-            margin-top: 24px;
-            padding-top: 16px;
+        /* 4 Department Clearance Hierarchy */
+        .dept-flow-strip {
+            padding-top: 18px;
             border-top: 1px solid rgba(255, 255, 255, 0.08);
-            font-size: 0.76rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.70rem;
+            color: #94a3b8;
+        }
+
+        .dept-step {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .dept-step span.dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        .brand-footer {
+            margin-top: 24px;
+            font-size: 0.74rem;
             color: #64748b;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
 
-        .brand-side-footer a {
+        .brand-footer a {
             color: #38bdf8;
             text-decoration: none;
-            font-weight: 500;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
         }
 
-        /* Right Side: Authentication Form */
-        .form-side {
+        .brand-footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* ─── RIGHT AUTHENTICATION FORM ─── */
+        .form-panel {
             background: #ffffff;
-            padding: 44px 40px;
+            padding: 48px 44px;
             display: flex;
             flex-direction: column;
             justify-content: center;
         }
 
         .form-header {
-            margin-bottom: 24px;
+            margin-bottom: 28px;
         }
 
         .form-header h2 {
             font-family: 'Outfit', sans-serif;
-            font-size: 1.5rem;
+            font-size: 1.6rem;
             font-weight: 700;
             color: #0f172a;
             display: flex;
@@ -233,35 +228,16 @@
         }
 
         .form-header p {
-            font-size: 0.86rem;
+            font-size: 0.88rem;
             color: #64748b;
             margin-top: 6px;
+            line-height: 1.45;
         }
 
-        .active-dept-banner {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            border-radius: var(--radius-md);
-            margin-bottom: 20px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            transition: all 0.2s ease;
-        }
-
-        .active-dept-banner .badge {
-            padding: 3px 8px;
-            font-size: 0.72rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            border-radius: 4px;
-        }
-
-        /* Alert message */
+        /* Error Alert */
         .error-alert {
             background: #fef2f2;
-            border: 1px solid #fecaca;
+            border: 1.5px solid #fecaca;
             color: #991b1b;
             padding: 12px 16px;
             border-radius: var(--radius-md);
@@ -270,7 +246,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            animation: fadeIn 0.3s ease;
+            animation: fadeIn 0.25s ease;
         }
 
         @keyframes fadeIn {
@@ -281,13 +257,13 @@
         .auth-form {
             display: flex;
             flex-direction: column;
-            gap: 18px;
+            gap: 20px;
         }
 
         .form-group {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 7px;
         }
 
         .form-group label {
@@ -295,7 +271,14 @@
             font-weight: 600;
             color: #334155;
             display: flex;
+            align-items: center;
             justify-content: space-between;
+        }
+
+        .form-group label small {
+            font-size: 0.72rem;
+            color: #64748b;
+            font-weight: 500;
         }
 
         .input-wrap {
@@ -314,19 +297,85 @@
 
         .input-wrap input {
             width: 100%;
-            padding: 12px 42px 12px 42px;
+            padding: 12px 14px 12px 42px;
             border: 1.5px solid #cbd5e1;
             border-radius: 10px;
             font-size: 0.92rem;
             color: #0f172a;
             outline: none;
+            background: #ffffff;
             transition: border-color 0.2s, box-shadow 0.2s;
             font-family: inherit;
         }
 
         .input-wrap input:focus {
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+            border-color: #0284c7;
+            box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+        }
+
+        /* 4 Department Selector Grid */
+        .dept-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .dept-card-btn {
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 11px 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: all 0.18s ease;
+            text-align: left;
+        }
+
+        .dept-card-btn:hover {
+            background: #f1f5f9;
+            border-color: #cbd5e1;
+        }
+
+        .dept-card-btn.active {
+            background: #ffffff;
+            border-width: 2px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+        }
+
+        .dept-card-btn.active.shearing { border-color: #2563eb; }
+        .dept-card-btn.active.krysalis { border-color: #7c3aed; }
+        .dept-card-btn.active.purchase { border-color: #d97706; }
+        .dept-card-btn.active.erp { border-color: #059669; }
+
+        .dept-card-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+        }
+
+        .shearing .dept-card-icon { background: #dbeafe; color: #1e40af; }
+        .krysalis .dept-card-icon { background: #ede9fe; color: #5b21b6; }
+        .purchase .dept-card-icon { background: #fef3c7; color: #92400e; }
+        .erp .dept-card-icon { background: #d1fae5; color: #065f46; }
+
+        .dept-card-text strong {
+            display: block;
+            font-size: 0.82rem;
+            color: #0f172a;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .dept-card-text span {
+            font-size: 0.68rem;
+            color: #64748b;
         }
 
         .toggle-pw-btn {
@@ -344,172 +393,111 @@
             color: #334155;
         }
 
-        /* Demo credentials pill bar */
-        .credentials-quick-fill {
-            background: #f8fafc;
-            border: 1px dashed #cbd5e1;
-            border-radius: var(--radius-md);
-            padding: 12px 14px;
-            margin-top: 4px;
-        }
-
-        .credentials-quick-fill span {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: #475569;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .quick-chips-row {
-            display: flex;
-            gap: 6px;
-            flex-wrap: wrap;
-        }
-
-        .quick-chip {
-            background: #ffffff;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            padding: 5px 10px;
-            font-size: 0.74rem;
-            font-weight: 600;
-            color: #334155;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-
-        .quick-chip:hover {
-            background: #f1f5f9;
-            border-color: #94a3b8;
-            transform: translateY(-1px);
-        }
-
-        .submit-login-btn {
+        .submit-btn {
             background: #0f172a;
             color: #ffffff;
             border: none;
             border-radius: 10px;
-            padding: 13px 20px;
+            padding: 14px 20px;
             font-size: 0.95rem;
-            font-weight: 600;
+            font-weight: 700;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
             gap: 10px;
             transition: all 0.2s ease;
-            box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15);
-            margin-top: 8px;
+            box-shadow: 0 4px 14px rgba(15, 23, 42, 0.15);
+            margin-top: 6px;
         }
 
-        .submit-login-btn:hover {
+        .submit-btn:hover {
             background: #1e293b;
             transform: translateY(-1px);
-            box-shadow: 0 6px 16px rgba(15, 23, 42, 0.2);
+            box-shadow: 0 6px 18px rgba(15, 23, 42, 0.22);
         }
 
-        .submit-login-btn:active {
+        .submit-btn:active {
             transform: translateY(0);
         }
 
-        @media (max-width: 840px) {
-            .login-wrapper {
+        @media (max-width: 860px) {
+            .auth-container {
                 grid-template-columns: 1fr;
             }
-            .brand-side {
-                padding: 30px 24px;
-            }
-            .form-side {
+            .brand-panel {
                 padding: 32px 24px;
+            }
+            .form-panel {
+                padding: 36px 24px;
+            }
+            .dept-grid {
+                grid-template-columns: 1fr;
             }
         }
     </style>
 </head>
 <body>
-    <div class="login-wrapper">
-        <!-- Left Side: Brand & Department Directory -->
-        <aside class="brand-side">
+
+    <div class="auth-container">
+        <!-- ─── LEFT: Platform Security & Clearance Overview ─── -->
+        <aside class="brand-panel">
             <div>
-                <div class="brand-badge"><i class="fa-solid fa-shield-halved"></i> Role-Based Authentication</div>
-                <h1>SheetLayout <span>AI</span></h1>
-                <p class="subtitle">Material Order (MO) Approval Portal with 4 separate department workspaces.</p>
+                <div class="brand-badge"><i class="fa-solid fa-shield-halved"></i> Enterprise Portal &bull; Encrypted</div>
+                <h1 class="brand-title">SheetLayout <span>AI</span></h1>
+                <p class="brand-sub">Material Order (MO) clearance gateway connecting shearing production with CAD nesting and live ERP systems.</p>
 
-                <div class="dept-selection-title">Select Department Workspace</div>
-                <div class="dept-pills-list">
-                    <!-- 1. Shearing -->
-                    <button type="button" class="dept-item-btn shearing active" onclick="selectDepartment('shearing', 'shearing123', 'Shearing (Production) Team', 'Production Floor', 'fa-industry')">
-                        <div class="dept-mini-icon"><i class="fa-solid fa-industry"></i></div>
-                        <div class="dept-mini-text">
-                            <strong>Shearing Production</strong>
-                            <span>Initiate MOs &amp; Cut Blanks</span>
+                <!-- Platform Security Highlights -->
+                <div class="platform-highlights">
+                    <div class="highlight-item">
+                        <div class="highlight-icon"><i class="fa-solid fa-building-user"></i></div>
+                        <div class="highlight-text">
+                            <strong>Multi-Tenant Isolation</strong>
+                            <span>Each company operates strictly within its isolated data partition and ERP connection.</span>
                         </div>
-                        <span class="dept-quick-tag">shearing</span>
-                    </button>
+                    </div>
+                    <div class="highlight-item">
+                        <div class="highlight-icon"><i class="fa-solid fa-layer-group"></i></div>
+                        <div class="highlight-text">
+                            <strong>4-Tier Approval Governance</strong>
+                            <span>Seamless stage-by-stage clearance across Shearing, Krysalis, Purchase, and ERP.</span>
+                        </div>
+                    </div>
+                    <div class="highlight-item">
+                        <div class="highlight-icon"><i class="fa-solid fa-warehouse"></i></div>
+                        <div class="highlight-text">
+                            <strong>Real-Time Stock Verification</strong>
+                            <span>Direct warehouse queries for sheet availability and remnant offcuts.</span>
+                        </div>
+                    </div>
+                </div>
 
-                    <!-- 2. Krysalis -->
-                    <button type="button" class="dept-item-btn krysalis" onclick="selectDepartment('krysalis', 'krysalis123', 'Consultants (Krysalis) Team', 'Design Clearance', 'fa-compass-drafting')">
-                        <div class="dept-mini-icon"><i class="fa-solid fa-compass-drafting"></i></div>
-                        <div class="dept-mini-text">
-                            <strong>Consultants (Krysalis)</strong>
-                            <span>CAD Layout &amp; Nesting Review</span>
-                        </div>
-                        <span class="dept-quick-tag">krysalis</span>
-                    </button>
-
-                    <!-- 3. Purchase -->
-                    <button type="button" class="dept-item-btn purchase" onclick="selectDepartment('purchase', 'purchase123', 'Purchase Team', 'Procurement Clearance', 'fa-cart-shopping')">
-                        <div class="dept-mini-icon"><i class="fa-solid fa-cart-shopping"></i></div>
-                        <div class="dept-mini-text">
-                            <strong>Purchase Team</strong>
-                            <span>Stock Shortages &amp; Coils</span>
-                        </div>
-                        <span class="dept-quick-tag">purchase</span>
-                    </button>
-
-                    <!-- 4. ERP -->
-                    <button type="button" class="dept-item-btn erp" onclick="selectDepartment('erp', 'erp123', 'ERP Team', 'Master Data Release', 'fa-network-wired')">
-                        <div class="dept-mini-icon"><i class="fa-solid fa-network-wired"></i></div>
-                        <div class="dept-mini-text">
-                            <strong>ERP Master Gateway</strong>
-                            <span>Final Approval &amp; Release</span>
-                        </div>
-                        <span class="dept-quick-tag">erp</span>
-                    </button>
+                <!-- 4 Department Clearance Hierarchy -->
+                <div class="dept-flow-strip">
+                    <div class="dept-step"><span class="dot" style="background: #3b82f6;"></span> Shearing</div>
+                    <i class="fa-solid fa-arrow-right" style="font-size: 0.65rem; color: #475569;"></i>
+                    <div class="dept-step"><span class="dot" style="background: #a855f7;"></span> Krysalis</div>
+                    <i class="fa-solid fa-arrow-right" style="font-size: 0.65rem; color: #475569;"></i>
+                    <div class="dept-step"><span class="dot" style="background: #f59e0b;"></span> Purchase</div>
+                    <i class="fa-solid fa-arrow-right" style="font-size: 0.65rem; color: #475569;"></i>
+                    <div class="dept-step"><span class="dot" style="background: #10b981;"></span> ERP</div>
                 </div>
             </div>
 
-            <div class="brand-side-footer">
-                <span>Enterprise MRP Workflow &bull; v2.0</span>
+            <div class="brand-footer">
+                <span>Enterprise v2.4 &bull; Multi-Tenant Auth</span>
                 <a href="/chat-full"><i class="fa-solid fa-robot"></i> Full Chatbot</a>
             </div>
         </aside>
 
-        <!-- Right Side: Login Form with Credentials -->
-        <main class="form-side">
+        <!-- ─── RIGHT: Clean, Confidential Sign In Form ─── -->
+        <main class="form-panel">
             <div class="form-header">
-                <h2><i class="fa-solid fa-lock" style="color: #2563eb; font-size: 1.25rem;"></i> Department Sign In</h2>
-                <p>Enter your department username and password to open your secure workspace.</p>
+                <h2><i class="fa-solid fa-shield-halved" style="color: #0284c7; font-size: 1.35rem;"></i> Enterprise Sign In</h2>
+                <p>Sign in with your <strong>Company ID</strong>, select your <strong>Department</strong>, and enter your password.</p>
             </div>
 
-            <!-- Active Department Pill -->
-            <div class="active-dept-banner" id="activeDeptBanner">
-                <i class="fa-solid fa-industry" id="bannerIcon" style="color: #2563eb; font-size: 1.2rem;"></i>
-                <div style="flex: 1;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <strong id="bannerName" style="font-size: 0.95rem; color: #0f172a;">Shearing (Production) Team</strong>
-                        <span class="badge" id="bannerBadge" style="background: #dbeafe; color: #1e40af;">Production Floor</span>
-                    </div>
-                    <small style="color: #64748b; font-size: 0.78rem;" id="bannerDesc">Authenticating as department operator</small>
-                </div>
-            </div>
-
-            <!-- Server Error Display -->
+            <!-- Server Error (Generic, never leaks other company IDs) -->
             {% if error %}
             <div class="error-alert">
                 <i class="fa-solid fa-circle-exclamation" style="font-size: 1.1rem;"></i>
@@ -517,56 +505,83 @@
             </div>
             {% endif %}
 
-            <!-- Client Error Display -->
-            <div class="error-alert" id="clientErrorAlert" style="display: none;">
-                <i class="fa-solid fa-circle-exclamation" style="font-size: 1.1rem;"></i>
-                <span id="clientErrorMsg"></span>
-            </div>
-
-            <!-- The Authentication Form -->
+            <!-- Login Form -->
             <form class="auth-form" id="loginForm" method="POST" action="/login">
-                <input type="hidden" name="role" id="roleInput" value="shearing">
-
+                <!-- 1. Company ID (Confidential, blank input) -->
                 <div class="form-group">
-                    <label for="usernameInput">Username <span style="font-weight: 400; color: #64748b;">(Department ID)</span></label>
+                    <label for="companyIdInput">
+                        <span>Company ID <span style="color: #ef4444;">*</span></span>
+                        <small>Assigned Enterprise Code</small>
+                    </label>
                     <div class="input-wrap">
-                        <i class="fa-solid fa-user prefix-icon"></i>
-                        <input type="text" id="usernameInput" name="username" value="shearing" required placeholder="e.g. shearing, krysalis, purchase, erp" autocomplete="username">
+                        <i class="fa-solid fa-building prefix-icon"></i>
+                        <input type="text" id="companyIdInput" name="company_id" value="" required placeholder="Enter your Company ID" autocomplete="organization" style="font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
                     </div>
                 </div>
 
+                <!-- 2. Department Workspace (1 in 4) -->
                 <div class="form-group">
-                    <label for="passwordInput">Password</label>
+                    <label>
+                        <span>Department Workspace <span style="color: #ef4444;">* (1 in 4)</span></span>
+                        <small>Select Role</small>
+                    </label>
+                    <div class="dept-grid">
+                        <!-- 1. Shearing -->
+                        <div class="dept-card-btn shearing active" onclick="selectDepartment('shearing')">
+                            <div class="dept-card-icon"><i class="fa-solid fa-industry"></i></div>
+                            <div class="dept-card-text">
+                                <strong>Shearing Floor</strong>
+                                <span>Initiate MOs &amp; Cut</span>
+                            </div>
+                        </div>
+
+                        <!-- 2. Krysalis -->
+                        <div class="dept-card-btn krysalis" onclick="selectDepartment('krysalis')">
+                            <div class="dept-card-icon"><i class="fa-solid fa-compass-drafting"></i></div>
+                            <div class="dept-card-text">
+                                <strong>Consultants</strong>
+                                <span>CAD Layout Review</span>
+                            </div>
+                        </div>
+
+                        <!-- 3. Purchase -->
+                        <div class="dept-card-btn purchase" onclick="selectDepartment('purchase')">
+                            <div class="dept-card-icon"><i class="fa-solid fa-cart-shopping"></i></div>
+                            <div class="dept-card-text">
+                                <strong>Purchase Team</strong>
+                                <span>Coils &amp; Shortages</span>
+                            </div>
+                        </div>
+
+                        <!-- 4. ERP -->
+                        <div class="dept-card-btn erp" onclick="selectDepartment('erp')">
+                            <div class="dept-card-icon"><i class="fa-solid fa-network-wired"></i></div>
+                            <div class="dept-card-text">
+                                <strong>ERP Gateway</strong>
+                                <span>Release &amp; Master</span>
+                            </div>
+                        </div>
+                    </div>
+                    <input type="hidden" name="department" id="departmentInput" value="shearing">
+                </div>
+
+                <!-- 3. Password (Blank input, not pre-filled) -->
+                <div class="form-group">
+                    <label for="passwordInput">
+                        <span>Department Password <span style="color: #ef4444;">*</span></span>
+                    </label>
                     <div class="input-wrap">
                         <i class="fa-solid fa-key prefix-icon"></i>
-                        <input type="password" id="passwordInput" name="password" value="shearing123" required placeholder="Enter department password" autocomplete="current-password">
+                        <input type="password" id="passwordInput" name="password" value="" required placeholder="Enter department password" autocomplete="current-password">
                         <button type="button" class="toggle-pw-btn" onclick="togglePasswordVisibility()" title="Toggle visibility">
                             <i class="fa-regular fa-eye" id="pwToggleIcon"></i>
                         </button>
                     </div>
                 </div>
 
-                <!-- 1-Click Quick Fill Strip for testing all 4 logins -->
-                <div class="credentials-quick-fill">
-                    <span><i class="fa-solid fa-key"></i> Quick Fill 4 Department Logins:</span>
-                    <div class="quick-chips-row">
-                        <button type="button" class="quick-chip" onclick="quickFill('shearing', 'shearing123')">
-                            <i class="fa-solid fa-industry" style="color: #2563eb;"></i> Shearing (shearing / shearing123)
-                        </button>
-                        <button type="button" class="quick-chip" onclick="quickFill('krysalis', 'krysalis123')">
-                            <i class="fa-solid fa-compass-drafting" style="color: #7c3aed;"></i> Krysalis (krysalis / krysalis123)
-                        </button>
-                        <button type="button" class="quick-chip" onclick="quickFill('purchase', 'purchase123')">
-                            <i class="fa-solid fa-cart-shopping" style="color: #d97706;"></i> Purchase (purchase / purchase123)
-                        </button>
-                        <button type="button" class="quick-chip" onclick="quickFill('erp', 'erp123')">
-                            <i class="fa-solid fa-network-wired" style="color: #059669;"></i> ERP (erp / erp123)
-                        </button>
-                    </div>
-                </div>
-
-                <button type="submit" class="submit-login-btn" id="submitLoginBtn">
-                    <span>Sign In to Workspace</span>
+                <!-- Submit Button -->
+                <button type="submit" class="submit-btn" id="submitBtn">
+                    <span id="submitBtnText">Sign In to Workspace</span>
                     <i class="fa-solid fa-arrow-right"></i>
                 </button>
             </form>
@@ -574,76 +589,30 @@
     </div>
 
     <script>
-        const DEPT_MAP = {
-            shearing: {
-                username: "shearing",
-                name: "Shearing (Production) Team",
-                badge: "Production Floor",
-                badgeBg: "#dbeafe",
-                badgeColor: "#1e40af",
-                icon: "fa-industry",
-                iconColor: "#2563eb",
-                btnColor: "#2563eb"
-            },
-            krysalis: {
-                username: "krysalis",
-                name: "Consultants (Krysalis) Team",
-                badge: "Design Clearance",
-                badgeBg: "#ede9fe",
-                badgeColor: "#5b21b6",
-                icon: "fa-compass-drafting",
-                iconColor: "#7c3aed",
-                btnColor: "#7c3aed"
-            },
-            purchase: {
-                username: "purchase",
-                name: "Purchase Team",
-                badge: "Procurement Clearance",
-                badgeBg: "#fef3c7",
-                badgeColor: "#92400e",
-                icon: "fa-cart-shopping",
-                iconColor: "#d97706",
-                btnColor: "#d97706"
-            },
-            erp: {
-                username: "erp",
-                name: "ERP Master Gateway",
-                badge: "Master Data Release",
-                badgeBg: "#d1fae5",
-                badgeColor: "#065f46",
-                icon: "fa-network-wired",
-                iconColor: "#059669",
-                btnColor: "#059669"
-            }
+        const DEPT_NAMES = {
+            shearing: "Shearing Production",
+            krysalis: "Consultants (Krysalis)",
+            purchase: "Purchase Team",
+            erp: "ERP Master Gateway"
         };
 
-        function selectDepartment(role, defaultPw, name, badge, icon) {
-            document.querySelectorAll(".dept-item-btn").forEach(btn => btn.classList.remove("active"));
-            const targetBtn = document.querySelector(`.dept-item-btn.${role}`);
-            if (targetBtn) targetBtn.classList.add("active");
+        let currentDept = "shearing";
 
-            document.getElementById("roleInput").value = role;
-            document.getElementById("usernameInput").value = role;
-            document.getElementById("passwordInput").value = defaultPw || "";
+        function selectDepartment(dept) {
+            currentDept = dept;
+            document.getElementById("departmentInput").value = dept;
 
-            const info = DEPT_MAP[role] || DEPT_MAP.shearing;
-            document.getElementById("bannerName").textContent = info.name;
-            const badgeEl = document.getElementById("bannerBadge");
-            badgeEl.textContent = info.badge;
-            badgeEl.style.backgroundColor = info.badgeBg;
-            badgeEl.style.color = info.badgeColor;
+            // Update active state on cards
+            document.querySelectorAll(".dept-card-btn").forEach(card => card.classList.remove("active"));
+            const target = document.querySelector(`.dept-card-btn.${dept}`);
+            if (target) target.classList.add("active");
 
-            const iconEl = document.getElementById("bannerIcon");
-            iconEl.className = `fa-solid ${info.icon}`;
-            iconEl.style.color = info.iconColor;
-
-            const submitBtn = document.getElementById("submitLoginBtn");
-            submitBtn.style.backgroundColor = info.btnColor;
-            submitBtn.innerHTML = `<span>Sign In as ${info.name.split(" ")[0]}</span> <i class="fa-solid fa-arrow-right"></i>`;
-        }
-
-        function quickFill(user, pw) {
-            selectDepartment(user, pw);
+            // Update button label cleanly without revealing company names
+            const deptLabel = DEPT_NAMES[dept] || "Workspace";
+            const btnText = document.getElementById("submitBtnText");
+            if (btnText) {
+                btnText.textContent = `Sign In to ${deptLabel}`;
+            }
         }
 
         function togglePasswordVisibility() {
@@ -658,9 +627,8 @@
             }
         }
 
-        // Initialize with default shearing button styling
         document.addEventListener("DOMContentLoaded", () => {
-            selectDepartment("shearing", "shearing123");
+            selectDepartment("shearing");
         });
     </script>
 </body>

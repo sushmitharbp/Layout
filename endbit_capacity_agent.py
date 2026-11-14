@@ -494,6 +494,26 @@ class EndbitCapacityAgent:
         }
 
     def _lookup_part_blank(self, part_query: str) -> Optional[Dict[str, Any]]:
+        # 1. Search in Supabase database parts master (db_clean)
+        try:
+            import db_clean as db
+            p = db.get_part(part_query)
+            if not p:
+                s_res = db.search_parts(part_query, limit=1)
+                if s_res:
+                    p = s_res[0]
+            if p and float(p.get("length") or 0) > 0 and float(p.get("width") or 0) > 0:
+                return {
+                    "part_no": p.get("part_no"),
+                    "blank_length": float(p.get("length")),
+                    "blank_width": float(p.get("width")),
+                    "thickness": float(p.get("thickness", 4.8)),
+                    "grade": p.get("grade", "HR")
+                }
+        except Exception:
+            pass
+
+        # 2. Search local data store
         clean = norm_key(part_query)
         # Search direct parts
         for p_name, p_data in self.parts.items():

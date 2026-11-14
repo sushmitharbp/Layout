@@ -1,0 +1,76 @@
+[
+  {
+    "company_id": "PEPIPL",
+    "branch_code": "PEPIPL",
+    "department": "shearing",
+    "username": "shearing",
+    "password_hash": "shearing123",
+    "display_name": "Shearing Production Floor",
+    "is_active": true,
+    "updated_at": "2026-11-13T05:43:25.109145Z"
+  },
+  {
+    "company_id": "PEPIPL",
+    "branch_code": "PEPIPL",
+    "department": "krysalis",
+    "username": "krysalis",
+    "password_hash": "krysalis123",
+    "display_name": "Consultants (Krysalis) Design",
+    "is_active": true
+  },
+  {
+    "company_id": "PEPIPL",
+    "branch_code": "PEPIPL",
+    "department": "purchase",
+    "username": "purchase",
+    "password_hash": "purchase123",
+    "display_name": "Purchase Team",
+    "is_active": true
+  },
+  {
+    "company_id": "PEPIPL",
+    "branch_code": "PEPIPL",
+    "department": "erp",
+    "username": "erp",
+    "password_hash": "erp123",
+    "display_name": "ERP Master Gateway",
+    "is_active": true
+  },
+  {
+    "company_id": "PEI2",
+    "branch_code": "PEI2",
+    "department": "shearing",
+    "username": "shearing",
+    "password_hash": "shearing123",
+    "display_name": "Shearing Production Floor (Unit 2)",
+    "is_active": true,
+    "updated_at": "2026-11-13T06:06:44.151665Z"
+  },
+  {
+    "company_id": "PEI2",
+    "branch_code": "PEI2",
+    "department": "krysalis",
+    "username": "krysalis",
+    "password_hash": "krysalis123",
+    "display_name": "Consultants (Krysalis) Design (Unit 2)",
+    "is_active": true
+  },
+  {
+    "company_id": "PEI2",
+    "branch_code": "PEI2",
+    "department": "purchase",
+    "username": "purchase",
+    "password_hash": "purchase123",
+    "display_name": "Purchase Team (Unit 2)",
+    "is_active": true
+  },
+  {
+    "company_id": "PEI2",
+    "branch_code": "PEI2",
+    "department": "erp",
+    "username": "erp",
+    "password_hash": "erp123",
+    "display_name": "ERP Master Gateway (Unit 2)",
+    "is_active": true
+  }
+]

@@ -564,6 +564,8 @@ class MOWorkflowEngine:
         now_iso = datetime.utcnow().isoformat() + "Z"
 
         mo_id = mo_data.get("mo_number") or f"MO-{int(time.time())}"
+        company_id = mo_data.get("company_id") or "PEPIPL"
+        branch_code = mo_data.get("branch_code") or mo_data.get("branch") or company_id
         
         audit_entry = {
             "action": "CREATED",
@@ -571,11 +573,16 @@ class MOWorkflowEngine:
             "actor_name": ROLES.get(created_by_role, {}).get("name", "Shearing"),
             "timestamp": now_iso,
             "stage": routing["first_stage"],
+            "company_id": company_id,
+            "branch_code": branch_code,
             "remarks": mo_data.get("notes") or f"MO initiated by Shearing team. Routing: {routing.get('description', '')}"
         }
 
         record = {
             "mo_number": mo_id,
+            "company_id": company_id,
+            "branch_code": branch_code,
+            "branch": branch_code,
             "part_no": mo_data.get("part_no", ""),
             "base_part": mo_data.get("base_part", ""),
             "rm_erp": mo_data.get("rm_erp", ""),
@@ -643,7 +650,7 @@ class MOWorkflowEngine:
                     "workflow_path": record.get("workflow_path", "DIRECT_ERP"),
                     "current_stage": record.get("current_stage", "KRYSALIS"),
                     "status": record.get("status", "PENDING_KRYSALIS"),
-                    "remarks": record.get("notes", ""),
+                    "remarks": f"[{company_id} - {branch_code}] {record.get('notes', '')}".strip(),
                     "created_by": record.get("created_by_role", "shearing"),
                     "audit_trail": record.get("audit_trail", [])
                 }
@@ -686,8 +693,8 @@ class MOWorkflowEngine:
         self._cached_mos = None  # Invalidate cache on new creation
         return record
 
-    def list_mos(self, role=None, stage=None, status=None):
-        """List MOs with optional filtering and in-memory short TTL cache (Detached legacy material_orders; uses clean app_mo & fresh local store)"""
+    def list_mos(self, role=None, stage=None, status=None, company_id=None):
+        """List MOs with optional filtering, company_id tenant isolation, and in-memory short TTL cache"""
         now = time.time()
         if self._cached_mos is not None and (now - self._cache_time) < self._cache_ttl:
             all_mos = self._cached_mos
@@ -717,6 +724,9 @@ class MOWorkflowEngine:
             self._cache_time = now
 
         mos = all_mos
+        if company_id:
+            c_id = str(company_id).strip().upper()
+            mos = [m for m in mos if (m.get("company_id") or "PEI2").strip().upper() == c_id]
         if stage:
             mos = [m for m in mos if m.get("current_stage") == stage]
         if status:
@@ -1616,8 +1626,8 @@ class MOWorkflowEngine:
         print(f"[Manual Endbit] Added end-bit {eb_id} ({dim_str} mm, {qty} Nos) to Store by {created_by_role}")
         return record, None
 
-    def list_endbits(self, status=None, grade=None, mo_number=None, search=None):
-        """List recorded end bits with optional filters, prioritizing Supabase endbits table"""
+    def list_endbits(self, status=None, grade=None, mo_number=None, search=None, company_id=None):
+        """List recorded end bits with optional filters, prioritizing Supabase endbits table and company_id isolation"""
         all_ebs = []
         if self.use_supabase:
             try:
@@ -1635,6 +1645,8 @@ class MOWorkflowEngine:
                         all_ebs.append({
                             "id": r.get("id"),
                             "endbit_id": f"EB-{r.get('id')}",
+                            "company_id": r.get("company_id") or "PEI2",
+                            "branch_code": r.get("branch_code") or r.get("company_id") or "PEI2",
                             "mo_number": r.get("mo_no") or "-",
                             "source_mo_number": r.get("mo_no") or "-",
                             "name": eb_desc or f"Endbit #{r.get('id')}",
@@ -1655,6 +1667,9 @@ class MOWorkflowEngine:
             all_ebs = self._load_endbits_local()
 
         filtered = all_ebs
+        if company_id:
+            c_id = str(company_id).strip().upper()
+            filtered = [e for e in filtered if (e.get("company_id") or "PEI2").strip().upper() == c_id]
         if status and status.upper() != "ALL":
             filtered = [e for e in filtered if (e.get("status") or "").upper() == status.upper()]
         if grade:
@@ -2146,9 +2161,9 @@ class MOWorkflowEngine:
 
         return mo_record, None
 
-    def get_endbit_stats(self):
-        """Returns summary statistics for the End Bits Store"""
-        all_ebs = self.list_endbits()
+    def get_endbit_stats(self, company_id=None):
+        """Returns summary statistics for the End Bits Store filtered by company_id"""
+        all_ebs = self.list_endbits(company_id=company_id)
         total_items = len(all_ebs)
         avail_items = sum(1 for e in all_ebs if (e.get("status") or "").upper() == "AVAILABLE")
         partial_items = sum(1 for e in all_ebs if (e.get("status") or "").upper() == "PARTIALLY_USED")
@@ -2462,9 +2477,9 @@ class MOWorkflowEngine:
 
         return mo, None
 
-    def get_stats(self):
-        """Get summary counts for all departments"""
-        mos = self.list_mos()
+    def get_stats(self, company_id=None):
+        """Get summary counts for all departments filtered strictly by company_id"""
+        mos = self.list_mos(company_id=company_id)
         return {
             "total_mos": len(mos),
             "pending_krysalis": sum(1 for m in mos if m.get("current_stage") == "KRYSALIS"),

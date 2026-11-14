@@ -10,7 +10,7 @@ Exposes REST endpoints for the redesigned Create Material Order modal and 7-tabl
 """
 
 import math
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 import db_clean as db
 from cut_optimizer import CUT_OPTIMIZER_2D
 
@@ -18,12 +18,14 @@ api_v2_bp = Blueprint('api_v2', __name__, url_prefix='/api/v2')
 
 @api_v2_bp.route('/search-parts', methods=['GET'])
 def search_parts_endpoint():
-    """Search parts master by query string"""
+    """Search parts master by query string scoped by company_id"""
     q = request.args.get('q', '').strip()
     limit = int(request.args.get('limit', 20))
-    parts = db.search_parts(query=q, limit=limit)
+    company_id = session.get("company_id") or request.args.get('company_id') or "PEI2"
+    parts = db.search_parts(query=q, limit=limit, company_id=company_id)
     return jsonify({
         "success": True,
+        "company_id": company_id,
         "count": len(parts),
         "parts": parts
     })
@@ -31,30 +33,34 @@ def search_parts_endpoint():
 @api_v2_bp.route('/part-details/<path:part_no>', methods=['GET'])
 def get_part_details_endpoint(part_no):
     """
-    Fetch comprehensive part specs, matching RMs from rm table, and live MRP demand.
+    Fetch comprehensive part specs, matching RMs from rm table, and live MRP demand scoped by company_id.
     """
-    part = db.get_part(part_no)
+    company_id = session.get("company_id") or request.args.get('company_id') or "PEI2"
+    part = db.get_part(part_no, company_id=company_id)
     if not part:
-        return jsonify({"success": False, "error": f"Part '{part_no}' not found"}), 404
+        return jsonify({"success": False, "error": f"Part '{part_no}' not found for company '{company_id}'"}), 404
 
     grade = part.get('grade')
     thickness = part.get('thickness')
 
     # 1. Fetch matching RMs from rm table
-    matching_rms = db.get_rms_by_spec(grade=grade, thickness=thickness)
+    matching_rms = db.get_rms_by_spec(grade=grade, thickness=thickness, branch=company_id, company_id=company_id)
 
     # 2. Fetch MRP demand
-    mrp_record = db.get_mrp_for_part(part_no) or {}
+    mrp_record = db.get_mrp_for_part(part_no, company_id=company_id) or {}
 
     # 3. Fetch past ERP MOs
-    past_mos = db.get_mos_for_part(part_no, limit=5)
+    past_mos = db.get_mos_for_part(part_no, limit=5, branch=company_id, company_id=company_id)
 
     return jsonify({
         "success": True,
+        "company_id": company_id,
         "part": part,
         "matching_rms": matching_rms,
         "mrp": {
             "monthly_schedule": mrp_record.get("monthly_schedule", 0),
+            "initial_stock": mrp_record.get("initial_stock", mrp_record.get("current_stock", 0)),
+            "app_mo_produced": mrp_record.get("app_mo_produced", 0),
             "current_stock": mrp_record.get("current_stock", 0),
             "qty_to_produce": mrp_record.get("qty_to_produce", 0)
         },
@@ -63,16 +69,20 @@ def get_part_details_endpoint(part_no):
 
 @api_v2_bp.route('/rm-stock/<path:rm_code>', methods=['GET'])
 def get_rm_stock_endpoint(rm_code):
-    """Get live stock and weight for an RM sheet"""
-    rm = db.get_rm(rm_code)
+    """Get live stock and weight for an RM sheet with optional branch/company filtering"""
+    branch = request.args.get("branch") or session.get("company_id") or "PEI2"
+    rm = db.get_rm(rm_code, branch=branch, company_id=branch)
     if not rm:
         return jsonify({"success": False, "error": "RM not found"}), 404
     return jsonify({
         "success": True,
+        "company_id": branch,
         "rm_code": rm.get("rm_code"),
         "available_sheets": rm.get("available_sheets", 0),
         "weight_per_sheet": rm.get("weight_per_sheet", 0),
-        "total_stock_weight": rm.get("total_stock_weight", 0)
+        "total_stock_weight": rm.get("total_stock_weight", 0),
+        "branch_code": rm.get("branch_code") or branch,
+        "stores": rm.get("stores", {})
     })
 
 @api_v2_bp.route('/optimize-cut', methods=['POST'])
@@ -159,8 +169,8 @@ def optimize_cut_endpoint():
 @api_v2_bp.route('/create-mo', methods=['POST'])
 def create_mo_endpoint():
     """
-    Submits a new Material Order:
-    - Inserts into app_mo
+    Submits a new Material Order scoped by company_id:
+    - Inserts into app_mo with company_id
     - Deducts from rm sheet stock
     - Logs generated endbit batch
     - Updates audit trail
@@ -169,19 +179,24 @@ def create_mo_endpoint():
     if not data.get("rm_code"):
         return jsonify({"success": False, "error": "RM Code is required"}), 400
 
-    result = db.create_app_mo(data)
+    company_id = session.get("company_id") or data.get("company_id") or "PEI2"
+    data["company_id"] = company_id
+    data["branch_code"] = session.get("branch_code") or company_id
+
+    result = db.create_app_mo(data, company_id=company_id)
     if result.get("success"):
         return jsonify(result), 201
     return jsonify(result), 400
 
 @api_v2_bp.route('/list-mos', methods=['GET'])
 def list_mos_endpoint():
-    """Fetch recent app MOs"""
+    """Fetch recent app MOs scoped by company_id"""
     status = request.args.get('status')
     stage = request.args.get('stage')
     limit = int(request.args.get('limit', 50))
-    mos = db.list_app_mos(status=status, stage=stage, limit=limit)
-    return jsonify({"success": True, "count": len(mos), "mos": mos})
+    company_id = session.get("company_id") or request.args.get('company_id') or "PEI2"
+    mos = db.list_app_mos(status=status, stage=stage, limit=limit, company_id=company_id)
+    return jsonify({"success": True, "company_id": company_id, "count": len(mos), "mos": mos})
 
 @api_v2_bp.route('/suggest-coproduction-parts', methods=['GET', 'POST'])
 def suggest_coproduction_endpoint():

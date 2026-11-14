@@ -124,6 +124,8 @@ class RMAdvisorState(TypedDict):
     thickness: Optional[float]
     grade: Optional[str]
     current_onhand: Optional[float]
+    branch: Optional[str]
+    company_id: Optional[str]
     shortfall: int
     has_shortage: bool
     cut_length: float
@@ -149,14 +151,53 @@ class RMAdvisorAgent:
         if erp_service is not None:
             self.erp_service = erp_service
 
-    def _load_endbits(self):
+    def _load_endbits(self, company_id=None):
+        records = []
+        seen_ids = set()
+
+        # 1. First Priority: Supabase database public.endbits table scoped by company_id
+        try:
+            import db_clean as db
+            db_ebs = db.get_available_endbits(company_id=company_id)
+            for eb in (db_ebs or []):
+                eb_id = str(eb.get("id"))
+                eb_str = str(eb.get("endbit") or "")
+                thk, l, w = parse_rm_dims(eb_str)
+                gr = extract_rm_grade(eb_str)
+                seen_ids.add(eb_id)
+                records.append({
+                    "id": eb_id,
+                    "endbit_id": eb_id,
+                    "company_id": eb.get("company_id") or "PEI2",
+                    "mo_number": eb.get("mo_no") or "",
+                    "grade": gr,
+                    "name": f"EndBit {eb_str}",
+                    "dimensions": eb_str,
+                    "thickness": thk,
+                    "length": l,
+                    "width": w,
+                    "available_qty": int(float(eb.get("quantity") or 0)),
+                    "weight_kg": float(eb.get("weight") or 0.0)
+                })
+        except Exception:
+            pass
+
+        # 2. Local fallback/supplement if present
         if os.path.exists(self.endbits_store_file):
             try:
                 with open(self.endbits_store_file, "r", encoding="utf-8") as f:
-                    return json.load(f)
+                    local_ebs = json.load(f)
+                    if company_id:
+                        c_id = str(company_id).strip().upper()
+                        local_ebs = [e for e in local_ebs if (e.get("company_id") or "PEI2").strip().upper() == c_id]
+                    for eb in local_ebs:
+                        eb_id = str(eb.get("id") or eb.get("endbit_id"))
+                        if eb_id not in seen_ids:
+                            records.append(eb)
             except Exception:
                 pass
-        return []
+
+        return records
 
     def _extract_blank_dims(self, record):
         if not record:
@@ -205,35 +246,54 @@ class RMAdvisorAgent:
             if rm_t > 0:
                 t_val = rm_t
 
-        # 2. Extract blank dimensions from CAD records
-        parts_dict = self.data_store.get("parts", {})
-        part_info = parts_dict.get(part_no) or {}
-        part_layouts = list(part_info.get("layouts", []))
-        all_recs = self.data_store.get("records", [])
-        norm_p = norm_key(part_no)
-        if not part_layouts and all_recs:
-            part_layouts = [r for r in all_recs if norm_key(r.get("part_no")) == norm_p]
-
+        # 2. Extract blank dimensions: Check Supabase database parts master (db_clean) first
         cut_len, cut_wid = 0.0, 0.0
-        for r in part_layouts:
-            cl, cw, ct = self._extract_blank_dims(r)
-            if cl > 0 and cw > 0:
-                cut_len, cut_wid = cl, cw
+        try:
+            import db_clean as db
+            p_rec = db.get_part(part_no)
+            if not p_rec:
+                s_res = db.search_parts(part_no, limit=1)
+                if s_res:
+                    p_rec = s_res[0]
+            if p_rec:
+                cut_len = float(p_rec.get("length") or 0.0)
+                cut_wid = float(p_rec.get("width") or 0.0)
                 if t_val == 0.0:
-                    t_val = ct
-                break
+                    t_val = float(p_rec.get("thickness") or 0.0)
+                if not grade or grade == "YS":
+                    grade = p_rec.get("grade") or grade
+        except Exception:
+            pass
 
-        # Fallback to related records for base part if cut dimensions not found
-        if (cut_len == 0.0 or cut_wid == 0.0) and all_recs:
-            base_p = norm_key(part_no.split("-")[0]) if "-" in part_no else norm_p
-            for r in all_recs:
-                if norm_key(r.get("part_no", "")).startswith(base_p):
-                    cl, cw, ct = self._extract_blank_dims(r)
-                    if cl > 0 and cw > 0:
-                        cut_len, cut_wid = cl, cw
-                        if t_val == 0.0:
-                            t_val = ct
-                        break
+        # Fallback to local CAD records if cut dimensions still missing
+        if cut_len <= 0.0 or cut_wid <= 0.0:
+            parts_dict = self.data_store.get("parts", {}) if self.data_store else {}
+            part_info = parts_dict.get(part_no) or {}
+            part_layouts = list(part_info.get("layouts", []))
+            all_recs = self.data_store.get("records", []) if self.data_store else []
+            norm_p = norm_key(part_no)
+            if not part_layouts and all_recs:
+                part_layouts = [r for r in all_recs if norm_key(r.get("part_no")) == norm_p]
+
+            for r in part_layouts:
+                cl, cw, ct = self._extract_blank_dims(r)
+                if cl > 0 and cw > 0:
+                    cut_len, cut_wid = cl, cw
+                    if t_val == 0.0:
+                        t_val = ct
+                    break
+
+            # Fallback to related records for base part if cut dimensions not found
+            if (cut_len == 0.0 or cut_wid == 0.0) and all_recs:
+                base_p = norm_key(part_no.split("-")[0]) if "-" in part_no else norm_p
+                for r in all_recs:
+                    if norm_key(r.get("part_no", "")).startswith(base_p):
+                        cl, cw, ct = self._extract_blank_dims(r)
+                        if cl > 0 and cw > 0:
+                            cut_len, cut_wid = cl, cw
+                            if t_val == 0.0:
+                                t_val = ct
+                            break
 
         return {
             "current_onhand": onhand,
@@ -241,7 +301,8 @@ class RMAdvisorAgent:
             "shortfall": shortfall,
             "cut_length": cut_len,
             "cut_width": cut_wid,
-            "thickness": t_val
+            "thickness": t_val,
+            "grade": grade
         }
 
     def _edge_decide_shortage(self, state: RMAdvisorState) -> str:
@@ -374,170 +435,270 @@ class RMAdvisorAgent:
                 }
             })
 
-        # Tool B: Stock Sheet Geometric Nesting Simulation (Strict Grade & Thickness Check)
+        # Tool B: Stock Sheet Geometric Nesting Simulation (Tara ERP Live API First)
         candidate_sheets = []
-        if self.erp_service and hasattr(self.erp_service, "rm_stock_list"):
+        raw_sheets = []
+
+        # 1. Fetch available in-stock RM sheets directly from Tara ERP Live API scoped to branch
+        try:
+            from tara_erp_client import tara_erp_client
+            b_val = state.get("branch") or state.get("company_id")
+            b_code = b_val.strip() if b_val and str(b_val).strip().upper() != "ALL" else None
+            erp_sheets = tara_erp_client.fetch_rm_sheet_details(thickness=t_val, grade=req_grade, branch_code=b_code)
+            for r in erp_sheets:
+                sheets_cnt = float(r.get("available_sheets") or 0.0)
+                if sheets_cnt > 0:
+                    raw_sheets.append({
+                        "item_code": r.get("rm_code", ""),
+                        "item_desc": r.get("item_desc", "") or r.get("rm_code", ""),
+                        "onhand_stock": sheets_cnt,
+                        "grade": r.get("grade") or req_grade,
+                        "thickness": float(r.get("thickness") or t_val or 0.0),
+                        "length": float(r.get("length") or 0.0),
+                        "width": float(r.get("width") or 0.0)
+                    })
+        except Exception:
+            pass
+
+        # 2. Supabase Database fallback if ERP returned empty or was unreachable
+        if not raw_sheets:
+            try:
+                import db_clean as db
+                db_rms = db.get_rms_by_spec(grade=req_grade, thickness=t_val, company_id=state.get("company_id"))
+                for r in db_rms:
+                    sheets_cnt = float(r.get("available_sheets") or 0.0)
+                    if sheets_cnt > 0:
+                        raw_sheets.append({
+                            "item_code": r.get("rm_code", ""),
+                            "item_desc": r.get("rm_code", ""),
+                            "onhand_stock": sheets_cnt,
+                            "grade": r.get("grade") or req_grade,
+                            "thickness": float(r.get("thickness") or t_val or 0.0),
+                            "length": float(r.get("length") or 0.0),
+                            "width": float(r.get("width") or 0.0)
+                        })
+            except Exception:
+                pass
+
+        # 3. Local fallback if database returned empty
+        if not raw_sheets and self.erp_service and hasattr(self.erp_service, "rm_stock_list"):
             for s in self.erp_service.rm_stock_list:
                 s_onhand = float(s.get("onhand_stock") or 0.0)
-                if s_onhand <= 0:
+                if s_onhand > 0:
+                    desc = s.get("item_desc", "")
+                    code = s.get("item_code", "")
+                    s_th, s_l, s_w = parse_rm_dims(f"{desc} {code}", fallback_t=t_val)
+                    raw_sheets.append({
+                        "item_code": code,
+                        "item_desc": desc,
+                        "onhand_stock": s_onhand,
+                        "grade": extract_rm_grade(f"{desc} {code}"),
+                        "thickness": s_th,
+                        "length": s_l,
+                        "width": s_w
+                    })
+
+        for s in raw_sheets:
+            s_onhand = float(s.get("onhand_stock") or 0.0)
+            if s_onhand <= 0:
+                continue
+
+            desc = s.get("item_desc", "")
+            code = s.get("item_code", "")
+            full_text = f"{desc} {code}".upper()
+
+            # Strict Grade Check: Must match part grade!
+            item_grade = s.get("grade") or extract_rm_grade(full_text)
+            if req_grade and item_grade and req_grade != item_grade:
+                continue
+            if req_grade and not item_grade:
+                continue
+
+            # Strict Thickness Check: Must match part thickness!
+            s_th = float(s.get("thickness") or 0.0)
+            if s_th == 0.0:
+                s_th, _, _ = parse_rm_dims(full_text, fallback_t=t_val)
+            if t_val > 0 and abs(s_th - t_val) > 0.05:
+                continue
+
+            s_len = float(s.get("length") or 0.0)
+            s_wid = float(s.get("width") or 0.0)
+            if s_len <= 0 or s_wid <= 0:
+                _, s_len, s_wid = parse_rm_dims(full_text, fallback_t=t_val)
+
+            if s_len < 400 or s_wid < 300 or s_len > 6000 or s_wid > 3500:
+                continue
+
+            # STRICT PHYSICAL SIZE CHECK:
+            # Sheet dimensions MUST be greater than or equal to blank cut dimensions!
+            if cut_len > 0 and cut_wid > 0:
+                part_max = max(cut_len, cut_wid)
+                part_min = min(cut_len, cut_wid)
+                sheet_max = max(s_len, s_wid)
+                sheet_min = min(s_len, s_wid)
+
+                if sheet_max < part_max or sheet_min < part_min:
+                    # Sheet is physically smaller than the blank cut size!
+                    # It is impossible to cut this part from this sheet -> REJECT!
                     continue
 
-                desc = s.get("item_desc", "")
-                code = s.get("item_code", "")
-                full_text = f"{desc} {code}".upper()
+                n1 = math.floor(s_len / cut_len) * math.floor(s_wid / cut_wid)
+                n2 = math.floor(s_len / cut_wid) * math.floor(s_wid / cut_len)
+                parts_fit = max(n1, n2)
 
-                # Strict Grade Check: Must match part grade!
-                item_grade = extract_rm_grade(full_text)
-                if req_grade and item_grade and req_grade != item_grade:
-                    continue
-                if req_grade and not item_grade:
+                # MUST fit at least 1 blank!
+                if parts_fit < 1:
                     continue
 
-                # Strict Thickness Check: Must match part thickness!
-                s_th, s_len, s_wid = parse_rm_dims(full_text, fallback_t=t_val)
-                if t_val > 0 and abs(s_th - t_val) > 0.05:
-                    continue
-                if s_len < 400 or s_wid < 300 or s_len > 6000 or s_wid > 3500:
-                    continue
+                sheet_area = s_len * s_wid
+                blank_area = cut_len * cut_wid
+                sim_yield = min(98.0, round(((parts_fit * blank_area) / sheet_area) * 100, 1))
+            else:
+                # If cut dimensions are unknown, do not blindly suggest sheets
+                continue
 
-                s_canon = f"{s_th:g}*{int(s_len)}*{int(s_wid)}"
-                if s_canon in seen_rms or norm_key(code) in seen_rms or norm_key(desc) in seen_rms:
-                    continue
-                seen_rms.add(s_canon)
-                seen_rms.add(norm_key(code))
-                seen_rms.add(norm_key(desc))
+            s_canon = f"{s_th:g}*{int(s_len)}*{int(s_wid)}"
+            if s_canon in seen_rms or norm_key(code) in seen_rms or norm_key(desc) in seen_rms:
+                continue
+            seen_rms.add(s_canon)
+            seen_rms.add(norm_key(code))
+            seen_rms.add(norm_key(desc))
 
-                display_grade = item_grade or req_grade or grade_str
-                grade_label = f"Grade {display_grade}"
+            display_grade = item_grade or req_grade or grade_str
+            grade_label = f"Grade {display_grade}"
 
-                parts_fit = 1
-                sim_yield = 75.0
-                if cut_len > 0 and cut_wid > 0:
-                    n1 = math.floor(s_len / cut_len) * math.floor(s_wid / cut_wid)
-                    n2 = math.floor(s_len / cut_wid) * math.floor(s_wid / cut_len)
-                    parts_fit = max(1, max(n1, n2))
-                    sheet_area = s_len * s_wid
-                    blank_area = cut_len * cut_wid
-                    sim_yield = min(98.0, round(((parts_fit * blank_area) / sheet_area) * 100, 1))
+            req_sheets = math.ceil(target_qty / parts_fit)
+            is_suff = s_onhand >= req_sheets
+            score = 850 + sim_yield + (s_onhand * 1.5) if is_suff else (150 + s_onhand)
 
-                req_sheets = math.ceil(target_qty / parts_fit)
-                is_suff = s_onhand >= req_sheets
-                score = 850 + sim_yield + (s_onhand * 1.5) if is_suff else (150 + s_onhand)
+            status_tag = f"In-Stock Sheet [{grade_label}]"
+            reason = (
+                f"In-Stock RM Sheet '{desc}' [{grade_label}] has {int(s_onhand):,} sheets on hand. "
+                f"Nesting fits ~{parts_fit} blanks/sheet with estimated {sim_yield}% yield (requires {req_sheets} sheet(s))."
+            )
 
-                status_tag = f"In-Stock Sheet [{grade_label}]"
-                reason = (
-                    f"In-Stock RM Sheet '{desc}' [{grade_label}] has {int(s_onhand):,} sheets on hand. "
-                    f"Nesting fits ~{parts_fit} blanks/sheet with estimated {sim_yield}% yield (requires {req_sheets} sheet(s))."
-                )
-
-                rm_display = f"{s_canon} ({display_grade})"
-                candidate_sheets.append({
-                    "type": "stock_sheet",
-                    "tier": 3,
-                    "tier_label": "📄 Priority 3: Stock RM Sheet",
+            rm_display = f"{s_canon} ({display_grade})"
+            candidate_sheets.append({
+                "type": "stock_sheet",
+                "tier": 3,
+                "tier_label": "📄 Priority 3: Stock RM Sheet",
+                "rm_erp": rm_display,
+                "item_code": code,
+                "item_desc": desc,
+                "layout_name": f"Fit-{s_canon}",
+                "status": status_tag,
+                "grade": display_grade,
+                "thickness": s_th or t_val,
+                "length": s_len,
+                "width": s_wid,
+                "parts_per_sheet": parts_fit,
+                "sheets_needed": req_sheets,
+                "onhand_stock": s_onhand,
+                "yield_pct": sim_yield,
+                "stock_sufficient": is_suff,
+                "score": score,
+                "reason": reason,
+                "action_payload": {
                     "rm_erp": rm_display,
-                    "item_code": code,
-                    "item_desc": desc,
-                    "layout_name": f"Fit-{s_canon}",
-                    "status": status_tag,
-                    "grade": display_grade,
+                    "layout_name": f"Simulated-{s_canon}",
                     "thickness": s_th or t_val,
                     "length": s_len,
                     "width": s_wid,
-                    "parts_per_sheet": parts_fit,
-                    "sheets_needed": req_sheets,
-                    "onhand_stock": s_onhand,
+                    "grade": display_grade,
                     "yield_pct": sim_yield,
-                    "stock_sufficient": is_suff,
-                    "score": score,
-                    "reason": reason,
-                    "action_payload": {
-                        "rm_erp": rm_display,
-                        "layout_name": f"Simulated-{s_canon}",
-                        "thickness": s_th or t_val,
-                        "length": s_len,
-                        "width": s_wid,
-                        "grade": display_grade,
-                        "yield_pct": sim_yield,
-                        "sheets_required": req_sheets,
-                        "target_qty": target_qty
-                    }
-                })
+                    "sheets_required": req_sheets,
+                    "target_qty": target_qty
+                }
+            })
 
-        # Tool C: Store Offcut Salvage Hunter
+        # Tool C: Store Offcut Salvage Hunter (Company-isolated)
         candidate_endbits = []
-        endbits = self._load_endbits()
+        endbits = self._load_endbits(company_id=state.get("company_id") or state.get("branch"))
         for eb in endbits:
             avail = int(eb.get("available_qty") or 0)
             if avail <= 0:
                 continue
 
-            # Strict Grade Check
-            eb_grade = extract_rm_grade(eb.get("grade") or eb.get("name") or "")
-            if req_grade and eb_grade and req_grade != eb_grade:
-                continue
+            # Strict Grade Check: Must match part grade
+            eb_grade = extract_rm_grade(eb.get("grade") or eb.get("name") or eb.get("dimensions") or "")
+            if req_grade and eb_grade:
+                if req_grade != eb_grade and req_grade not in eb_grade and eb_grade not in req_grade:
+                    continue
 
-            # Strict Thickness Check
+            # Strict Thickness Check: Endbit thickness must match part thickness
             eb_t = float(eb.get("thickness") or 0.0)
-            if t_val > 0 and abs(eb_t - t_val) > 0.05:
+            if t_val > 0 and eb_t > 0 and abs(eb_t - t_val) > 0.05:
                 continue
 
             eb_l = float(eb.get("length") or 0.0)
             eb_w = float(eb.get("width") or 0.0)
 
-            can_cut = False
-            blanks_per_eb = 1
-            if cut_len > 0 and cut_wid > 0:
-                blanks_per_eb = calculate_max_guillotine_capacity(eb_l, eb_w, cut_len, cut_wid)
-                if blanks_per_eb == 0:
-                    n1 = math.floor(eb_l / cut_len) * math.floor(eb_w / cut_wid)
-                    n2 = math.floor(eb_l / cut_wid) * math.floor(eb_w / cut_len)
-                    blanks_per_eb = max(n1, n2)
-                can_cut = blanks_per_eb >= 1
-            else:
-                can_cut = (eb_l >= 200 and eb_w >= 50)
+            # Strict Size Check: Both length and width must be >= part blank size
+            if cut_len <= 0 or cut_wid <= 0:
+                # Unknown cut dimensions -> Cannot verify physical fit, do NOT suggest!
+                continue
 
-            if can_cut:
-                total_producible = blanks_per_eb * avail
-                dim_str = eb.get("dimensions") or f"{eb_t}*{eb_l}*{eb_w}"
-                score = 3000 + min(1000, total_producible * 25)
-                blank_fit_str = f" ({int(cut_len)}×{int(cut_wid)} mm)" if (cut_len > 0 and cut_wid > 0) else ""
-                reason = (
-                    f"Store Offcut [{eb.get('name', 'End bit')}] #{eb.get('endbit_id')} ({dim_str} mm, Grade {eb_grade or req_grade or grade_str}). "
-                    f"{avail} offcut(s) in store can harvest up to {total_producible} blank(s){blank_fit_str} with ZERO virgin raw material sheets needed."
-                )
+            part_max = max(cut_len, cut_wid)
+            part_min = min(cut_len, cut_wid)
+            eb_max = max(eb_l, eb_w)
+            eb_min = min(eb_l, eb_w)
 
-                candidate_endbits.append({
-                    "type": "endbit_salvage",
-                    "tier": 1,
-                    "tier_label": "✂️ Priority 1: In-Store End-Bit Offcut",
+            # Must satisfy: eb_max >= part_max AND eb_min >= part_min
+            # (i.e. length >= length and width >= width in at least one orientation)
+            if eb_max < part_max or eb_min < part_min:
+                # Endbit is physically smaller than required blank size -> DO NOT suggest!
+                continue
+
+            blanks_per_eb = calculate_max_guillotine_capacity(eb_l, eb_w, cut_len, cut_wid)
+            if blanks_per_eb == 0:
+                n1 = math.floor(eb_l / cut_len) * math.floor(eb_w / cut_wid)
+                n2 = math.floor(eb_l / cut_wid) * math.floor(eb_w / cut_len)
+                blanks_per_eb = max(n1, n2)
+
+            if blanks_per_eb < 1:
+                # Cannot harvest even 1 blank from this endbit -> DO NOT suggest!
+                continue
+
+            total_producible = blanks_per_eb * avail
+            dim_str = eb.get("dimensions") or f"{eb_t}*{eb_l}*{eb_w}"
+            score = 3000 + min(1000, total_producible * 25)
+            blank_fit_str = f" ({int(cut_len)}×{int(cut_wid)} mm)" if (cut_len > 0 and cut_wid > 0) else ""
+            reason = (
+                f"Store Offcut [{eb.get('name', 'End bit')}] #{eb.get('endbit_id')} ({dim_str} mm, Grade {eb_grade or req_grade or grade_str}). "
+                f"{avail} offcut(s) in store can harvest up to {total_producible} blank(s){blank_fit_str} with ZERO virgin raw material sheets needed."
+            )
+
+            candidate_endbits.append({
+                "type": "endbit_salvage",
+                "tier": 1,
+                "tier_label": "✂️ Priority 1: In-Store End-Bit Offcut",
+                "endbit_id": eb.get("endbit_id"),
+                "endbit_name": eb.get("name", "End bit"),
+                "rm_erp": f"EndBit: {dim_str}",
+                "item_desc": f"End Bit Offcut #{eb.get('endbit_id')} ({dim_str} mm)",
+                "thickness": eb_t,
+                "length": eb_l,
+                "width": eb_w,
+                "grade": eb_grade or req_grade or grade_str,
+                "onhand_stock": avail,
+                "parts_producible": total_producible,
+                "parts_per_sheet": blanks_per_eb,
+                "yield_pct": 94.0,
+                "stock_sufficient": total_producible >= target_qty,
+                "score": score,
+                "reason": reason,
+                "action_payload": {
+                    "is_endbit": True,
                     "endbit_id": eb.get("endbit_id"),
                     "endbit_name": eb.get("name", "End bit"),
-                    "rm_erp": f"EndBit: {dim_str}",
-                    "item_desc": f"End Bit Offcut #{eb.get('endbit_id')} ({dim_str} mm)",
                     "thickness": eb_t,
                     "length": eb_l,
                     "width": eb_w,
+                    "dim_str": dim_str,
                     "grade": eb_grade or req_grade or grade_str,
-                    "onhand_stock": avail,
-                    "parts_producible": total_producible,
-                    "parts_per_sheet": blanks_per_eb,
-                    "yield_pct": 94.0,
-                    "stock_sufficient": total_producible >= target_qty,
-                    "score": score,
-                    "reason": reason,
-                    "action_payload": {
-                        "is_endbit": True,
-                        "endbit_id": eb.get("endbit_id"),
-                        "endbit_name": eb.get("name", "End bit"),
-                        "thickness": eb_t,
-                        "length": eb_l,
-                        "width": eb_w,
-                        "dim_str": dim_str,
-                        "grade": eb_grade or req_grade or grade_str,
-                        "parts_producible": total_producible
-                    }
-                })
+                    "parts_producible": total_producible
+                }
+            })
 
         return {
             "candidate_layouts": candidate_layouts,
@@ -715,20 +876,26 @@ class RMAdvisorAgent:
         sheets_needed: int = 1,
         thickness: Optional[float] = None,
         grade: Optional[str] = None,
-        current_onhand: Optional[float] = None
+        current_onhand: Optional[float] = None,
+        branch: Optional[str] = None,
+        company_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Executes the LangGraph StateGraph pipeline.
         Returns the final state containing inventory inspection, ranked alternatives, and LLM verdict.
         """
+        resolved_grade = grade or extract_rm_grade(current_rm) or ""
+        resolved_company = company_id or branch or "PEPIPL"
         initial_state: RMAdvisorState = {
             "part_no": part_no or "",
             "current_rm": current_rm or "",
             "target_qty": max(1, int(target_qty or 1)),
             "sheets_needed": max(1, int(sheets_needed or 1)),
             "thickness": float(thickness) if thickness else None,
-            "grade": grade or "YS",
+            "grade": resolved_grade,
             "current_onhand": float(current_onhand) if current_onhand is not None else None,
+            "branch": branch or resolved_company,
+            "company_id": resolved_company,
             "shortfall": 0,
             "has_shortage": False,
             "cut_length": 0.0,

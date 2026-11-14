@@ -29,6 +29,12 @@
                     </div>
                     <h1 class="mo-brand-title">SheetLayout <span>AI</span></h1>
                 </div>
+                <!-- Authenticated Client Company Badge (Multi-Client SaaS) -->
+                <div class="mo-company-pill" style="display: inline-flex; align-items: center; gap: 7px; background: #f8fafc; border: 1.5px solid #cbd5e1; padding: 4px 10px; border-radius: 8px; font-size: 0.78rem; font-weight: 700; color: #1e293b;" title="Authenticated Client Company">
+                    <i class="fa-solid fa-building" style="color: #0284c7; font-size: 0.85rem;"></i>
+                    <span>{{ current_company_short or 'Praveen Engineers' }}</span>
+                    <span style="font-size: 0.68rem; background: #0f172a; color: #38bdf8; padding: 1px 6px; border-radius: 4px; font-family: monospace; letter-spacing: 0.5px;">{{ current_company_id or 'PEPIPL' }}</span>
+                </div>
                 <div class="mo-nav-divider"></div>
                 <!-- Horizontal Tab Navigation -->
                 <nav class="mo-nav-tabs" id="mainNavTabs">
@@ -102,6 +108,10 @@
             <script id="authUserData" type="application/json">{{ user_info | tojson }}</script>
             <script>
                 window.AUTH_ROLE = "{{ current_role }}";
+                window.AUTH_COMPANY_ID = "{{ current_company_id }}";
+                window.AUTH_BRANCH_CODE = "{{ current_branch_code }}";
+                window.AUTH_COMPANY_NAME = "{{ current_company_name }}";
+                window.AUTH_COMPANY_SHORT = "{{ current_company_short }}";
                 try {
                     window.AUTH_USER = JSON.parse(document.getElementById("authUserData").textContent);
                 } catch (e) {
@@ -230,6 +240,7 @@
                     </div>
 
                     <div class="mo-dropdown-filters-wrap">
+
                         <!-- Status Filter -->
                         <div class="filter-dropdown-group">
                             <label for="filterStatusSelect" class="filter-dropdown-label">
@@ -620,9 +631,15 @@
     <!-- Modal: Create New MO (Shearing Team) -->
     <div class="mo-modal-backdrop" id="createMoModal" style="display: none;">
         <div class="mo-modal-dialog">
-            <div class="mo-modal-header">
-                <div>
-                    <h3><i class="fa-solid fa-file-circle-plus"></i> Create Material Order</h3>
+            <div class="mo-modal-header" style="display: flex; justify-content: space-between; align-items: center;">
+                <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+                    <h3 style="margin: 0;"><i class="fa-solid fa-file-circle-plus"></i> Create Material Order</h3>
+                    <div class="unit-badge-pill" style="display: inline-flex; align-items: center; gap: 6px; background: #e0f2fe; color: #0284c7; padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; border: 1px solid #bae6fd;">
+                        <i class="fa-solid fa-industry"></i>
+                        <span>Target Unit:</span>
+                        <strong id="modalUnitDisplay" style="color: #0369a1;">{{ current_company_short or current_branch_code or 'Unit' }}</strong>
+                        <input type="hidden" id="modalUnitSelect" name="branch_code" value="{{ current_branch_code or 'PEPIPL' }}">
+                    </div>
                 </div>
                 <button class="modal-close-btn" onclick="closeCreateModal()"><i class="fa-solid fa-xmark"></i></button>
             </div>
@@ -2149,13 +2166,14 @@
         </div>
     </div>
 
+
     <!-- PDF Generation Libraries (jsPDF + AutoTable) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=117"></script>
+    <script src="/static/mo_app.js?v=120"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
-    <script src="/static/mo_create_v2.js?v=1"></script>
+    <script src="/static/mo_create_v2.js?v=3"></script>
 </body>
 
 </html>

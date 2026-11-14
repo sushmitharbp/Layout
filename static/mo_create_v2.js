@@ -154,8 +154,12 @@ window.selectV2BasePart = async function(partNo) {
         document.getElementById('v2BaseStripBadge').innerText = `${part.strip_per_blank_qty} Nos`;
 
         // Update Base Part 3 Live Demand Cards
+        const baseProducedMo = mrp.app_mo_produced || 0;
+        const baseInitStock = mrp.initial_stock !== undefined ? mrp.initial_stock : (mrp.current_stock || 0);
         document.getElementById('v2BaseMrpVal').innerText = `${mrp.monthly_schedule || 0} Nos`;
-        document.getElementById('v2BaseStockVal').innerText = `${mrp.current_stock || 0} Nos`;
+        document.getElementById('v2BaseStockVal').innerHTML = baseProducedMo > 0
+            ? `${mrp.current_stock || 0} Nos <span style="font-size:0.68rem; color:#0369a1; font-weight:600;">(${baseInitStock} + ${baseProducedMo} MO)</span>`
+            : `${mrp.current_stock || 0} Nos`;
         document.getElementById('v2BaseProduceVal').innerText = `${mrp.qty_to_produce || 0} Nos`;
 
         // 2. Auto-load RM Dropdown matching this Base Part!
@@ -414,8 +418,12 @@ window.selectV2AddPart = async function(index, partNo) {
         document.getElementById(`v2AddSizeBadge_${index}`).innerText = `${part.thickness} × ${part.length} × ${part.width} mm`;
         document.getElementById(`v2AddStripBadge_${index}`).innerText = `${part.strip_per_blank_qty} Nos`;
 
+        const addProducedMo = mrp.app_mo_produced || 0;
+        const addInitStock = mrp.initial_stock !== undefined ? mrp.initial_stock : (mrp.current_stock || 0);
         document.getElementById(`v2AddMrpVal_${index}`).innerText = `${mrp.monthly_schedule || 0} Nos`;
-        document.getElementById(`v2AddStockVal_${index}`).innerText = `${mrp.current_stock || 0} Nos`;
+        document.getElementById(`v2AddStockVal_${index}`).innerHTML = addProducedMo > 0
+            ? `${mrp.current_stock || 0} Nos <span style="font-size:0.68rem; color:#0369a1; font-weight:600;">(${addInitStock} + ${addProducedMo} MO)</span>`
+            : `${mrp.current_stock || 0} Nos`;
         document.getElementById(`v2AddProduceVal_${index}`).innerText = `${mrp.qty_to_produce || 0} Nos`;
 
         updateV2TotalPartsProduced();
@@ -441,11 +449,18 @@ window.openCutOptimizerForV2 = async function() {
         return;
     }
 
-    // Extract sheet dimensions (e.g. HR-3-2500-1250)
-    const nums = rmCode.match(/\d+(\.\d+)?/g) || [3.0, 2500, 1250];
-    const sLen = nums[1] ? parseFloat(nums[1]) : 2500;
-    const sWid = nums[2] ? parseFloat(nums[2]) : 1250;
-    const sThk = nums[0] ? parseFloat(nums[0]) : v2BasePart.thickness;
+    // Extract sheet dimensions
+    let sLen = 0;
+    let sWid = 0;
+    if (window._selectedRmAgentRecord && (window._selectedRmAgentRecord.rm_erp === rmCode || !rmCode)) {
+        sLen = parseFloat(window._selectedRmAgentRecord.sheet_length || window._selectedRmAgentRecord.length || 0);
+        sWid = parseFloat(window._selectedRmAgentRecord.sheet_width || window._selectedRmAgentRecord.width || 0);
+    }
+    if (!sLen || !sWid) {
+        const nums = rmCode.match(/\d+(\.\d+)?/g) || [3.0, 2500, 1250];
+        sLen = nums[1] ? parseFloat(nums[1]) : 2500;
+        sWid = nums[2] ? parseFloat(nums[2]) : 1250;
+    }
 
     // Populate inputs of cutOptimizerModal
     const slEl = document.getElementById("optSheetLength");
@@ -514,9 +529,16 @@ function applyCutOptimizerToV2Modal() {
         resBox.style.display = "grid";
         document.getElementById("v2OptYield").innerText = `${yieldVal}%`;
         const sheets = parseInt(document.getElementById("v2SheetsInput")?.value || 1, 10);
-        const totalP = blanksVal > 0 ? (blanksVal * sheets) : (v2BasePart.offtake * sheets);
-        document.getElementById("v2OptPartsProduced").innerText = `${totalP} Nos`;
-        v2LastOptimization = { yield_pct: yieldVal, total_parts_produced: totalP };
+        const basePartOfftake = blanksVal > 0 ? blanksVal : (v2BasePart?.offtake || 1);
+        const baseTotalP = basePartOfftake * sheets;
+        const addTotalP = (v2AdditionalParts || []).filter(p => p && p.part_no).reduce((acc, p) => acc + (Math.max(1, (p.offtake || 1) * sheets)), 0);
+        const totalP = baseTotalP + addTotalP;
+        document.getElementById("v2OptPartsProduced").innerText = `${totalP} Nos (${baseTotalP} Base + ${addTotalP} Co-Parts)`;
+        v2LastOptimization = { 
+            yield_pct: yieldVal, 
+            total_parts_produced: totalP,
+            base_blanks: blanksVal > 0 ? blanksVal : null
+        };
     }
 
     // 2. Show End Bits Generated Banner
@@ -583,21 +605,28 @@ window.submitV2CreateMo = async function(e) {
     let endbitDesc = '';
     let endbitWt = 0;
 
+    const optBaseBlanks = v2LastOptimization?.base_blanks;
+
+    partsProduced = allParts.map((p, idx) => {
+        let pQty;
+        if (idx === 0 && optBaseBlanks && optBaseBlanks > 0) {
+            pQty = Math.max(1, optBaseBlanks * sheetsCount);
+        } else {
+            pQty = Math.max(1, (p.offtake || 1) * sheetsCount);
+        }
+        return {
+            part_no: p.part_no,
+            qty: pQty,
+            is_base: (idx === 0)
+        };
+    });
+
+    totalPartsQty = partsProduced.reduce((sum, p) => sum + p.qty, 0);
+
     if (v2LastOptimization) {
         yieldPct = v2LastOptimization.yield_pct;
-        totalPartsQty = v2LastOptimization.total_parts_produced;
         endbitDesc = v2LastOptimization.endbit_desc || '';
         endbitWt = v2LastOptimization.total_endbit_weight || 0;
-        partsProduced = allParts.map(p => ({
-            part_no: p.part_no,
-            qty: Math.max(1, p.offtake * sheetsCount)
-        }));
-    } else {
-        partsProduced = allParts.map(p => ({
-            part_no: p.part_no,
-            qty: Math.max(1, p.offtake * sheetsCount)
-        }));
-        totalPartsQty = partsProduced.reduce((sum, p) => sum + p.qty, 0);
     }
 
     const payload = {
