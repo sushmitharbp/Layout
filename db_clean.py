@@ -630,6 +630,285 @@ def get_mrp_for_parts_batch(part_nos, month_year=None, company_id=None):
 
     return results
 
+def create_or_update_mrp(data):
+    """
+    Inserts or updates an MRP Demand Schedule record in Supabase public.mrp table.
+    Fields:
+    - part_no: Component part number (e.g. MBA01008ITEM02)
+    - month_year: Target scheduling month (e.g. 2026-11)
+    - monthly_schedule: Total units required by MRP
+    - current_stock: Current in-house stock count
+    - company_id: Tenant scope (PEPIPL or PEI2)
+    - status: 'ACTIVE' by default
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return {"success": False, "error": "Database not configured"}
+
+    part_no = (data.get("part_no") or "").strip()
+    if not part_no:
+        return {"success": False, "error": "Part Number is required"}
+
+    company_id = (data.get("company_id") or "PEPIPL").strip().upper()
+    month_year = (data.get("month_year") or "").strip() or datetime.now().strftime("%Y-%m")
+    status = (data.get("status") or "ACTIVE").strip().upper()
+
+    try:
+        monthly_schedule = int(float(data.get("monthly_schedule") or 0))
+    except (ValueError, TypeError):
+        monthly_schedule = 0
+
+    try:
+        current_stock = int(float(data.get("current_stock") or 0))
+    except (ValueError, TypeError):
+        current_stock = 0
+
+    if monthly_schedule < 0:
+        return {"success": False, "error": "Monthly Schedule cannot be negative"}
+    if current_stock < 0:
+        return {"success": False, "error": "Current Stock cannot be negative"}
+
+    # Resolve normalized part_no if part exists in parts master
+    resolved_part_no = part_no
+    part_rec = get_part(part_no, company_id=company_id)
+    if part_rec and part_rec.get("part_no"):
+        resolved_part_no = part_rec.get("part_no")
+
+    # Check if an existing MRP record exists for this part and month
+    existing_url = f"{SUPABASE_URL}/rest/v1/mrp?part_no=eq.{resolved_part_no}&month_year=eq.{month_year}&limit=1"
+    existing_rows = _safe_supabase_get(existing_url, company_id=company_id)
+    if not existing_rows and part_no != resolved_part_no:
+        existing_url2 = f"{SUPABASE_URL}/rest/v1/mrp?part_no=eq.{part_no}&month_year=eq.{month_year}&limit=1"
+        existing_rows = _safe_supabase_get(existing_url2, company_id=company_id)
+
+    now_iso = datetime.utcnow().isoformat() + "Z"
+
+    if existing_rows:
+        # Update existing record
+        rec_id = existing_rows[0].get("id")
+        patch_payload = {
+            "monthly_schedule": monthly_schedule,
+            "current_stock": current_stock,
+            "status": status,
+            "updated_at": now_iso
+        }
+        patch_url = f"{SUPABASE_URL}/rest/v1/mrp?id=eq.{rec_id}"
+        try:
+            res = requests.patch(patch_url, headers=_get_headers(), json=patch_payload, timeout=10)
+            if res.status_code in (200, 204):
+                return {
+                    "success": True,
+                    "action": "updated",
+                    "part_no": resolved_part_no,
+                    "month_year": month_year,
+                    "monthly_schedule": monthly_schedule,
+                    "current_stock": current_stock,
+                    "qty_to_produce": max(0, monthly_schedule - current_stock)
+                }
+            return {"success": False, "error": f"Supabase update failed: {res.text}"}
+        except Exception as pe:
+            return {"success": False, "error": str(pe)}
+    else:
+        # Insert new MRP record
+        mrp_id = get_next_id("mrp")
+        insert_payload = {
+            "id": mrp_id,
+            "company_id": company_id,
+            "month_year": month_year,
+            "part_no": resolved_part_no,
+            "monthly_schedule": monthly_schedule,
+            "current_stock": current_stock,
+            "status": status,
+            "created_at": now_iso,
+            "updated_at": now_iso
+        }
+        ok, err, saved = _safe_supabase_post(f"{SUPABASE_URL}/rest/v1/mrp", insert_payload, timeout=10)
+        if ok:
+            return {
+                "success": True,
+                "action": "created",
+                "part_no": resolved_part_no,
+                "month_year": month_year,
+                "monthly_schedule": monthly_schedule,
+                "current_stock": current_stock,
+                "qty_to_produce": max(0, monthly_schedule - current_stock),
+                "data": saved
+            }
+        return {"success": False, "error": err or "Failed to insert MRP schedule"}
+
+def bulk_import_mrp(rows, company_id=None, default_month_year=None):
+    """
+    Bulk inserts or updates MRP schedule records from CSV rows for the authenticated company.
+    Normalized columns: part_no, monthly_schedule, current_stock, month_year.
+    """
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        return {"success": False, "error": "Database not configured"}
+
+    company_id = (company_id or "PEPIPL").strip().upper()
+    default_month_year = (default_month_year or "").strip() or datetime.now().strftime("%Y-%m")
+
+    if not rows:
+        return {"success": False, "error": "No data rows provided in CSV"}
+
+    # 1. Fetch registered parts for this company to allow case & formatting normalization
+    parts_url = f"{SUPABASE_URL}/rest/v1/parts?select=part_no&company_id=eq.{company_id}&limit=2000"
+    all_parts = _safe_supabase_get(parts_url, company_id=company_id) or []
+    part_lookup = {}
+    for p in all_parts:
+        pno = p.get("part_no") or ""
+        if pno:
+            part_lookup[pno] = pno
+            p_clean = re.sub(r'[^A-Z0-9]', '', pno.upper())
+            part_lookup[p_clean] = pno
+
+    # 2. Parse and clean incoming rows
+    months_needed = set()
+    cleaned_rows = []
+    skipped = []
+
+    for idx, r in enumerate(rows):
+        # Support flexible column header variations
+        raw_pno = str(r.get("part_no") or r.get("part no") or r.get("part") or r.get("item_no") or r.get("item no") or r.get("component") or "").strip()
+        if not raw_pno:
+            skipped.append(f"Row {idx+1}: Missing part number")
+            continue
+
+        raw_sched = r.get("monthly_schedule") or r.get("schedule") or r.get("monthly target") or r.get("monthly_target") or r.get("target") or r.get("mrp_qty") or r.get("qty") or r.get("demand") or 0
+        raw_stock = r.get("current_stock") or r.get("stock") or r.get("in_house_stock") or r.get("in house stock") or r.get("on_hand") or r.get("inventory") or 0
+        m_year = str(r.get("month_year") or r.get("month-year") or r.get("month") or default_month_year).strip() or default_month_year
+
+        try:
+            monthly_schedule = int(float(raw_sched))
+        except (ValueError, TypeError):
+            monthly_schedule = 0
+
+        try:
+            current_stock = int(float(raw_stock))
+        except (ValueError, TypeError):
+            current_stock = 0
+
+        if monthly_schedule < 0:
+            monthly_schedule = 0
+        if current_stock < 0:
+            current_stock = 0
+
+        # Match part against master catalog
+        p_clean = re.sub(r'[^A-Z0-9]', '', raw_pno.upper())
+        resolved_part_no = part_lookup.get(raw_pno) or part_lookup.get(p_clean) or raw_pno
+
+        months_needed.add(m_year)
+        cleaned_rows.append({
+            "part_no": resolved_part_no,
+            "raw_part_no": raw_pno,
+            "monthly_schedule": monthly_schedule,
+            "current_stock": current_stock,
+            "month_year": m_year
+        })
+
+    if not cleaned_rows:
+        return {"success": False, "error": "No valid rows found in CSV", "skipped": skipped}
+
+    # 3. Query existing MRP records for all targeted months
+    existing_mrp_map = {}
+    for m in months_needed:
+        m_url = f"{SUPABASE_URL}/rest/v1/mrp?month_year=eq.{m}&company_id=eq.{company_id}&select=id,part_no,month_year&limit=5000"
+        m_rows = _safe_supabase_get(m_url, company_id=company_id) or []
+        for mr in m_rows:
+            key = (mr.get("part_no"), mr.get("month_year"))
+            existing_mrp_map[key] = mr.get("id")
+
+    # 4. Separate rows into updates and inserts
+    to_update = []
+    to_insert = []
+    now_iso = datetime.utcnow().isoformat() + "Z"
+    next_id = get_next_id("mrp")
+
+    created_count = 0
+    updated_count = 0
+    seen_in_batch = set()
+
+    for item in cleaned_rows:
+        key = (item["part_no"], item["month_year"])
+        if key in seen_in_batch:
+            continue
+        seen_in_batch.add(key)
+
+        existing_id = existing_mrp_map.get(key)
+        if existing_id:
+            to_update.append({
+                "id": existing_id,
+                "part_no": item["part_no"],
+                "monthly_schedule": item["monthly_schedule"],
+                "current_stock": item["current_stock"],
+                "status": "ACTIVE",
+                "updated_at": now_iso
+            })
+        else:
+            to_insert.append({
+                "id": next_id,
+                "company_id": company_id,
+                "month_year": item["month_year"],
+                "part_no": item["part_no"],
+                "monthly_schedule": item["monthly_schedule"],
+                "current_stock": item["current_stock"],
+                "status": "ACTIVE",
+                "created_at": now_iso,
+                "updated_at": now_iso
+            })
+            next_id += 1
+
+    headers = _get_headers()
+
+    # 5. Execute Updates
+    for upd in to_update:
+        upd_id = upd["id"]
+        patch_payload = {
+            "monthly_schedule": upd["monthly_schedule"],
+            "current_stock": upd["current_stock"],
+            "status": upd["status"],
+            "updated_at": upd["updated_at"]
+        }
+        patch_url = f"{SUPABASE_URL}/rest/v1/mrp?id=eq.{upd_id}"
+        try:
+            res = requests.patch(patch_url, headers=headers, json=patch_payload, timeout=8)
+            if res.status_code in (200, 204):
+                updated_count += 1
+            else:
+                skipped.append(f"Update failed for '{upd['part_no']}': {res.text}")
+        except Exception as e:
+            skipped.append(f"Update error for '{upd['part_no']}': {str(e)}")
+
+    # 6. Execute Inserts in chunks of 50
+    batch_size = 50
+    post_url = f"{SUPABASE_URL}/rest/v1/mrp"
+    for i in range(0, len(to_insert), batch_size):
+        chunk = to_insert[i:i + batch_size]
+        try:
+            res = requests.post(post_url, headers=headers, json=chunk, timeout=12)
+            if res.status_code in (200, 201):
+                created_count += len(chunk)
+            else:
+                # Fallback to single row inserts if batch encounters an error (e.g. invalid part FK)
+                for single in chunk:
+                    try:
+                        s_res = requests.post(post_url, headers=headers, json=[single], timeout=6)
+                        if s_res.status_code in (200, 201):
+                            created_count += 1
+                        else:
+                            skipped.append(f"Part '{single['part_no']}' not registered in parts master: skipped")
+                    except Exception as se:
+                        skipped.append(f"Insert error for '{single['part_no']}': {str(se)}")
+        except Exception as e:
+            skipped.append(f"Batch insert error: {str(e)}")
+
+    return {
+        "success": True,
+        "company_id": company_id,
+        "total_rows": len(cleaned_rows),
+        "created": created_count,
+        "updated": updated_count,
+        "skipped": skipped
+    }
+
 def get_mos_for_part(part_no, limit=10, branch=None, company_id=None):
     """Fetch ERP historical cutting orders for this part (Tara ERP Live First, then Supabase) scoped by tenant"""
     if not part_no:

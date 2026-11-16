@@ -1951,6 +1951,62 @@ def add_part_endpoint():
     return jsonify(res), 201
 
 
+@app.route("/api/mrp/create", methods=["POST"])
+def add_mrp_endpoint():
+    """ERP team adds or updates an MRP Demand Schedule Target"""
+    body = request.json or request.form.to_dict() or {}
+    role = request.headers.get("X-Role") or session.get("role") or ""
+    if role != "erp":
+        return jsonify({"error": "Unauthorized: Only the ERP Team can manage MRP Monthly Schedules."}), 403
+
+    company_id = session.get("company_id") or "PEPIPL"
+    body["company_id"] = company_id
+    res = clean_db.create_or_update_mrp(body)
+    if not res.get("success"):
+        return jsonify({"error": res.get("error", "Failed to save MRP schedule")}), 400
+    return jsonify(res), 201
+
+
+@app.route("/api/mrp/upload-csv", methods=["POST"])
+def upload_mrp_csv_endpoint():
+    """ERP team bulk uploads monthly MRP demand & stock schedules via CSV"""
+    role = request.headers.get("X-Role") or session.get("role") or ""
+    if role != "erp":
+        return jsonify({"error": "Unauthorized: Only the ERP Team can upload MRP schedules."}), 403
+
+    company_id = session.get("company_id") or "PEPIPL"
+    month_year = request.form.get("month_year") or request.args.get("month_year") or datetime.now().strftime("%Y-%m")
+
+    rows = []
+    # 1. Check for JSON payload (client-side pre-parsed rows)
+    if request.is_json:
+        payload = request.get_json(silent=True) or {}
+        rows = payload.get("rows") or []
+        month_year = payload.get("month_year") or month_year
+    # 2. Check for multipart/form-data CSV file
+    elif "file" in request.files:
+        uploaded_file = request.files["file"]
+        if not uploaded_file.filename:
+            return jsonify({"error": "No CSV file selected"}), 400
+
+        import csv
+        import io
+        content = uploaded_file.stream.read().decode("utf-8-sig", errors="replace")
+        stream = io.StringIO(content)
+        reader = csv.DictReader(stream)
+        for r in reader:
+            clean_r = {str(k).strip(): str(v).strip() for k, v in r.items() if k is not None}
+            rows.append(clean_r)
+
+    if not rows:
+        return jsonify({"error": "No valid data rows found in uploaded CSV. Please check columns."}), 400
+
+    res = clean_db.bulk_import_mrp(rows, company_id=company_id, default_month_year=month_year)
+    if not res.get("success"):
+        return jsonify({"error": res.get("error", "Failed to import MRP CSV")}), 400
+    return jsonify(res), 200
+
+
 @app.route("/api/endbits/<endbit_id>")
 def get_endbit_detail(endbit_id):
     """Get single end bit with its parts creation history"""

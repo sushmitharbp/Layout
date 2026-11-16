@@ -141,8 +141,10 @@ function updateRoleUI() {
     const isErp = (currentRole === "erp");
     const bannerAddRm = document.getElementById("bannerAddRmBtn");
     const bannerAddPart = document.getElementById("bannerAddPartBtn");
+    const bannerAddMrp = document.getElementById("bannerAddMrpBtn");
     if (bannerAddRm) bannerAddRm.style.display = isErp ? "inline-flex" : "none";
     if (bannerAddPart) bannerAddPart.style.display = isErp ? "inline-flex" : "none";
+    if (bannerAddMrp) bannerAddMrp.style.display = isErp ? "inline-flex" : "none";
 
     if (window.allEndbits && window.allEndbits.length > 0) {
         renderEndbitsTable(window.allEndbits);
@@ -4608,8 +4610,10 @@ async function loadDbTableData() {
         const isErp = (currentRole === "erp");
         const tableAddRm = document.getElementById("tableAddRmBtn");
         const tableAddPart = document.getElementById("tableAddPartBtn");
+        const tableAddMrp = document.getElementById("tableAddMrpBtn");
         if (tableAddRm) tableAddRm.style.display = (isErp && currentDbTable === "rm") ? "inline-flex" : "none";
         if (tableAddPart) tableAddPart.style.display = (isErp && currentDbTable === "parts") ? "inline-flex" : "none";
+        if (tableAddMrp) tableAddMrp.style.display = (isErp && currentDbTable === "mrp") ? "inline-flex" : "none";
 
         // Render Head
         let columns = (data.columns || []).filter(c => !["sl_no", "slno", "s_no"].includes(c.toLowerCase()));
@@ -6406,6 +6410,519 @@ async function submitAddPartForm(e) {
         }
     }
 }
+
+/* =========================================================================
+   ADD / UPDATE MRP MONTHLY SCHEDULE (ERP MASTER DATA)
+   ========================================================================= */
+
+let mrpPartSearchDebounceTimer = null;
+let pendingMrpCsvRows = [];
+
+function switchMrpTab(tabName) {
+    const csvTab = document.getElementById("mrpTabCsvView");
+    const manualTab = document.getElementById("mrpTabManualView");
+    const btnCsv = document.getElementById("tabBtnMrpCsv");
+    const btnManual = document.getElementById("tabBtnMrpManual");
+
+    if (tabName === "manual") {
+        if (csvTab) csvTab.style.display = "none";
+        if (manualTab) manualTab.style.display = "block";
+        if (btnCsv) {
+            btnCsv.style.borderBottom = "2.5px solid transparent";
+            btnCsv.style.color = "#64748b";
+            btnCsv.style.fontWeight = "600";
+        }
+        if (btnManual) {
+            btnManual.style.borderBottom = "2.5px solid #7c3aed";
+            btnManual.style.color = "#7c3aed";
+            btnManual.style.fontWeight = "700";
+        }
+        setTimeout(() => { document.getElementById("newMrpPartNo")?.focus(); }, 150);
+    } else {
+        if (csvTab) csvTab.style.display = "block";
+        if (manualTab) manualTab.style.display = "none";
+        if (btnCsv) {
+            btnCsv.style.borderBottom = "2.5px solid #7c3aed";
+            btnCsv.style.color = "#7c3aed";
+            btnCsv.style.fontWeight = "700";
+        }
+        if (btnManual) {
+            btnManual.style.borderBottom = "2.5px solid transparent";
+            btnManual.style.color = "#64748b";
+            btnManual.style.fontWeight = "600";
+        }
+    }
+}
+
+function downloadMrpSampleCsv() {
+    const csvContent = "part_no,monthly_schedule,current_stock,month_year\n" +
+                       "MBA01008ITEM02,500,67,2026-11\n" +
+                       "B0103401ITEM05,1911,845,2026-11\n" +
+                       "117102VB1AITEM01,250,50,2026-11\n";
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", "mrp_schedule_template.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+function handleMrpCsvFileSelected(e) {
+    const file = e?.target?.files?.[0];
+    if (!file) return;
+
+    const label = document.getElementById("mrpCsvDropzoneLabel");
+    const sub = document.getElementById("mrpCsvDropzoneSub");
+    if (label) label.textContent = `Selected: ${file.name}`;
+    if (sub) sub.textContent = `Size: ${(file.size / 1024).toFixed(1)} KB — Click to change file`;
+
+    const reader = new FileReader();
+    reader.onload = function(evt) {
+        const text = evt.target.result || "";
+        parseAndPreviewMrpCsv(text, file.name);
+    };
+    reader.onerror = function() {
+        alert("Failed to read CSV file. Please make sure it is a valid text/csv format.");
+    };
+    reader.readAsText(file, "UTF-8");
+}
+
+function parseAndPreviewMrpCsv(csvText, filename) {
+    pendingMrpCsvRows = [];
+    const lines = csvText.split(/\r\n|\n|\r/).filter(l => l.trim().length > 0);
+    if (lines.length < 2) {
+        alert("The selected CSV file must have at least a header row and 1 data row.");
+        return;
+    }
+
+    // Split headers
+    const rawHeaders = lines[0].split(",").map(h => h.replace(/^["']|["']$/g, "").trim().toLowerCase());
+
+    // Map header indices
+    const partIdx = rawHeaders.findIndex(h => ["part_no", "part no", "part", "item_no", "item no", "component"].includes(h));
+    const schedIdx = rawHeaders.findIndex(h => ["monthly_schedule", "monthly schedule", "schedule", "target", "monthly target", "mrp_qty", "qty", "demand"].includes(h));
+    const stockIdx = rawHeaders.findIndex(h => ["current_stock", "current stock", "stock", "in_house_stock", "in house stock", "on_hand", "inventory"].includes(h));
+    const monthIdx = rawHeaders.findIndex(h => ["month_year", "month-year", "month", "period"].includes(h));
+
+    if (partIdx === -1) {
+        alert("Missing required column 'part_no' in CSV header.\nRequired columns are: part_no, monthly_schedule, current_stock.");
+        return;
+    }
+
+    const defaultMonth = document.getElementById("csvMrpMonthYear")?.value || "";
+
+    for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(",").map(c => c.replace(/^["']|["']$/g, "").trim());
+        const pNo = cols[partIdx] || "";
+        if (!pNo) continue;
+
+        const sched = schedIdx !== -1 ? Math.max(0, parseInt(cols[schedIdx], 10) || 0) : 0;
+        const stock = stockIdx !== -1 ? Math.max(0, parseInt(cols[stockIdx], 10) || 0) : 0;
+        const mYear = (monthIdx !== -1 && cols[monthIdx]) ? cols[monthIdx] : defaultMonth;
+
+        pendingMrpCsvRows.push({
+            part_no: pNo,
+            monthly_schedule: sched,
+            current_stock: stock,
+            month_year: mYear
+        });
+    }
+
+    if (pendingMrpCsvRows.length === 0) {
+        alert("No valid part rows found in the CSV. Please check formatting.");
+        return;
+    }
+
+    // Render Preview
+    const previewContainer = document.getElementById("mrpCsvPreviewContainer");
+    const badge = document.getElementById("mrpCsvFileBadge");
+    const countSpan = document.getElementById("mrpCsvRowCount");
+    const tbody = document.getElementById("mrpCsvPreviewTableBody");
+    const submitBtn = document.getElementById("submitMrpCsvBtn");
+
+    if (badge) badge.textContent = filename || "file.csv";
+    if (countSpan) countSpan.textContent = pendingMrpCsvRows.length;
+
+    if (tbody) {
+        tbody.innerHTML = pendingMrpCsvRows.slice(0, 8).map((r, idx) => {
+            const net = Math.max(0, r.monthly_schedule - r.current_stock);
+            return `
+                <tr style="border-bottom: 1px solid #f1f5f9;">
+                    <td style="padding: 6px 10px; color: #94a3b8; font-weight: 600;">${idx + 1}</td>
+                    <td style="padding: 6px 10px; font-weight: 700; color: #1e293b;">${r.part_no}</td>
+                    <td style="padding: 6px 10px; text-align: center; color: #6d28d9; font-weight: 700;">${r.monthly_schedule.toLocaleString()}</td>
+                    <td style="padding: 6px 10px; text-align: center; color: #059669; font-weight: 700;">${r.current_stock.toLocaleString()}</td>
+                    <td style="padding: 6px 10px; text-align: center; color: #b45309; font-weight: 700;">${net.toLocaleString()}</td>
+                </tr>
+            `;
+        }).join("");
+    }
+
+    if (previewContainer) previewContainer.style.display = "block";
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload &amp; Import ${pendingMrpCsvRows.length} Parts`;
+    }
+}
+
+async function submitMrpCsvUpload(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!pendingMrpCsvRows || pendingMrpCsvRows.length === 0) {
+        alert("Please select a CSV file first.");
+        return;
+    }
+
+    const monthYear = document.getElementById("csvMrpMonthYear")?.value || "";
+    const submitBtn = document.getElementById("submitMrpCsvBtn");
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Importing ${pendingMrpCsvRows.length} Parts...`;
+    }
+
+    try {
+        const res = await fetch("/api/mrp/upload-csv", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify({
+                rows: pendingMrpCsvRows,
+                month_year: monthYear
+            })
+        });
+
+        if (res.ok) {
+            const data = await res.json();
+            let summary = `🎉 MRP Schedule CSV Successfully Imported!\n\n` +
+                          `• Total Processed: ${data.total_rows || pendingMrpCsvRows.length} parts\n` +
+                          `• New Records Created: ${data.created || 0}\n` +
+                          `• Existing Records Updated: ${data.updated || 0}\n`;
+
+            if (data.skipped && data.skipped.length > 0) {
+                summary += `\n⚠️ Warnings / Skipped (${data.skipped.length}):\n${data.skipped.slice(0, 5).join('\n')}`;
+            }
+
+            summary += `\n\nAll monthly demand targets and inventory counts are now active.`;
+            alert(summary);
+
+            closeAddMrpModal();
+            if (currentDbTable === "mrp" || currentDbTable === "parts") {
+                await loadDbTableData();
+            }
+            await loadStats();
+        } else {
+            const err = await res.json();
+            alert(`Failed to import MRP CSV: ${err.error || 'Server error'}`);
+        }
+    } catch (err) {
+        console.error("MRP CSV import failed:", err);
+        alert("Failed to upload MRP CSV. Please check network connection.");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload &amp; Import MRP Schedule`;
+        }
+    }
+}
+
+function openAddMrpModal(prefillPartNo = null) {
+    if (currentRole !== "erp") {
+        alert("Access Restricted: Only the ERP Team can manage MRP Monthly Schedules.");
+        return;
+    }
+    const modal = document.getElementById("addMrpModal");
+    if (!modal) return;
+
+    // Reset CSV upload state
+    pendingMrpCsvRows = [];
+    const fileInput = document.getElementById("mrpCsvFileInput");
+    if (fileInput) fileInput.value = "";
+    const previewContainer = document.getElementById("mrpCsvPreviewContainer");
+    if (previewContainer) previewContainer.style.display = "none";
+    const dropzoneLabel = document.getElementById("mrpCsvDropzoneLabel");
+    if (dropzoneLabel) dropzoneLabel.textContent = "Click to select CSV file, or drag and drop here";
+    const dropzoneSub = document.getElementById("mrpCsvDropzoneSub");
+    if (dropzoneSub) dropzoneSub.textContent = "Supports standard .csv spreadsheets exported from Excel or ERP";
+    const submitCsvBtn = document.getElementById("submitMrpCsvBtn");
+    if (submitCsvBtn) {
+        submitCsvBtn.disabled = true;
+        submitCsvBtn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> Upload &amp; Import MRP Schedule`;
+    }
+
+    // Reset Form Fields for Single Part
+    const partNoInput = document.getElementById("newMrpPartNo");
+    const dropdown = document.getElementById("newMrpPartDropdown");
+    const badge = document.getElementById("newMrpPartBadge");
+    const monthInput = document.getElementById("newMrpMonthYear");
+    const csvMonthInput = document.getElementById("csvMrpMonthYear");
+    const scheduleInput = document.getElementById("newMrpMonthlySchedule");
+    const stockInput = document.getElementById("newMrpCurrentStock");
+
+    if (partNoInput) partNoInput.value = "";
+    if (dropdown) { dropdown.innerHTML = ""; dropdown.style.display = "none"; }
+    if (badge) badge.style.display = "none";
+    if (scheduleInput) scheduleInput.value = "";
+    if (stockInput) stockInput.value = "0";
+
+    // Set Default Month (YYYY-MM)
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const currentMonthVal = `${yyyy}-${mm}`;
+    if (monthInput) monthInput.value = currentMonthVal;
+    if (csvMonthInput) csvMonthInput.value = currentMonthVal;
+
+    updateMrpModalKpis();
+    modal.style.display = "flex";
+
+    if (prefillPartNo) {
+        switchMrpTab("manual");
+        if (partNoInput) partNoInput.value = prefillPartNo;
+        selectMrpPart(encodeURIComponent(prefillPartNo));
+    } else {
+        switchMrpTab("csv");
+    }
+}
+
+function closeAddMrpModal() {
+    const modal = document.getElementById("addMrpModal");
+    if (modal) modal.style.display = "none";
+    const dropdown = document.getElementById("newMrpPartDropdown");
+    if (dropdown) dropdown.style.display = "none";
+}
+
+function onNewMrpPartSearch(val) {
+    clearTimeout(mrpPartSearchDebounceTimer);
+    const dropdown = document.getElementById("newMrpPartDropdown");
+    if (!dropdown) return;
+
+    const query = (val || "").trim();
+    if (query.length < 2) {
+        dropdown.innerHTML = "";
+        dropdown.style.display = "none";
+        return;
+    }
+
+    mrpPartSearchDebounceTimer = setTimeout(async () => {
+        try {
+            const companyId = (window.currentCompanyId || "PEPIPL").toUpperCase();
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&company_id=${encodeURIComponent(companyId)}`);
+            if (res.ok) {
+                const parts = await res.json();
+                if (!parts || parts.length === 0) {
+                    dropdown.innerHTML = `<div style="padding: 10px 14px; font-size: 0.82rem; color: #94a3b8;">No matching parts found in catalog</div>`;
+                    dropdown.style.display = "block";
+                    return;
+                }
+
+                dropdown.innerHTML = parts.slice(0, 15).map(p => {
+                    const pNo = p.part_no || p.name || "";
+                    const desc = p.description || p.part_desc || "";
+                    const grade = p.grade || "";
+                    const size = (p.thickness && p.length && p.width) ? `${p.thickness}×${p.length}×${p.width} mm` : "";
+                    const safePNo = encodeURIComponent(pNo);
+                    const safeDesc = encodeURIComponent(desc);
+                    const safeGrade = encodeURIComponent(grade);
+                    const safeSize = encodeURIComponent(size);
+
+                    return `
+                        <div class="mrp-part-opt" style="padding: 9px 14px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; transition: background 0.15s;" 
+                             onmouseover="this.style.background='#f8fafc'" 
+                             onmouseout="this.style.background='#ffffff'"
+                             onclick="selectMrpPart('${safePNo}', '${safeGrade}', '${safeDesc}', '${safeSize}')">
+                            <div>
+                                <strong style="font-size: 0.88rem; color: #1e293b;">${pNo}</strong>
+                                ${desc ? `<div style="font-size: 0.76rem; color: #64748b;">${desc}</div>` : ''}
+                            </div>
+                            <div style="text-align: right;">
+                                ${grade ? `<span style="background: #e0f2fe; color: #0284c7; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-right: 4px;">${grade}</span>` : ''}
+                                ${size ? `<span style="font-size: 0.74rem; color: #64748b;">${size}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join("");
+                dropdown.style.display = "block";
+            }
+        } catch (e) {
+            console.error("MRP part search error:", e);
+        }
+    }, 250);
+}
+
+async function selectMrpPart(safePartNo, safeGrade = '', safeDesc = '', safeSize = '') {
+    const partNo = decodeURIComponent(safePartNo || "");
+    const grade = decodeURIComponent(safeGrade || "");
+    const desc = decodeURIComponent(safeDesc || "");
+    const size = decodeURIComponent(safeSize || "");
+
+    const input = document.getElementById("newMrpPartNo");
+    const dropdown = document.getElementById("newMrpPartDropdown");
+    const badge = document.getElementById("newMrpPartBadge");
+    const badgeTitle = document.getElementById("newMrpPartBadgeTitle");
+    const badgeGrade = document.getElementById("newMrpPartBadgeGrade");
+    const badgeMeta = document.getElementById("newMrpPartBadgeMeta");
+
+    if (input) input.value = partNo;
+    if (dropdown) dropdown.style.display = "none";
+
+    if (badge) {
+        badge.style.display = "block";
+        if (badgeTitle) badgeTitle.textContent = partNo;
+        if (badgeGrade) {
+            badgeGrade.textContent = grade || "Part Catalog";
+            badgeGrade.style.display = grade ? "inline-block" : "none";
+        }
+        if (badgeMeta) {
+            const metaParts = [];
+            if (desc) metaParts.push(desc);
+            if (size) metaParts.push(`Blank: ${size}`);
+            badgeMeta.textContent = metaParts.length > 0 ? metaParts.join(" • ") : "Component registered in Master Catalog";
+        }
+    }
+
+    // Try fetching existing MRP schedule & stock for this part
+    await loadExistingMrpForModal(partNo);
+}
+
+async function loadExistingMrpForModal(partNo) {
+    if (!partNo) return;
+    const month = document.getElementById("newMrpMonthYear")?.value || "";
+    const companyId = (window.currentCompanyId || "PEPIPL").toUpperCase();
+
+    try {
+        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}?company_id=${encodeURIComponent(companyId)}`);
+        if (res.ok) {
+            const data = await res.json();
+            const schedInput = document.getElementById("newMrpMonthlySchedule");
+            const stockInput = document.getElementById("newMrpCurrentStock");
+
+            if (data.mrp && typeof data.mrp.monthly_schedule !== "undefined" && data.mrp.monthly_schedule !== null) {
+                if (schedInput && !schedInput.value) {
+                    schedInput.value = data.mrp.monthly_schedule;
+                }
+            }
+            if (data.mrp && typeof data.mrp.current_stock !== "undefined" && data.mrp.current_stock !== null) {
+                if (stockInput && (stockInput.value === "0" || !stockInput.value)) {
+                    stockInput.value = data.mrp.current_stock;
+                }
+            }
+            updateMrpModalKpis();
+        }
+    } catch (e) {
+        console.warn("Could not prefill existing MRP for modal:", e);
+    }
+}
+
+function onMrpMonthChange() {
+    const partNo = document.getElementById("newMrpPartNo")?.value;
+    if (partNo) loadExistingMrpForModal(partNo);
+    updateMrpModalKpis();
+}
+
+function updateMrpModalKpis() {
+    const sched = Math.max(0, parseInt(document.getElementById("newMrpMonthlySchedule")?.value, 10) || 0);
+    const stock = Math.max(0, parseInt(document.getElementById("newMrpCurrentStock")?.value, 10) || 0);
+    const toProduce = Math.max(0, sched - stock);
+
+    const prevSched = document.getElementById("mrpModalPreviewSchedule");
+    const prevStock = document.getElementById("mrpModalPreviewStock");
+    const prevToProduce = document.getElementById("mrpModalPreviewToProduce");
+    const prevToProduceSub = document.getElementById("mrpModalPreviewToProduceSub");
+
+    if (prevSched) prevSched.textContent = `${sched.toLocaleString()} Nos`;
+    if (prevStock) prevStock.textContent = `${stock.toLocaleString()} Nos`;
+    if (prevToProduce) prevToProduce.textContent = `${toProduce.toLocaleString()} Nos`;
+    if (prevToProduceSub) {
+        if (stock >= sched && sched > 0) {
+            prevToProduceSub.innerHTML = `<span style="color: #15803d; font-weight: 700;"><i class="fa-solid fa-check"></i> Fully Covered by Stock</span>`;
+        } else {
+            prevToProduceSub.textContent = `Net Requirement (${sched} - ${stock})`;
+        }
+    }
+}
+
+async function submitAddMrpForm(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    const form = document.getElementById("addMrpForm");
+    if (!form) return;
+
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
+
+    const submitBtn = document.getElementById("submitAddMrpBtn");
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i> Saving Schedule...`;
+    }
+
+    try {
+        const res = await fetch("/api/mrp/create", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Role": currentRole
+            },
+            body: JSON.stringify(data)
+        });
+
+        if (res.ok) {
+            const resp = await res.json();
+            const actionText = resp.action === "updated" ? "Updated" : "Saved";
+            alert(`🎉 MRP Demand Schedule Successfully ${actionText}!\n\n` +
+                  `• Part No: ${resp.part_no}\n` +
+                  `• Month: ${resp.month_year}\n` +
+                  `• Schedule Target: ${resp.monthly_schedule} Nos\n` +
+                  `• In-House Stock: ${resp.current_stock} Nos\n` +
+                  `• Net to Produce: ${resp.qty_to_produce} Nos\n\n` +
+                  `The updated MRP targets are immediately active in the ERP system and MO creation.`);
+
+            closeAddMrpModal();
+            if (currentDbTable === "mrp" || currentDbTable === "parts") {
+                await loadDbTableData();
+            }
+            await loadStats();
+        } else {
+            const err = await res.json();
+            alert(`Failed to save MRP schedule: ${err.error || 'Server error'}`);
+        }
+    } catch (err) {
+        console.error("MRP schedule submission failed:", err);
+        alert("Failed to save MRP schedule. Please check network connection.");
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = `<i class="fa-solid fa-floppy-disk"></i> Save MRP Schedule`;
+        }
+    }
+}
+
+// Window bindings
+window.openAddMrpModal = openAddMrpModal;
+window.closeAddMrpModal = closeAddMrpModal;
+window.switchMrpTab = switchMrpTab;
+window.downloadMrpSampleCsv = downloadMrpSampleCsv;
+window.handleMrpCsvFileSelected = handleMrpCsvFileSelected;
+window.submitMrpCsvUpload = submitMrpCsvUpload;
+window.onNewMrpPartSearch = onNewMrpPartSearch;
+window.selectMrpPart = selectMrpPart;
+window.onMrpMonthChange = onMrpMonthChange;
+window.updateMrpModalKpis = updateMrpModalKpis;
+window.submitAddMrpForm = submitAddMrpForm;
+
+// Close MRP part dropdown on outside click
+document.addEventListener("click", (e) => {
+    const dropdown = document.getElementById("newMrpPartDropdown");
+    const input = document.getElementById("newMrpPartNo");
+    if (dropdown && dropdown.style.display !== "none") {
+        if (!dropdown.contains(e.target) && e.target !== input) {
+            dropdown.style.display = "none";
+        }
+    }
+});
 
 /* =========================================================================
    CREATE MATERIAL ORDER FOR END BITS (MANUAL OFFCUT SHEARING - NO LAYOUTS)

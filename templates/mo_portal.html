@@ -167,6 +167,9 @@
                     <button class="btn btn-primary" id="bannerAddPartBtn" style="display: none;" onclick="openAddPartModal()">
                         <i class="fa-solid fa-puzzle-piece"></i> Add New Part
                     </button>
+                    <button class="btn btn-secondary" id="bannerAddMrpBtn" style="display: none; background: #f5f3ff; color: #6d28d9; border: 1.5px solid #ddd6fe; font-weight: 700;" onclick="openAddMrpModal()">
+                        <i class="fa-solid fa-calendar-days"></i> Add MRP Schedule
+                    </button>
                 </div>
             </div>
 
@@ -350,6 +353,9 @@
                     </button>
                     <button class="btn btn-primary btn-sm" id="tableAddPartBtn" style="display: none;" onclick="openAddPartModal()">
                         <i class="fa-solid fa-plus"></i> Add Part Master
+                    </button>
+                    <button class="btn btn-primary btn-sm" id="tableAddMrpBtn" style="display: none; background: #6d28d9; border-color: #5b21b6;" onclick="openAddMrpModal()">
+                        <i class="fa-solid fa-calendar-days"></i> Add MRP Schedule
                     </button>
                     <button class="btn btn-icon" onclick="reloadCurrentDbTable()" title="Refresh">
                         <i class="fa-solid fa-rotate"></i>
@@ -1893,6 +1899,209 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal: Add / Upload MRP Monthly Schedule (ERP Team Master Data) -->
+    <div class="mo-modal-backdrop" id="addMrpModal" style="display: none;">
+        <div class="mo-modal-dialog" style="max-width: 680px;">
+            <div class="mo-modal-header" style="background: #ffffff; border-bottom: 1px solid var(--border-color); padding: 18px 24px;">
+                <div>
+                    <h3 style="display: flex; align-items: center; gap: 8px; color: #1e293b;">
+                        <i class="fa-solid fa-file-csv" style="color: #7c3aed;"></i> Add / Upload MRP Monthly Schedule
+                    </h3>
+                    <p style="margin-top: 3px; font-size: 0.82rem; color: #64748b;">
+                        ERP Master Data: Import monthly schedule targets &amp; in-house stock via CSV or add individual components
+                    </p>
+                </div>
+                <button type="button" class="btn-close-modal" onclick="closeAddMrpModal()" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; color: #64748b;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Tab Switcher (CSV Upload default vs Single Part Entry) -->
+            <div style="display: flex; gap: 8px; border-bottom: 2px solid #e2e8f0; padding: 0 24px; background: #f8fafc;">
+                <button type="button" id="tabBtnMrpCsv" onclick="switchMrpTab('csv')"
+                        style="padding: 10px 18px; font-size: 0.85rem; font-weight: 700; border: none; background: none; border-bottom: 2.5px solid #7c3aed; color: #7c3aed; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-file-csv"></i> Upload CSV File
+                </button>
+                <button type="button" id="tabBtnMrpManual" onclick="switchMrpTab('manual')"
+                        style="padding: 10px 18px; font-size: 0.85rem; font-weight: 600; border: none; background: none; border-bottom: 2.5px solid transparent; color: #64748b; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-pen-to-square"></i> Single Part Entry
+                </button>
+            </div>
+
+            <!-- 1. CSV Bulk Upload Tab View -->
+            <div id="mrpTabCsvView" style="display: block;">
+                <form id="uploadMrpCsvForm" onsubmit="submitMrpCsvUpload(event)">
+                    <div class="mo-modal-body" style="padding: 20px 24px; gap: 14px;">
+                        <!-- What Columns are Needed Instruction Box -->
+                        <div style="background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 8px; padding: 14px 16px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <strong style="color: #166534; font-size: 0.88rem; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-circle-info" style="color: #16a34a;"></i> Required CSV Columns Format
+                                </strong>
+                                <button type="button" onclick="downloadMrpSampleCsv()" style="background: #ffffff; color: #15803d; border: 1.5px solid #86efac; font-size: 0.76rem; font-weight: 700; padding: 4px 10px; border-radius: 6px; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                    <i class="fa-solid fa-download"></i> Download Sample CSV
+                                </button>
+                            </div>
+                            <p style="font-size: 0.8rem; color: #15803d; margin: 0 0 10px 0;">
+                                Your CSV file must contain the following column headers (order does not matter):
+                            </p>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                                <div style="background: #ffffff; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 10px;">
+                                    <div style="font-size: 0.82rem; font-weight: 700; color: #166534;">1. part_no <span style="color:#ef4444;">*</span></div>
+                                    <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Component Part No<br><em>e.g. MBA01008ITEM02</em></div>
+                                </div>
+                                <div style="background: #ffffff; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 10px;">
+                                    <div style="font-size: 0.82rem; font-weight: 700; color: #166534;">2. monthly_schedule <span style="color:#ef4444;">*</span></div>
+                                    <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Monthly Target (Nos)<br><em>e.g. 500</em></div>
+                                </div>
+                                <div style="background: #ffffff; border: 1px solid #bbf7d0; border-radius: 6px; padding: 8px 10px;">
+                                    <div style="font-size: 0.82rem; font-weight: 700; color: #166534;">3. current_stock <span style="color:#ef4444;">*</span></div>
+                                    <div style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">In-House Stock (Nos)<br><em>e.g. 67 (or 0)</em></div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 8px; font-size: 0.75rem; color: #475569;">
+                                <i class="fa-solid fa-asterisk" style="font-size: 0.65rem; color: #0284c7;"></i> <strong>Optional Column:</strong> <code>month_year</code> (e.g. <code>2026-11</code>). If not present in your CSV, the month selected below is used.
+                            </div>
+                        </div>
+
+                        <!-- Target Scheduling Month -->
+                        <div class="form-group">
+                            <label for="csvMrpMonthYear">Target Scheduling Month / Year <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="month" id="csvMrpMonthYear" name="month_year" required style="height: 38px; font-weight: 600; width: 100%;">
+                            <small style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Default scheduling period applied to all CSV rows</small>
+                        </div>
+
+                        <!-- CSV File Upload Dropzone -->
+                        <div id="mrpCsvDropzone" onclick="document.getElementById('mrpCsvFileInput').click()"
+                             style="border: 2px dashed #cbd5e1; border-radius: 8px; padding: 24px; text-align: center; background: #fafafa; cursor: pointer; transition: all 0.2s;"
+                             onmouseover="this.style.borderColor='#7c3aed'; this.style.background='#faf5ff'"
+                             onmouseout="this.style.borderColor='#cbd5e1'; this.style.background='#fafafa'">
+                            <input type="file" id="mrpCsvFileInput" accept=".csv,text/csv" style="display: none;" onchange="handleMrpCsvFileSelected(event)">
+                            <i class="fa-solid fa-cloud-arrow-up" style="font-size: 2.2rem; color: #7c3aed; margin-bottom: 8px;"></i>
+                            <div style="font-weight: 700; color: #1e293b; font-size: 0.92rem;" id="mrpCsvDropzoneLabel">Click to select CSV file, or drag and drop here</div>
+                            <div style="font-size: 0.78rem; color: #64748b; margin-top: 4px;" id="mrpCsvDropzoneSub">Supports standard .csv spreadsheets exported from Excel or ERP</div>
+                        </div>
+
+                        <!-- CSV Live Preview Strip (shown when file is selected) -->
+                        <div id="mrpCsvPreviewContainer" style="display: none; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div style="font-size: 0.82rem; font-weight: 700; color: #1e293b; display: flex; align-items: center; gap: 6px;">
+                                    <i class="fa-solid fa-table-list" style="color: #7c3aed;"></i> Parsed CSV Preview (<span id="mrpCsvRowCount">0</span> Parts Found)
+                                </div>
+                                <span id="mrpCsvFileBadge" style="background: #e0e7ff; color: #4338ca; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 4px;">filename.csv</span>
+                            </div>
+                            <div style="max-height: 160px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 6px; background: #ffffff;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 0.78rem; text-align: left;">
+                                    <thead style="background: #f1f5f9; position: sticky; top: 0; z-index: 1;">
+                                        <tr>
+                                            <th style="padding: 6px 10px; border-bottom: 1px solid #cbd5e1; color: #475569;">#</th>
+                                            <th style="padding: 6px 10px; border-bottom: 1px solid #cbd5e1; color: #475569;">Part No</th>
+                                            <th style="padding: 6px 10px; border-bottom: 1px solid #cbd5e1; color: #475569; text-align: center;">Target (Nos)</th>
+                                            <th style="padding: 6px 10px; border-bottom: 1px solid #cbd5e1; color: #475569; text-align: center;">Stock (Nos)</th>
+                                            <th style="padding: 6px 10px; border-bottom: 1px solid #cbd5e1; color: #475569; text-align: center;">Net to Produce</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="mrpCsvPreviewTableBody">
+                                        <!-- Preview rows rendered dynamically -->
+                                    </tbody>
+                                </table>
+                            </div>
+                            <small style="display: block; font-size: 0.72rem; color: #64748b; margin-top: 6px;">Showing first rows preview. All records will be imported upon saving.</small>
+                        </div>
+                    </div>
+
+                    <div class="mo-modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #fafafa;">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddMrpModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submitMrpCsvBtn" disabled style="background: #7c3aed; border-color: #6d28d9; color: #fff;">
+                            <i class="fa-solid fa-cloud-arrow-up"></i> Upload &amp; Import MRP Schedule
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- 2. Single Part Entry Tab View -->
+            <div id="mrpTabManualView" style="display: none;">
+                <form id="addMrpForm" onsubmit="submitAddMrpForm(event)">
+                    <div class="mo-modal-body" style="padding: 20px 24px; gap: 14px;">
+                        <!-- Part Number Autocomplete Search -->
+                        <div class="form-group" style="position: relative;">
+                            <label for="newMrpPartNo">Part Number <span class="required" style="color:#ef4444;">*</span></label>
+                            <div style="position: relative;">
+                                <input type="text" id="newMrpPartNo" name="part_no" required placeholder="Type part number or select from catalog (e.g. MBA01008 - Item 2)" autocomplete="off" oninput="onNewMrpPartSearch(this.value)" style="height: 38px; font-weight: 700; color: #1e293b; padding-right: 32px;">
+                                <span style="position: absolute; right: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; pointer-events: none;">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                </span>
+                            </div>
+                            <div id="newMrpPartDropdown" style="display: none; position: absolute; top: calc(100% + 2px); left: 0; right: 0; background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 8px; max-height: 220px; overflow-y: auto; z-index: 1050; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);">
+                                <!-- Dropdown options populated dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- Selected Part Info Badge -->
+                        <div id="newMrpPartBadge" style="display: none; background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; margin-top: -6px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div style="font-size: 0.85rem; color: #1e293b; font-weight: 700;" id="newMrpPartBadgeTitle">Selected Part</div>
+                                <span id="newMrpPartBadgeGrade" style="background: #e0f2fe; color: #0284c7; padding: 2px 8px; border-radius: 4px; font-size: 0.72rem; font-weight: 700;">HR</span>
+                            </div>
+                            <div style="font-size: 0.78rem; color: #64748b; margin-top: 3px;" id="newMrpPartBadgeMeta">Loading part specifications...</div>
+                        </div>
+
+                        <!-- Month/Year ONLY (Manufacturing Unit completely removed) -->
+                        <div class="form-group">
+                            <label for="newMrpMonthYear">Scheduling Month / Year <span class="required" style="color:#ef4444;">*</span></label>
+                            <input type="month" id="newMrpMonthYear" name="month_year" required onchange="onMrpMonthChange()" style="height: 38px; font-weight: 600; width: 100%;">
+                        </div>
+
+                        <!-- Monthly Demand Schedule & In-House Stock -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="form-group">
+                                <label for="newMrpMonthlySchedule">Monthly Schedule Target (Nos) <span class="required" style="color:#ef4444;">*</span></label>
+                                <input type="number" step="1" min="0" id="newMrpMonthlySchedule" name="monthly_schedule" required placeholder="e.g. 500" oninput="updateMrpModalKpis()" style="height: 40px; font-weight: 700; text-align: center; color: #6d28d9; font-size: 1.05rem; background: #faf5ff; border: 1.5px solid #ddd6fe;">
+                                <small style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Total units needed for the month</small>
+                            </div>
+                            <div class="form-group">
+                                <label for="newMrpCurrentStock">Current In-House Stock (Nos) <span class="required" style="color:#ef4444;">*</span></label>
+                                <input type="number" step="1" min="0" id="newMrpCurrentStock" name="current_stock" required value="0" placeholder="e.g. 50" oninput="updateMrpModalKpis()" style="height: 40px; font-weight: 700; text-align: center; color: #059669; font-size: 1.05rem; background: #f0fdf4; border: 1.5px solid #bbf7d0;">
+                                <small style="font-size: 0.72rem; color: #64748b; margin-top: 2px;">Ready FG / WIP stock in hand</small>
+                            </div>
+                        </div>
+
+                        <!-- Live 3 Stat Cards Preview (Matches MO Generation) -->
+                        <div style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 8px; padding: 12px 14px;">
+                            <div style="font-size: 0.75rem; font-weight: 700; color: #475569; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px;">
+                                <i class="fa-solid fa-chart-line" style="color: #7c3aed;"></i> Live Demand Calculation Preview
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr 1.2fr; gap: 10px;">
+                                <div style="background: #faf5ff; border: 1.5px solid #e9d5ff; border-radius: 8px; padding: 10px 12px;">
+                                    <div style="font-size: 0.68rem; color: #6b21a8; font-weight: 700; text-transform: uppercase;"><i class="fa-solid fa-calendar-days"></i> MRP Quantity</div>
+                                    <div id="mrpModalPreviewSchedule" style="font-size: 1.25rem; font-weight: 800; color: #6d28d9; line-height: 1.2; margin-top: 3px;">0 Nos</div>
+                                    <small style="font-size: 0.68rem; color: #7e22ce;">Schedule Target</small>
+                                </div>
+                                <div style="background: #f0fdf4; border: 1.5px solid #bbf7d0; border-radius: 8px; padding: 10px 12px;">
+                                    <div style="font-size: 0.68rem; color: #166534; font-weight: 700; text-transform: uppercase;"><i class="fa-solid fa-warehouse"></i> Current Stock</div>
+                                    <div id="mrpModalPreviewStock" style="font-size: 1.25rem; font-weight: 800; color: #15803d; line-height: 1.2; margin-top: 3px;">0 Nos</div>
+                                    <small style="font-size: 0.68rem; color: #16a34a;">In-House Stock</small>
+                                </div>
+                                <div style="background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 10px 12px;">
+                                    <div style="font-size: 0.68rem; color: #92400e; font-weight: 700; text-transform: uppercase;"><i class="fa-solid fa-industry"></i> Qty to Produce</div>
+                                    <div id="mrpModalPreviewToProduce" style="font-size: 1.25rem; font-weight: 800; color: #b45309; line-height: 1.2; margin-top: 3px;">0 Nos</div>
+                                    <small style="font-size: 0.68rem; color: #d97706;" id="mrpModalPreviewToProduceSub">Net Requirement (0 - 0)</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mo-modal-footer" style="padding: 14px 24px; border-top: 1px solid var(--border-color); display: flex; justify-content: flex-end; gap: 10px; background: #fafafa;">
+                        <button type="button" class="btn btn-secondary" onclick="closeAddMrpModal()">Cancel</button>
+                        <button type="submit" class="btn btn-primary" id="submitAddMrpBtn" style="background: #7c3aed; border-color: #6d28d9; color: #fff;">
+                            <i class="fa-solid fa-floppy-disk"></i> Save MRP Schedule
+                        </button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
 
