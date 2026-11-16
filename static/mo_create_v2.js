@@ -37,13 +37,21 @@ window.openV2CreateMoModal = function() {
     const baseInput = document.getElementById('v2BasePartInput');
     if (baseInput) baseInput.value = '';
 
-    document.getElementById('v2BaseGradeBadge').innerText = '-';
-    document.getElementById('v2BaseSizeBadge').innerText = '- × - × - mm';
-    document.getElementById('v2BaseStripBadge').innerText = '- Nos';
+    // Reset Base Technical Specs row
+    const gradeBadge = document.getElementById('v2BaseGradeBadge');
+    if (gradeBadge) gradeBadge.innerText = '-';
+    const sizeBadge = document.getElementById('v2BaseSizeBadge');
+    if (sizeBadge) sizeBadge.innerText = '- × - × - mm';
+    const stripBadge = document.getElementById('v2BaseStripBadge');
+    if (stripBadge) stripBadge.innerText = '- Nos';
 
-    document.getElementById('v2BaseMrpVal').innerText = '- Nos';
-    document.getElementById('v2BaseStockVal').innerText = '- Nos';
-    document.getElementById('v2BaseProduceVal').innerText = '- Nos';
+    // Reset 3 Live Demand Cards (Support both v2 and standard mo_portal IDs)
+    const elMrp = document.getElementById('mrpMonthlyQtyVal') || document.getElementById('v2BaseMrpVal');
+    const elStock = document.getElementById('mrpCurrentStockVal') || document.getElementById('v2BaseStockVal');
+    const elProduce = document.getElementById('mrpQtyToProduceVal') || document.getElementById('v2BaseProduceVal');
+    if (elMrp) elMrp.innerText = '- Nos';
+    if (elStock) elStock.innerText = '- Nos';
+    if (elProduce) elProduce.innerText = '- Nos';
 
     // Reset RM Section
     const rmSelect = document.getElementById('v2RmSelect');
@@ -148,19 +156,36 @@ window.selectV2BasePart = async function(partNo) {
             mrp: mrp
         };
 
-        // Update Base Part Row Badges
-        document.getElementById('v2BaseGradeBadge').innerHTML = `<span style="color: #0284c7; font-weight: 700;">${part.grade}</span>`;
-        document.getElementById('v2BaseSizeBadge').innerText = `${part.thickness} × ${part.length} × ${part.width} mm`;
-        document.getElementById('v2BaseStripBadge').innerText = `${part.strip_per_blank_qty} Nos`;
+        // Update Base Part Row Badges defensively
+        const gradeBadgeEl = document.getElementById('v2BaseGradeBadge');
+        if (gradeBadgeEl) gradeBadgeEl.innerHTML = `<span style="color: #0284c7; font-weight: 700;">${part.grade}</span>`;
+        const sizeBadgeEl = document.getElementById('v2BaseSizeBadge');
+        if (sizeBadgeEl) sizeBadgeEl.innerText = `${part.thickness} × ${part.length} × ${part.width} mm`;
+        const stripBadgeEl = document.getElementById('v2BaseStripBadge');
+        if (stripBadgeEl) stripBadgeEl.innerText = `${part.strip_per_blank_qty} Nos`;
 
-        // Update Base Part 3 Live Demand Cards
+        // Update Base Part 3 Live Demand Cards (Supports both mo_portal and v2 element IDs)
         const baseProducedMo = mrp.app_mo_produced || 0;
         const baseInitStock = mrp.initial_stock !== undefined ? mrp.initial_stock : (mrp.current_stock || 0);
-        document.getElementById('v2BaseMrpVal').innerText = `${mrp.monthly_schedule || 0} Nos`;
-        document.getElementById('v2BaseStockVal').innerHTML = baseProducedMo > 0
-            ? `${mrp.current_stock || 0} Nos <span style="font-size:0.68rem; color:#0369a1; font-weight:600;">(${baseInitStock} + ${baseProducedMo} MO)</span>`
-            : `${mrp.current_stock || 0} Nos`;
-        document.getElementById('v2BaseProduceVal').innerText = `${mrp.qty_to_produce || 0} Nos`;
+        const cardMrp = document.getElementById('mrpMonthlyQtyVal') || document.getElementById('v2BaseMrpVal');
+        const cardStock = document.getElementById('mrpCurrentStockVal') || document.getElementById('v2BaseStockVal');
+        const cardStockSub = document.getElementById('mrpCurrentStockSub');
+        const cardProduce = document.getElementById('mrpQtyToProduceVal') || document.getElementById('v2BaseProduceVal');
+
+        if (cardMrp) cardMrp.innerText = `${mrp.monthly_schedule || 0} Nos`;
+        if (cardStock) {
+            cardStock.innerHTML = baseProducedMo > 0
+                ? `${mrp.current_stock || 0} Nos <span style="font-size:0.68rem; color:#0369a1; font-weight:600;">(${baseInitStock} + ${baseProducedMo} MO)</span>`
+                : `${mrp.current_stock || 0} Nos`;
+        }
+        if (cardStockSub) {
+            if (baseProducedMo > 0) {
+                cardStockSub.innerHTML = `<span style="color:#047857; font-weight:600;">Stock ${baseInitStock}</span> + <span style="color:#0284c7; font-weight:700;">${baseProducedMo} MO</span>`;
+            } else {
+                cardStockSub.textContent = "In-House Stock";
+            }
+        }
+        if (cardProduce) cardProduce.innerText = `${mrp.qty_to_produce || 0} Nos`;
 
         // 2. Auto-load RM Dropdown matching this Base Part!
         populateV2RmDropdown(matchingRms, part.standard_rm);

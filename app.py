@@ -442,54 +442,131 @@ def search_all_layouts():
     return jsonify(results)
 
 
+def get_layout_records_for(part_name):
+    """
+    Look up standardized engineering CAD layout records (with part1, part2, part3, part4) from layout_records / PARTS.
+    Supports both formatted names (e.g. 'MBA01221 - Item 2') and unformatted/ERP codes (e.g. 'MBA01221ITEM02').
+    """
+    if not part_name:
+        return []
+    if part_name in PARTS:
+        return PARTS[part_name].get("records", [])
+    
+    # Normalize alphanumeric with item padding/unpadding
+    nq = re.sub(r'[^a-zA-Z0-9]', '', str(part_name)).upper()
+    nq_canonical = re.sub(r'ITEM0*(\d+)', r'ITEM\1', nq)
+    
+    for p_no, p_data in PARTS.items():
+        pk = re.sub(r'[^a-zA-Z0-9]', '', str(p_no)).upper()
+        pk_canonical = re.sub(r'ITEM0*(\d+)', r'ITEM\1', pk)
+        if nq_canonical == pk_canonical or nq == pk:
+            return p_data.get("records", [])
+            
+    # Also check base part match if exact item not found
+    base = part_name.split("-")[0].strip() if "-" in part_name else part_name[:8]
+    base_clean = re.sub(r'[^a-zA-Z0-9]', '', base).upper()
+    for p_no, p_data in PARTS.items():
+        pk = re.sub(r'[^a-zA-Z0-9]', '', str(p_no)).upper()
+        if pk.startswith(base_clean) and p_data.get("records"):
+            return p_data.get("records", [])
+
+    return []
+
+
+def rm_spec_matches_dim(dim_str, rm):
+    """Check if an RM sheet record matches layout dimension string (e.g. 7.8*2500*1500 vs BSK-7.8-2500-1500)"""
+    nums1 = re.findall(r'\d+(?:\.\d+)?', str(dim_str))
+    nums2 = re.findall(r'\d+(?:\.\d+)?', str(rm.get("rm_code", "")))
+    if nums1 and nums2 and [float(x) for x in nums1] == [float(x) for x in nums2]:
+        return True
+    try:
+        t = float(rm.get("thickness", 0))
+        l = float(rm.get("length", 0))
+        w = float(rm.get("width", 0))
+        if nums1 and len(nums1) >= 3:
+            fn = [float(x) for x in nums1[:3]]
+            if fn[0] == t and ((fn[1] == l and fn[2] == w) or (fn[1] == w and fn[2] == l)):
+                return True
+    except Exception:
+        pass
+    return False
+
+
 @app.route("/api/part/<path:part_no>")
 def get_part_details(part_no):
     part_clean = part_no.strip()
-    company_id = session.get("company_id") or request.args.get("company_id") or "PEI2"
+    company_id = request.args.get("company_id") or request.args.get("branch") or session.get("company_id") or "PEPIPL"
     branch = request.args.get("branch") or company_id
 
     # 1. Prioritize clean 7-table Supabase DB
     try:
         db_part = clean_db.get_part(part_clean, company_id=company_id)
+        if not db_part:
+            clean_alnum = re.sub(r'[^A-Z0-9]', '', part_clean.upper())
+            if clean_alnum:
+                cands = clean_db.search_parts(clean_alnum, limit=5, company_id=company_id)
+                if cands:
+                    db_part = cands[0]
+
         if db_part:
+            target_part_no = db_part.get("part_no") or part_clean
             matching_rms = clean_db.get_rms_by_spec(grade=db_part.get("grade"), thickness=db_part.get("thickness"), branch=branch, company_id=company_id)
-            mrp_rec = clean_db.get_mrp_for_part(part_clean, company_id=company_id) or {}
+            mrp_rec = clean_db.get_mrp_for_part(target_part_no, company_id=company_id) or clean_db.get_mrp_for_part(part_clean, company_id=company_id) or {}
+            
+            # For PEPIPL: check if this part has engineering CAD layout records in layout_records / PARTS!
             records = []
-            for rm in matching_rms:
-                rm_grade = rm.get("grade") or db_part.get("grade") or "YS"
-                rm_thk = rm.get("thickness") if rm.get("thickness") is not None else db_part.get("thickness")
-                rm_len = rm.get("length") if rm.get("length") is not None else 2500.0
-                rm_wid = rm.get("width") if rm.get("width") is not None else 1250.0
-                records.append({
-                    "rm_erp": rm.get("rm_code"),
-                    "grade": rm_grade,
-                    "thickness": rm_thk,
-                    "length": rm_len,
-                    "width": rm_wid,
-                    "sheet_size": f"{rm_thk}*{rm_len}*{rm_wid}",
-                    "available_sheets": rm.get("available_sheets", 0),
-                    "weight_per_sheet": rm.get("weight_per_sheet", 0),
-                    "status": "Standardized" if rm.get("rm_code") == db_part.get("standard_rm") else "Active RM Store",
-                    "part_no": db_part.get("part_no"),
-                    "base_part": db_part.get("part_no", "").split(" - ")[0],
-                    "strip_qty": db_part.get("strip_per_blank_qty", 1),
-                    "blank_qty": db_part.get("offtake", 1),
-                    "part1": {
+            if company_id == "PEPIPL":
+                layout_recs = get_layout_records_for(part_clean) or get_layout_records_for(target_part_no)
+                for lr in layout_recs:
+                    lr_copy = dict(lr)
+                    # Match available stock from matching_rms if available
+                    rm_dim = lr.get("rm_erp", "")
+                    rm_match = next((rm for rm in matching_rms if rm_spec_matches_dim(rm_dim, rm)), None)
+                    if rm_match:
+                        lr_copy["available_sheets"] = rm_match.get("available_sheets", 0)
+                        lr_copy["weight_per_sheet"] = rm_match.get("weight_per_sheet", 0)
+                        # Ensure grade from matching RM is present
+                        if not lr_copy.get("grade"):
+                            lr_copy["grade"] = rm_match.get("grade")
+                    records.append(lr_copy)
+
+            # If no layout records found from layout_records (e.g. Unit 2 PEI2 or custom parts), construct from matching_rms
+            if not records:
+                for rm in matching_rms:
+                    rm_grade = rm.get("grade") or db_part.get("grade") or "YS"
+                    rm_thk = rm.get("thickness") if rm.get("thickness") is not None else db_part.get("thickness")
+                    rm_len = rm.get("length") if rm.get("length") is not None else 2500.0
+                    rm_wid = rm.get("width") if rm.get("width") is not None else 1250.0
+                    records.append({
+                        "rm_erp": rm.get("rm_code"),
+                        "grade": rm_grade,
+                        "thickness": rm_thk,
+                        "length": rm_len,
+                        "width": rm_wid,
+                        "sheet_size": f"{rm_thk}*{rm_len}*{rm_wid}",
+                        "available_sheets": rm.get("available_sheets", 0),
+                        "weight_per_sheet": rm.get("weight_per_sheet", 0),
+                        "status": "Standardized" if rm.get("rm_code") == db_part.get("standard_rm") else "Active RM Store",
                         "part_no": db_part.get("part_no"),
-                        "cut_blank": f"{db_part.get('thickness')}*{db_part.get('length')}*{db_part.get('width')}",
-                        "blank_qty": db_part.get("offtake", 1),
+                        "base_part": db_part.get("part_no", "").split(" - ")[0],
                         "strip_qty": db_part.get("strip_per_blank_qty", 1),
-                        "strip_per_blank_qty": db_part.get("strip_per_blank_qty", 1),
-                        "blank_size": {
-                            "thickness": db_part.get("thickness"),
-                            "length": db_part.get("length"),
-                            "width": db_part.get("width")
+                        "blank_qty": db_part.get("offtake", 1),
+                        "part1": {
+                            "part_no": db_part.get("part_no"),
+                            "cut_blank": f"{db_part.get('thickness')}*{db_part.get('length')}*{db_part.get('width')}",
+                            "blank_qty": db_part.get("offtake", 1),
+                            "strip_qty": db_part.get("strip_per_blank_qty", 1),
+                            "strip_per_blank_qty": db_part.get("strip_per_blank_qty", 1),
+                            "blank_size": {
+                                "thickness": db_part.get("thickness"),
+                                "length": db_part.get("length"),
+                                "width": db_part.get("width")
+                            }
+                        },
+                        "per_sheet": {
+                            "yield_pct": None
                         }
-                    },
-                    "per_sheet": {
-                        "yield_pct": None
-                    }
-                })
+                    })
             return jsonify({
                 "base_part": db_part.get("part_no", "").split(" - ")[0],
                 "part_no": db_part.get("part_no"),

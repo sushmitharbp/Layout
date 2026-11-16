@@ -113,12 +113,37 @@ def search_parts(query="", limit=30, company_id=None):
     return _safe_supabase_get(url, company_id=company_id)
 
 def get_part(part_no, company_id=None):
-    """Fetch a single part by part_no scoped by company_id"""
+    """Fetch a single part by part_no scoped by company_id, with robust normalization fallback."""
     if not SUPABASE_URL or not SUPABASE_KEY or not part_no:
         return None
-    url = f"{SUPABASE_URL}/rest/v1/parts?part_no=eq.{part_no}&limit=1"
+    part_clean = str(part_no).strip()
+    url = f"{SUPABASE_URL}/rest/v1/parts?part_no=eq.{part_clean}&limit=1"
     rows = _safe_supabase_get(url, company_id=company_id)
-    return rows[0] if rows else None
+    if rows:
+        return rows[0]
+
+    # Try case-insensitive lookup
+    url_ilike = f"{SUPABASE_URL}/rest/v1/parts?part_no=ilike.{part_clean}&limit=1"
+    rows = _safe_supabase_get(url_ilike, company_id=company_id)
+    if rows:
+        return rows[0]
+
+    # Try normalized alphanumeric match (e.g. 'MBA01221 - Item 2' <-> 'MBA01221ITEM02')
+    clean_alnum = re.sub(r'[^A-Z0-9]', '', part_clean.upper())
+    if clean_alnum:
+        cand_rows = search_parts(clean_alnum, limit=15, company_id=company_id)
+        variants = {clean_alnum}
+        if "ITEM0" in clean_alnum:
+            variants.add(clean_alnum.replace("ITEM0", "ITEM"))
+        elif "ITEM" in clean_alnum:
+            variants.add(re.sub(r'ITEM(\d)$', r'ITEM0\1', clean_alnum))
+
+        for r in cand_rows:
+            r_alnum = re.sub(r'[^A-Z0-9]', '', (r.get("part_no") or "").upper())
+            if r_alnum in variants:
+                return r
+
+    return None
 
 def get_parts_by_spec(grade=None, thickness=None, limit=60, company_id=None):
     """
@@ -488,11 +513,13 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
     - app_mo_produced: sum of parts produced from active app_mo orders
     - current_stock: initial_stock + app_mo_produced
     - qty_to_produce: max(0, monthly_schedule - current_stock)
+    Supports robust fallback across normalized variants (e.g. MBA01221 - Item 2 vs MBA01221ITEM02).
     """
     if not SUPABASE_URL or not SUPABASE_KEY or not part_no:
         return None
     
-    url = f"{SUPABASE_URL}/rest/v1/mrp?part_no=eq.{part_no}"
+    part_clean = str(part_no).strip()
+    url = f"{SUPABASE_URL}/rest/v1/mrp?part_no=eq.{part_clean}"
     if month_year:
         url += f"&month_year=eq.{month_year}"
     url += "&order=id.desc&limit=1"
@@ -500,10 +527,38 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
     try:
         rows = _safe_supabase_get(url, company_id=company_id)
         if not rows:
+            # Case-insensitive
+            url_ilike = f"{SUPABASE_URL}/rest/v1/mrp?part_no=ilike.{part_clean}"
+            if month_year:
+                url_ilike += f"&month_year=eq.{month_year}"
+            url_ilike += "&order=id.desc&limit=1"
+            rows = _safe_supabase_get(url_ilike, company_id=company_id)
+
+        if not rows:
+            # Try normalized alphanumeric match
+            clean_alnum = re.sub(r'[^A-Z0-9]', '', part_clean.upper())
+            variants = [clean_alnum]
+            if "ITEM0" in clean_alnum:
+                variants.append(clean_alnum.replace("ITEM0", "ITEM"))
+            elif "ITEM" in clean_alnum:
+                variants.append(re.sub(r'ITEM(\d)$', r'ITEM0\1', clean_alnum))
+
+            for v in variants:
+                v_url = f"{SUPABASE_URL}/rest/v1/mrp?part_no=ilike.*{v}*&order=id.desc&limit=5"
+                v_rows = _safe_supabase_get(v_url, company_id=company_id)
+                for vr in v_rows:
+                    vr_alnum = re.sub(r'[^A-Z0-9]', '', (vr.get("part_no") or "").upper())
+                    if vr_alnum == clean_alnum or vr_alnum in variants:
+                        rows = [vr]
+                        break
+                if rows:
+                    break
+
+        if not rows:
             return None
         mrp_row = rows[0]
-
-        produced_mo_qty = get_produced_qty_from_app_mo(part_no, company_id=company_id)
+        actual_part_no = mrp_row.get("part_no") or part_clean
+        produced_mo_qty = get_produced_qty_from_app_mo(actual_part_no, company_id=company_id)
         initial_stock = float(mrp_row.get("current_stock") or 0)
         monthly_sched = float(mrp_row.get("monthly_schedule") or 0)
 

@@ -1,5 +1,41 @@
 [
   {
+    "id": "notif_1794815733557_43890c",
+    "target_role": "erp",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-9782",
+    "title": "New MO MO-2026-9782 Received",
+    "message": "New Material Order MO-2026-9782 (B1049415ITEM01) created by Shearing. Assigned to ERP Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-11-16T07:55:33.557880Z",
+    "read_by": [],
+    "dismissed_by": [],
+    "extra_data": {
+      "part_no": "B1049415ITEM01",
+      "stage": "ERP"
+    }
+  },
+  {
+    "id": "notif_1794815430193_59f43d",
+    "target_role": "erp",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-1640",
+    "title": "New MO MO-2026-1640 Received",
+    "message": "New Material Order MO-2026-1640 (B0103401ITEM03) created by Shearing. Assigned to ERP Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-11-16T07:50:30.193617Z",
+    "read_by": [],
+    "dismissed_by": [],
+    "extra_data": {
+      "part_no": "B0103401ITEM03",
+      "stage": "ERP"
+    }
+  },
+  {
     "id": "notif_1794571955566_3db8ba",
     "target_role": "purchase",
     "type": "MO_ROUTED",

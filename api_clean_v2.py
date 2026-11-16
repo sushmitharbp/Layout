@@ -35,7 +35,7 @@ def get_part_details_endpoint(part_no):
     """
     Fetch comprehensive part specs, matching RMs from rm table, and live MRP demand scoped by company_id.
     """
-    company_id = session.get("company_id") or request.args.get('company_id') or "PEI2"
+    company_id = request.args.get('company_id') or request.args.get('branch') or session.get("company_id") or "PEPIPL"
     part = db.get_part(part_no, company_id=company_id)
     if not part:
         return jsonify({"success": False, "error": f"Part '{part_no}' not found for company '{company_id}'"}), 404

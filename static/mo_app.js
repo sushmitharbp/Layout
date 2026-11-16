@@ -983,6 +983,10 @@ function openCreateModal() {
     addModalPartCounter = 0;
     updateModalAddPartsCountBadge();
 
+    window._aiSuggestionsRequestedByUser = false;
+    const inlineAiBanner = document.getElementById("inlineAiPartSuggestionsBanner");
+    if (inlineAiBanner) inlineAiBanner.style.display = "none";
+
     // Reset layout standardization UI to Standard by default
     const stdRadio = document.querySelector('input[name="is_standard_layout"][value="true"]');
     if (stdRadio) stdRadio.checked = true;
@@ -1144,8 +1148,9 @@ async function selectPartForModal(partNo) {
     if (dropdown) dropdown.style.display = "none";
 
     try {
-        const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
-        const unitParam = (modalUnit && modalUnit !== "ALL") ? `?branch=${encodeURIComponent(modalUnit)}` : "";
+        const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+        const cid = (modalUnit && modalUnit !== "ALL") ? modalUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
+        const unitParam = `?branch=${encodeURIComponent(cid)}&company_id=${encodeURIComponent(cid)}`;
         const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
         if (res.ok) {
             selectedPartData = await res.json();
@@ -1211,10 +1216,10 @@ async function selectPartForModal(partNo) {
                 if (toProduceSub) toProduceSub.textContent = "Net Requirement";
             }
 
-            // Trigger AI Co-Production Agent suggestions (Yield 1st, Low Stock 2nd)
-            if (typeof fetchAiPartSuggestions === "function") {
-                fetchAiPartSuggestions("all");
-            }
+            // Hide inline AI recommendations by default; only show when user clicks AI Advisor
+            window._aiSuggestionsRequestedByUser = false;
+            const inlineAiBanner = document.getElementById("inlineAiPartSuggestionsBanner");
+            if (inlineAiBanner) inlineAiBanner.style.display = "none";
         }
     } catch (err) {
         console.error("Failed to load part details:", err);
@@ -1476,6 +1481,11 @@ function onRmErpChanged(rmCode) {
         }
     }
 
+    // Auto-render standard layout companion parts if pre-defined in CAD records
+    if (typeof renderStandardLayoutCompanionParts === "function") {
+        renderStandardLayoutCompanionParts(record);
+    }
+
     // Auto-compute target quantity & populate layout parts
     recalculateTargetQtyFromLayout();
 
@@ -1694,6 +1704,16 @@ function selectCustomRmRecord(record) {
 }
 
 function onSheetsRequiredInput() {
+    const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
+    const stdRows = document.querySelectorAll("#modalAdditionalPartsList .std-companion-part-row");
+    stdRows.forEach(row => {
+        const bPerSheet = parseFloat(row.dataset.blanksPerSheet) || 1;
+        const stripVal = parseFloat(row.dataset.stripQty) || 1;
+        const qtyInp = row.querySelector(".add-part-qty");
+        if (qtyInp) {
+            qtyInp.value = Math.max(1, Math.round(bPerSheet * stripVal * sheetsNeeded));
+        }
+    });
     recalculateTargetQtyFromLayout();
 }
 window.onSheetsRequiredInput = onSheetsRequiredInput;
@@ -1807,8 +1827,10 @@ function recalculateTargetQtyFromLayout() {
         });
     }
 
-    // 3. Child parts 2, 3, 4 from Standard Layout record if not already added
-    if (isStd && record) {
+    // 3. Child parts 2, 3, 4 from Standard Layout record (preserved strictly for PEPIPL standard layout from layout_records)
+    const activeComp = (window.AUTH_BRANCH_CODE || window.AUTH_COMPANY_ID || document.getElementById("modalUnitSelect")?.value || "PEPIPL").toUpperCase();
+    const isPepipl = (activeComp === "PEPIPL" || activeComp === "ALL");
+    if (isStd && isPepipl && record) {
         [record.part2, record.part3, record.part4].forEach((child, cIdx) => {
             if (child && child.part_no) {
                 const cleanChild = child.part_no.toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1976,6 +1998,21 @@ function updateLayoutTypeUI(isStandard) {
     if (badge) {
         badge.className = "badge-auto";
         badge.innerHTML = '<i class="fa-solid fa-calculator"></i> Auto-Fetched';
+    }
+
+    if (isStandard) {
+        const record = getSelectedLayoutRecord();
+        if (typeof renderStandardLayoutCompanionParts === "function") {
+            renderStandardLayoutCompanionParts(record);
+        }
+    } else {
+        const list = document.getElementById("modalAdditionalPartsList");
+        if (list) {
+            list.querySelectorAll(".std-companion-part-row").forEach(r => r.remove());
+            if (typeof updateModalAddPartsCountBadge === "function") {
+                updateModalAddPartsCountBadge();
+            }
+        }
     }
 
     recalculateTargetQtyFromLayout();
@@ -7636,8 +7673,9 @@ async function selectAdditionalPartForModal(rowIdx, partNo) {
     if (dropdown) dropdown.style.display = "none";
 
     try {
-        const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
-        const unitParam = (modalUnit && modalUnit !== "ALL") ? `?branch=${encodeURIComponent(modalUnit)}` : "";
+        const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+        const cid = (modalUnit && modalUnit !== "ALL") ? modalUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
+        const unitParam = `?branch=${encodeURIComponent(cid)}&company_id=${encodeURIComponent(cid)}`;
         const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
         if (!res.ok) return;
         const data = await res.json();
@@ -7764,8 +7802,230 @@ function refreshModalIntelligenceForCurrentParts() {
 function onAddPartQtyChanged() {
     recalculateTargetQtyFromLayout();
     refreshModalIntelligenceForCurrentParts();
-    if (typeof fetchAiPartSuggestions === "function") {
+    if (window._aiSuggestionsRequestedByUser && typeof fetchAiPartSuggestions === "function") {
         fetchAiPartSuggestions(activeAiFilterMode || "all");
+    }
+}
+
+/**
+ * Standard Layout Companion Parts Renderer (Preserved strictly for PEPIPL standard CAD layouts)
+ * Injects pre-defined companion parts from layout_records into 'Parts to Cut on this Sheet'
+ * and fetches their live MRP Demand stat cards (MRP Quantity, Current Stock, Qty to Produce).
+ */
+function renderStandardLayoutCompanionParts(record) {
+    const list = document.getElementById("modalAdditionalPartsList");
+    if (!list) return;
+
+    const stdRadio = document.querySelector('input[name="is_standard_layout"][value="true"]');
+    const isStd = stdRadio ? stdRadio.checked : true;
+    const activeComp = (window.AUTH_BRANCH_CODE || window.AUTH_COMPANY_ID || document.getElementById("modalUnitSelect")?.value || "PEPIPL").toUpperCase();
+    const isPepipl = (activeComp === "PEPIPL" || activeComp === "ALL");
+
+    // Remove any previously rendered standard companion rows
+    const oldStdRows = list.querySelectorAll(".std-companion-part-row");
+    oldStdRows.forEach(r => r.remove());
+
+    if (!isStd || !isPepipl || !record) {
+        updateModalAddPartsCountBadge();
+        return;
+    }
+
+    const stdChildParts = [];
+    [record.part2, record.part3, record.part4].forEach((child, cIdx) => {
+        if (child && child.part_no && child.part_no.trim() !== "") {
+            stdChildParts.push({ ...child, childIdx: cIdx + 2 });
+        }
+    });
+
+    if (stdChildParts.length === 0) {
+        updateModalAddPartsCountBadge();
+        return;
+    }
+
+    // Hide inline AI recommendations when standard layout already defines exact companion parts
+    const inlineBanner = document.getElementById("inlineAiPartSuggestionsBanner");
+    if (inlineBanner) inlineBanner.style.display = "none";
+
+    const sheetsNeeded = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
+    const thickVal = parseFloat(document.getElementById("thicknessInput")?.value) || parseFloat(record.thickness) || 0;
+
+    stdChildParts.forEach(child => {
+        const rowIdx = addModalPartCounter++;
+        const row = document.createElement("div");
+        row.className = "modal-add-part-card modal-add-part-row std-companion-part-row";
+        row.id = `modalAddPartRow_${rowIdx}`;
+        row.dataset.stdPart = "true";
+        row.dataset.childIdx = child.childIdx;
+
+        let pL = 0, pW = 0;
+        if (child.blank_size?.length && child.blank_size?.width) {
+            pL = parseFloat(child.blank_size.length);
+            pW = parseFloat(child.blank_size.width);
+        } else if (child.cut_blank) {
+            const d = parseDimString(child.cut_blank, thickVal);
+            pL = d.l; pW = d.w;
+        }
+
+        const blanksPerSheet = parseFloat(child.blank_qty) || 1;
+        const stripVal = parseFloat(child.strip_qty) || 1;
+        const blanksTotal = Math.max(1, Math.round(blanksPerSheet * stripVal * sheetsNeeded));
+        const sizeStr = (pL > 0 && pW > 0) ? `${thickVal}*${pL}*${pW}` : (child.cut_blank || "");
+        const gradeVal = record.grade || child.grade || "HR";
+        const offtakeVal = Math.max(1, Math.round(blanksPerSheet * stripVal));
+
+        row.dataset.blanksPerSheet = blanksPerSheet;
+        row.dataset.stripQty = stripVal;
+
+        row.innerHTML = `
+            <!-- Row 1: Part Technical Grid -->
+            <div class="modal-add-part-grid">
+                <div class="form-col" style="position: relative;">
+                    <label style="display: flex; align-items: center; justify-content: space-between;">
+                        <span>Part Number</span>
+                        <span style="font-size:0.68rem; font-weight:700; background:#e0f2fe; color:#0284c7; padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-shapes"></i> Standard Layout Part</span>
+                    </label>
+                    <div class="part-search-input-wrap">
+                        <i class="fa-solid fa-link" style="color: #0284c7;"></i>
+                        <input type="text" class="add-part-no" id="addPartNo_${rowIdx}" value="${escapeHtml(child.part_no)}" readonly style="height: 38px !important; font-size: 0.85rem; padding-left: 32px !important; font-weight: 700; background: #f8fafc; color: #0f172a;">
+                    </div>
+                </div>
+
+                <div class="form-col">
+                    <label>Grade</label>
+                    <input type="text" class="add-part-grade" id="addPartGrade_${rowIdx}" value="${escapeHtml(gradeVal)}" readonly style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 700; color: #0284c7; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+                </div>
+
+                <div class="form-col">
+                    <label>Size (T × L × W)</label>
+                    <input type="text" class="add-part-size" id="addPartSize_${rowIdx}" value="${escapeHtml(sizeStr)}" readonly style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 600; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 6px;">
+                    <input type="hidden" class="add-part-len" id="addPartLen_${rowIdx}" value="${pL}">
+                    <input type="hidden" class="add-part-wid" id="addPartWid_${rowIdx}" value="${pW}">
+                    <input type="hidden" class="add-part-thick" id="addPartThick_${rowIdx}" value="${thickVal}">
+                </div>
+
+                <div class="form-col">
+                    <label>Strip/Blank</label>
+                    <input type="text" class="add-part-strip" id="addPartStrip_${rowIdx}" value="${stripVal} Nos" readonly style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 700; color: #0369a1; background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 6px;">
+                </div>
+
+                <div class="form-col">
+                    <label>Offtake</label>
+                    <input type="text" class="add-part-offtake" id="addPartOfftake_${rowIdx}" value="${offtakeVal} Nos" readonly style="height: 38px !important; font-size: 0.85rem; text-align: center; font-weight: 700; color: #0284c7; background: #f0fdf4; border: 1.5px solid #86efac; border-radius: 6px;">
+                </div>
+
+                <div class="form-col">
+                    <label>Blanks Qty</label>
+                    <input type="number" min="1" step="1" class="add-part-qty" id="addPartQty_${rowIdx}" value="${blanksTotal}" readonly oninput="onAddPartQtyChanged()" style="height: 38px !important; font-size: 0.95rem; text-align: center; font-weight: 700; background: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 6px; color: #0f172a;">
+                </div>
+
+                <div class="form-col" style="justify-content: flex-end;">
+                    <button type="button" class="btn btn-sm btn-ghost" onclick="removeModalAdditionalPartRow(${rowIdx})" style="height: 38px; width: 38px; min-width: 38px; padding: 0; border-radius: 6px; background: #f1f5f9; border: 1px solid #cbd5e1; color: #64748b; cursor: pointer; display: flex; align-items: center; justify-content: center;" title="Remove this companion part from MO">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Row 2: 3 Cards/Tabs for this Added Part: MRP Quantity, Current Stock, Qty to Produce -->
+            <div class="modal-add-part-mrp-tabs" id="addPartMrpRow_${rowIdx}">
+                <div class="modal-add-part-mrp-card" style="background: #f5f3ff; border: 1.5px solid #ddd6fe;">
+                    <div style="width: 28px; height: 28px; border-radius: 5px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                        <i class="fa-solid fa-calendar-days"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="card-title" style="color: #6d28d9;">MRP Quantity</span>
+                        <div class="card-val" id="addPartMrpQty_${rowIdx}" style="color: #5b21b6;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="modal-add-part-mrp-card" style="background: #ecfdf5; border: 1.5px solid #a7f3d0;">
+                    <div style="width: 28px; height: 28px; border-radius: 5px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                        <i class="fa-solid fa-boxes-stacked"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="card-title" style="color: #047857;">Current Stock</span>
+                        <div class="card-val" id="addPartCurStock_${rowIdx}" style="color: #065f46;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="modal-add-part-mrp-card" style="background: #fffbeb; border: 1.5px solid #fde68a;">
+                    <div style="width: 28px; height: 28px; border-radius: 5px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                        <i class="fa-solid fa-industry"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="card-title" style="color: #b45309;">Qty to Produce</span>
+                        <div class="card-val" id="addPartToProduce_${rowIdx}" style="color: #92400e;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        list.appendChild(row);
+
+        // Fetch live MRP stats for this child part
+        fetchChildPartMrpStats(child.part_no, activeComp, rowIdx);
+    });
+
+    updateModalAddPartsCountBadge();
+}
+
+/**
+ * Fetches live MRP stats (MRP Quantity, Current Stock, Qty to Produce) from clean Supabase DB
+ * for a child part row in the modal.
+ */
+async function fetchChildPartMrpStats(partNo, companyId, rowIdx) {
+    if (!partNo) return;
+    try {
+        const cid = companyId || window.AUTH_COMPANY_ID || "PEPIPL";
+        const unitParam = `?branch=${encodeURIComponent(cid)}&company_id=${encodeURIComponent(cid)}`;
+        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
+        if (!res.ok) {
+            const mrpQEl = document.getElementById(`addPartMrpQty_${rowIdx}`);
+            const curSEl = document.getElementById(`addPartCurStock_${rowIdx}`);
+            const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+            if (mrpQEl) mrpQEl.textContent = "- Nos";
+            if (curSEl) curSEl.textContent = "- Nos";
+            if (toPEl) toPEl.textContent = "- Nos";
+            return;
+        }
+
+        const data = await res.json();
+        const mrp = data.mrp || {};
+        const sched = (mrp.monthly_schedule !== undefined && mrp.monthly_schedule !== null) ? Number(mrp.monthly_schedule) : null;
+        const curStock = (mrp.current_stock !== undefined && mrp.current_stock !== null) ? Number(mrp.current_stock) : null;
+        const initStock = mrp.initial_stock !== undefined ? Number(mrp.initial_stock) : curStock;
+        const producedMo = mrp.app_mo_produced !== undefined ? Number(mrp.app_mo_produced) : 0;
+
+        const mrpQEl = document.getElementById(`addPartMrpQty_${rowIdx}`);
+        const curSEl = document.getElementById(`addPartCurStock_${rowIdx}`);
+        const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+
+        if (mrpQEl) mrpQEl.textContent = sched !== null ? `${sched.toLocaleString()} Nos` : "- Nos";
+
+        if (curSEl) {
+            if (curStock !== null) {
+                curSEl.innerHTML = producedMo > 0
+                    ? `${curStock.toLocaleString()} Nos <span style="font-size:0.68rem; color:#0369a1; font-weight:600;">(${initStock.toLocaleString()} + ${producedMo.toLocaleString()} MO)</span>`
+                    : `${curStock.toLocaleString()} Nos`;
+            } else {
+                curSEl.textContent = "- Nos";
+            }
+        }
+
+        if (toPEl) {
+            if (sched !== null && curStock !== null) {
+                if (curStock >= sched) {
+                    toPEl.innerHTML = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Stock: ${curStock.toLocaleString()} Nos</small>`;
+                } else {
+                    const rem = sched - curStock;
+                    toPEl.textContent = `${rem.toLocaleString()} Nos`;
+                }
+            } else {
+                const toProduce = mrp.qty_to_produce !== undefined ? mrp.qty_to_produce : "-";
+                toPEl.textContent = toProduce !== "-" ? `${Number(toProduce).toLocaleString()} Nos` : "- Nos";
+            }
+        }
+    } catch (e) {
+        console.error("fetchChildPartMrpStats error:", e);
     }
 }
 
@@ -7775,6 +8035,8 @@ window.searchAdditionalPartForModal = searchAdditionalPartForModal;
 window.selectAdditionalPartForModal = selectAdditionalPartForModal;
 window.onAddPartQtyChanged = onAddPartQtyChanged;
 window.refreshModalIntelligenceForCurrentParts = refreshModalIntelligenceForCurrentParts;
+window.renderStandardLayoutCompanionParts = renderStandardLayoutCompanionParts;
+window.fetchChildPartMrpStats = fetchChildPartMrpStats;
 
 // ============================================================================
 // AI PART CO-PRODUCTION & YIELD ADVISOR AGENT
@@ -7940,6 +8202,12 @@ function renderInlineAiPartSuggestions(data) {
     const cardsWrap = document.getElementById("inlineAiSuggestionsCards");
     if (!banner || !cardsWrap) return;
 
+    // Strictly suppress automatic display; only show if explicitly requested by user
+    if (!window._aiSuggestionsRequestedByUser) {
+        banner.style.display = "none";
+        return;
+    }
+
     const recs = data?.recommendations || [];
     if (!data || !data.success || recs.length === 0) {
         banner.style.display = "none";
@@ -8013,6 +8281,7 @@ function openAiPartSuggestionsModal() {
         return;
     }
 
+    window._aiSuggestionsRequestedByUser = true;
     const modal = document.getElementById("modalAiPartSuggestions");
     if (!modal) return;
 
@@ -8401,7 +8670,14 @@ async function openCutOptimizerForModal() {
     const nonStdRows = document.querySelectorAll("#nonStdPartsContainer .eb-part-card-row");
     const nonStdPartsList = [];
     if (modalAddPartsList.length > 0) {
-        const baseQty = window._basePartPlacedBlanks || (layoutRec?.part1?.blank_qty ? parseFloat(layoutRec.part1.blank_qty) : 1);
+        const optSheetsCount = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
+        let baseQty = window._basePartPlacedBlanks;
+        if (!baseQty && layoutRec?.part1?.blank_qty) {
+            baseQty = Math.round((parseFloat(layoutRec.part1.blank_qty) || 1) * optSheetsCount);
+        }
+        if (!baseQty) {
+            baseQty = Math.max(1, parseInt(document.getElementById("targetQtyManual")?.value || document.getElementById("targetQty")?.value || 1, 10));
+        }
         nonStdPartsList.push({
             row_id: 1,
             part_no: partNo || "Base Part",
@@ -8465,8 +8741,11 @@ async function openCutOptimizerForModal() {
         }
     }
 
-    // Support multi-part layouts from standard layout record as well
-    if (nonStdPartsList.length <= 1 && layoutRec) {
+    // Support multi-part layouts from standard layout record as well (preserved strictly for PEPIPL standard layout from layout_records)
+    const activeOptComp = (window.AUTH_BRANCH_CODE || window.AUTH_COMPANY_ID || document.getElementById("modalUnitSelect")?.value || "PEPIPL").toUpperCase();
+    const isPepiplOpt = (activeOptComp === "PEPIPL" || activeOptComp === "ALL");
+    const isStd = document.querySelector('input[name="is_standard_layout"]:checked')?.value === "true";
+    if (isPepiplOpt && isStd && nonStdPartsList.length <= 1 && layoutRec) {
         const lrParts = [];
         [layoutRec.part1, layoutRec.part2, layoutRec.part3, layoutRec.part4].forEach((child, cIdx) => {
             if (child && child.part_no) {
