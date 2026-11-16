@@ -14,8 +14,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+DEFAULT_SUPABASE_URL = "https://otqxytgeqijdszggxgif.supabase.co"
+DEFAULT_SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im90cXh5dGdlcWlqZHN6Z2d4Z2lmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA2NTA2MTYsImV4cCI6MjEwNjIyNjYxNn0.YY67ogTibPKhhYK3A3fAP4r7nAeQZsztT-YGZbrogJE"
+
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or DEFAULT_SUPABASE_URL).strip().rstrip("/")
+SUPABASE_KEY = (os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY") or DEFAULT_SUPABASE_KEY).strip()
 
 logger = logging.getLogger("sheetlayout.db_clean")
 
@@ -100,14 +103,19 @@ def _safe_supabase_post(endpoint_url, payload, timeout=10):
 # ============================================================================
 
 def search_parts(query="", limit=30, company_id=None):
-    """Search parts by part_no or part_desc scoped by company_id"""
+    """Search parts by part_no or part_desc scoped by company_id, with alphanumeric matching support"""
     if not SUPABASE_URL or not SUPABASE_KEY:
         return []
     
     url = f"{SUPABASE_URL}/rest/v1/parts?select=*&limit={limit}"
     if query:
         q = query.strip()
-        url += f"&or=(part_no.ilike.*{q}*,part_desc.ilike.*{q}*)"
+        clean_q = re.sub(r'[^A-Z0-9]', '', q.upper())
+        if clean_q and clean_q != q.upper():
+            base_pfx = clean_q.split("ITEM")[0] if "ITEM" in clean_q else clean_q
+            url += f"&or=(part_no.ilike.*{q}*,part_desc.ilike.*{q}*,part_no.ilike.*{clean_q}*,part_no.ilike.*{base_pfx}*)"
+        else:
+            url += f"&or=(part_no.ilike.*{q}*,part_desc.ilike.*{q}*)"
     url += "&order=part_no.asc"
 
     return _safe_supabase_get(url, company_id=company_id)
@@ -128,16 +136,24 @@ def get_part(part_no, company_id=None):
     if rows:
         return rows[0]
 
-    # Try normalized alphanumeric match (e.g. 'MBA01221 - Item 2' <-> 'MBA01221ITEM02')
+    # Try normalized alphanumeric match using fast exact 'in' query
     clean_alnum = re.sub(r'[^A-Z0-9]', '', part_clean.upper())
     if clean_alnum:
-        cand_rows = search_parts(clean_alnum, limit=15, company_id=company_id)
-        variants = {clean_alnum}
-        if "ITEM0" in clean_alnum:
-            variants.add(clean_alnum.replace("ITEM0", "ITEM"))
-        elif "ITEM" in clean_alnum:
-            variants.add(re.sub(r'ITEM(\d)$', r'ITEM0\1', clean_alnum))
+        variants = [clean_alnum]
+        if "ITEM" in clean_alnum:
+            if "ITEM0" in clean_alnum:
+                variants.append(clean_alnum.replace("ITEM0", "ITEM"))
+            else:
+                variants.append(re.sub(r'ITEM(\d+)$', r'ITEM0\1', clean_alnum))
 
+        in_list = ",".join(variants)
+        url_in = f"{SUPABASE_URL}/rest/v1/parts?part_no=in.({in_list})&limit=1"
+        rows = _safe_supabase_get(url_in, company_id=company_id)
+        if rows:
+            return rows[0]
+
+        base_prefix = clean_alnum.split("ITEM")[0] if "ITEM" in clean_alnum else clean_alnum
+        cand_rows = search_parts(base_prefix, limit=30, company_id=company_id)
         for r in cand_rows:
             r_alnum = re.sub(r'[^A-Z0-9]', '', (r.get("part_no") or "").upper())
             if r_alnum in variants:
@@ -535,24 +551,20 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
             rows = _safe_supabase_get(url_ilike, company_id=company_id)
 
         if not rows:
-            # Try normalized alphanumeric match
+            # Try normalized alphanumeric match using fast exact 'in' query
             clean_alnum = re.sub(r'[^A-Z0-9]', '', part_clean.upper())
             variants = [clean_alnum]
-            if "ITEM0" in clean_alnum:
-                variants.append(clean_alnum.replace("ITEM0", "ITEM"))
-            elif "ITEM" in clean_alnum:
-                variants.append(re.sub(r'ITEM(\d)$', r'ITEM0\1', clean_alnum))
+            if "ITEM" in clean_alnum:
+                if "ITEM0" in clean_alnum:
+                    variants.append(clean_alnum.replace("ITEM0", "ITEM"))
+                else:
+                    variants.append(re.sub(r'ITEM(\d+)$', r'ITEM0\1', clean_alnum))
 
-            for v in variants:
-                v_url = f"{SUPABASE_URL}/rest/v1/mrp?part_no=ilike.*{v}*&order=id.desc&limit=5"
-                v_rows = _safe_supabase_get(v_url, company_id=company_id)
-                for vr in v_rows:
-                    vr_alnum = re.sub(r'[^A-Z0-9]', '', (vr.get("part_no") or "").upper())
-                    if vr_alnum == clean_alnum or vr_alnum in variants:
-                        rows = [vr]
-                        break
-                if rows:
-                    break
+            in_list = ",".join(variants)
+            v_url = f"{SUPABASE_URL}/rest/v1/mrp?part_no=in.({in_list})&order=id.desc&limit=5"
+            v_rows = _safe_supabase_get(v_url, company_id=company_id)
+            if v_rows:
+                rows = v_rows
 
         if not rows:
             return None

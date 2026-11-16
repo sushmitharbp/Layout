@@ -370,7 +370,7 @@ def search_parts():
     # 1. Prioritize clean 7-table Supabase DB
     if clean_db.SUPABASE_URL and clean_db.SUPABASE_KEY:
         try:
-            company_id = session.get("company_id") or request.args.get("company_id") or "PEI2"
+            company_id = request.args.get("company_id") or request.args.get("branch") or session.get("company_id") or "PEPIPL"
             db_parts = clean_db.search_parts(query=q, limit=20, company_id=company_id)
             results = []
             for p in (db_parts or []):

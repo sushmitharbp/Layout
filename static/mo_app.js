@@ -1110,7 +1110,9 @@ function searchPartsForModal(query) {
 
     searchDebounceTimer = setTimeout(async () => {
         try {
-            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+            const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+            const cid = (modalUnit && modalUnit !== "ALL") ? modalUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
+            const res = await fetch(`/api/search?q=${encodeURIComponent(query)}&company_id=${encodeURIComponent(cid)}&branch=${encodeURIComponent(cid)}`);
             if (res.ok) {
                 const results = await res.json();
                 if (dropdown) {

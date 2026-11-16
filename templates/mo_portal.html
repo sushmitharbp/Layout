@@ -658,7 +658,7 @@
                             </label>
                             <div class="part-search-input-wrap">
                                 <i class="fa-solid fa-barcode"></i>
-                                <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)">
+                                <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)" onchange="if(this.value.trim().length >= 2) selectPartForModal(this.value.trim())" onkeydown="if(event.key==='Enter'){event.preventDefault(); if(this.value.trim().length >= 2) selectPartForModal(this.value.trim());}">
                                 <div class="part-dropdown-results" id="partDropdownResults" style="display: none;"></div>
                             </div>
                             <input type="hidden" id="basePartInput" name="base_part">
