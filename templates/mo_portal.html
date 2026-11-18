@@ -646,10 +646,13 @@
                         <i class="fa-solid fa-traffic-light"></i>
                     </div>
                     <div>
-                        <div style="display: flex; align-items: center; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                             <h2 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">RM Reorder Level &amp; Dynamic RYG Monitor</h2>
+                            <span class="header-count-pill" style="background: #f1f5f9; color: #334155; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem;">
+                                <i class="fa-solid fa-industry"></i> Unit 1 (PEPIPL)
+                            </span>
                             <span class="header-count-pill" id="rygCurrentCustomerBadge" style="background: #e0f2fe; color: #0284c7; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem;">
-                                <i class="fa-solid fa-industry"></i> Unit 1 (PEPIPL) • 36 RM Standards
+                                Ashok Leyland (AL) • 36 Standards
                             </span>
                         </div>
                         <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #64748b;">
@@ -659,16 +662,31 @@
                 </div>
 
                 <div class="view-header-right" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <!-- Customer Switcher Buttons (AL vs VST both under Unit 1) -->
+                    <div style="background: #f1f5f9; padding: 3px; border-radius: 8px; display: flex; gap: 4px; border: 1px solid #e2e8f0;">
+                        <button type="button" id="rygCustomerBtnAL" onclick="switchRygCustomer('AL')" 
+                                style="border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 700; cursor: pointer; background: #0284c7; color: #ffffff; transition: all 0.2s;">
+                            <i class="fa-solid fa-truck-moving"></i> AL (36 Standards)
+                        </button>
+                        <button type="button" id="rygCustomerBtnVST" onclick="switchRygCustomer('VST')" 
+                                style="border: none; padding: 6px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 600; cursor: pointer; background: transparent; color: #475569; transition: all 0.2s;">
+                            <i class="fa-solid fa-tractor"></i> VST (13 Standards)
+                        </button>
+                    </div>
+
                     <div class="db-search-box" style="position: relative;">
                         <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.85rem;"></i>
-                        <input type="text" id="rygSearchInput" placeholder="Search RM Code / Spec..." oninput="handleRygSearch(this.value)" style="height: 36px; padding-left: 32px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.82rem; width: 220px;">
+                        <input type="text" id="rygSearchInput" placeholder="Search RM Code / Spec..." oninput="handleRygSearch(this.value)" style="height: 36px; padding-left: 32px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.82rem; width: 190px;">
                     </div>
 
                     <button class="btn btn-icon" onclick="reloadRygData()" title="Refresh / Sync ERP Stock" style="height: 36px; width: 36px; border-radius: 6px; border: 1.5px solid #cbd5e1; background: #fff; cursor: pointer;">
                         <i class="fa-solid fa-rotate"></i>
                     </button>
-                    <button class="btn btn-secondary btn-sm" onclick="exportRygCsv()" title="Download CSV Report" style="height: 36px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
-                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    <button type="button" class="btn btn-sm" onclick="exportRygExcel()" title="Export formatted Excel (.xlsx) with highlighted RYG colors in the RYG column" style="height: 36px; display: inline-flex; align-items: center; gap: 6px; font-weight: 700; background: #16a34a; color: #ffffff; border: 1.5px solid #15803d; border-radius: 6px; padding: 0 12px; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.06);">
+                        <i class="fa-solid fa-file-excel"></i> Export Excel (Colors)
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-sm" onclick="exportRygCsv()" title="Download plain CSV report" style="height: 36px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+                        <i class="fa-solid fa-file-csv"></i> CSV
                     </button>
                 </div>
             </div>
@@ -2552,7 +2570,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=124"></script>
+    <script src="/static/mo_app.js?v=125"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
     <script src="/static/mo_create_v2.js?v=3"></script>
 </body>

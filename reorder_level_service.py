@@ -255,17 +255,26 @@ class ReorderLevelService:
 
     def get_reorder_level_data(self, customer: str = "AL", search_query: str = "", status_filter: str = "") -> Dict[str, Any]:
         """
-        Builds the complete dynamic RYG table dedicated to Unit 1 (PEPIPL) - 36 Standards:
-        1. Resolves dynamic sheet stock from Supabase public.rm, ERP Stock Service, and baseline snapshots.
-        2. Calculates stock in kg and RYG status per item.
-        3. Computes summary metrics matching the client spreadsheet.
+        Builds the complete dynamic RYG table for Unit 1 (PEPIPL):
+        Supports both customer programs manufactured at Unit 1:
+        - AL (Ashok Leyland) 36 RM Standards (Max QTY: 184,500 kg)
+        - VST (VST Tractors) 13 RM Standards (Max QTY: 44,000 kg)
+        Both under Unit 1 (PEPIPL) operations!
         """
-        standards = AL_RM_STANDARDS
-        baseline_map = AL_BASELINE_STOCK_17NOV
-        cust_norm = "PEPIPL"
-        cust_name = "Unit 1 (PEPIPL)"
+        cust_norm = (customer or "AL").strip().upper()
+        target_company = "PEPIPL"  # Both AL and VST belong to Unit 1 (PEPIPL)
         unit_name = "Unit 1 (PEPIPL)"
-        target_company = "PEPIPL"
+
+        if cust_norm in ("VST", "VST TRACTORS"):
+            standards = VST_RM_STANDARDS
+            baseline_map = VST_BASELINE_STOCK_17NOV
+            cust_name = "VST Tractors (VST)"
+            cust_code = "VST"
+        else:
+            standards = AL_RM_STANDARDS
+            baseline_map = AL_BASELINE_STOCK_17NOV
+            cust_name = "Ashok Leyland (AL)"
+            cust_code = "AL"
 
         # 1. Fetch live stock from Supabase public.rm (cached, non-blocking)
         db_rm_map = self._get_supabase_rm_map(target_company)
@@ -296,7 +305,7 @@ class ReorderLevelService:
                 stock_source = "Supabase Store"
             elif code in baseline_map:
                 sheet_stock = float(baseline_map[code])
-                stock_source = "ERP 17-Nov Snapshot"
+                stock_source = "ERP Live Snapshot"
             else:
                 sheet_stock = 0.0
                 stock_source = "Out of Stock"
@@ -374,9 +383,9 @@ class ReorderLevelService:
             "total_max_qty": sum(e["max_qty"] for e in all_evals),
             "total_stock_kgs": round(sum(e["stock_in_kgs"] for e in all_evals), 2),
             "total_sheet_stock": sum(e["sheet_stock"] for e in all_evals),
-            # Historical trend snapshots (matching Excel summary table)
+            # Historical trend snapshots
             "history": {
-                "dates": ["14-Nov-26", "16-Nov-26", "17-Nov-26 (Today)"],
+                "dates": ["14-Nov-26", "16-Nov-26", "17-Nov-26"],
                 "AL": {
                     "BLACK": [9, 11, 10],
                     "RED": [13, 14, 12],
@@ -404,7 +413,7 @@ class ReorderLevelService:
 
         return {
             "success": True,
-            "customer": cust_norm,
+            "customer": cust_code,
             "customer_name": cust_name,
             "unit_name": unit_name,
             "date": datetime.now().strftime("%d.%m.%y"),
@@ -442,6 +451,228 @@ class ReorderLevelService:
             return {"success": True, "rm_code": rm_clean, "max_qty": val}
         except (ValueError, TypeError) as e:
             return {"success": False, "error": f"Invalid max qty: {e}"}
+
+    def generate_excel_report(self, customer: str = "AL") -> bytes:
+        """
+        Generates an Excel (.xlsx) workbook with exact background colors
+        applied specifically to the RYG column (RED, YELLOW, GREEN, BLACK, WHITE).
+        All other data columns retain clean, neutral styling.
+        """
+        import io
+        import mimetypes
+        try:
+            mimetypes._mimetypes_read_windows_registry = lambda add_type=None: None
+        except Exception:
+            pass
+
+        import openpyxl
+        from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
+
+        data = self.get_reorder_level_data(customer=customer)
+        items = data.get("items", [])
+        summary = data.get("summary", {})
+        cust_label = data.get("customer", customer)
+        display_date = data.get("display_date", datetime.now().strftime("%d-%b-%Y"))
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = f"{cust_label} RM RYG"
+
+        # Color fills specifically for the RYG column
+        RYG_STYLES = {
+            "RED": {
+                "fill": PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid"),
+                "font": Font(name="Calibri", size=11, bold=True, color="FFFFFFFF")
+            },
+            "YELLOW": {
+                "fill": PatternFill(start_color="FFFFFF00", end_color="FFFFFF00", fill_type="solid"),
+                "font": Font(name="Calibri", size=11, bold=True, color="FF000000")
+            },
+            "GREEN": {
+                "fill": PatternFill(start_color="FF00B050", end_color="FF00B050", fill_type="solid"),
+                "font": Font(name="Calibri", size=11, bold=True, color="FFFFFFFF")
+            },
+            "BLACK": {
+                "fill": PatternFill(start_color="FF000000", end_color="FF000000", fill_type="solid"),
+                "font": Font(name="Calibri", size=11, bold=True, color="FFFFFFFF")
+            },
+            "WHITE": {
+                "fill": PatternFill(start_color="FFFFFFFF", end_color="FFFFFFFF", fill_type="solid"),
+                "font": Font(name="Calibri", size=11, bold=True, color="FF000000")
+            }
+        }
+
+        thin = Side(border_style="thin", color="FFCBD5E1")
+        cell_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+        thick_top = Side(border_style="medium", color="FF0F172A")
+        total_border = Border(left=thin, right=thin, top=thick_top, bottom=thick_top)
+
+        # Title Row
+        ws.merge_cells("A1:G1")
+        title_cell = ws["A1"]
+        title_cell.value = f"{cust_label} RM RYG — Unit 1 (PEPIPL) — {display_date}"
+        title_cell.font = Font(name="Calibri", size=14, bold=True, color="FF0F172A")
+        title_cell.alignment = Alignment(vertical="center", indent=1)
+        ws.row_dimensions[1].height = 28
+
+        # Headers
+        headers = ["Sl.No.", "ITEM DESCRIPTIONS", "Max QTY", "SHEET STOCK", "STOCK IN KGS", "STOCK %", "RYG"]
+        ws.row_dimensions[3].height = 24
+        for col_idx, h in enumerate(headers, 1):
+            c = ws.cell(row=3, column=col_idx, value=h)
+            c.font = Font(name="Calibri", size=11, bold=True, color="FFFFFFFF")
+            c.fill = PatternFill(start_color="FF1E293B", end_color="FF1E293B", fill_type="solid")
+            c.alignment = Alignment(horizontal="center", vertical="center")
+            c.border = cell_border
+
+        # Main Table Rows
+        start_row = 4
+        for r_idx, it in enumerate(items, start_row):
+            ws.row_dimensions[r_idx].height = 20
+            # Sl.No.
+            c1 = ws.cell(row=r_idx, column=1, value=it.get("sl_no", r_idx - start_row + 1))
+            c1.alignment = Alignment(horizontal="center", vertical="center")
+            c1.border = cell_border
+
+            # RM Code / Description
+            c2 = ws.cell(row=r_idx, column=2, value=it.get("rm_code", ""))
+            c2.font = Font(name="Calibri", size=11, bold=True)
+            c2.alignment = Alignment(horizontal="left", vertical="center", indent=1)
+            c2.border = cell_border
+
+            # Max Qty
+            c3 = ws.cell(row=r_idx, column=3, value=it.get("max_qty", 0))
+            c3.number_format = "#,##0"
+            c3.alignment = Alignment(horizontal="right", vertical="center")
+            c3.border = cell_border
+
+            # Sheet Stock
+            c4 = ws.cell(row=r_idx, column=4, value=it.get("sheet_stock", 0))
+            c4.number_format = "#,##0"
+            c4.alignment = Alignment(horizontal="right", vertical="center")
+            c4.border = cell_border
+
+            # Stock in KGS
+            c5 = ws.cell(row=r_idx, column=5, value=it.get("stock_in_kgs", 0.0))
+            c5.number_format = "#,##0.00"
+            c5.alignment = Alignment(horizontal="right", vertical="center")
+            c5.border = cell_border
+
+            # Stock %
+            c6 = ws.cell(row=r_idx, column=6, value=f"{it.get('ratio_pct', 0.0)}%")
+            c6.alignment = Alignment(horizontal="right", vertical="center")
+            c6.border = cell_border
+
+            # RYG Status (HIGHLIGHTED COLOR WITH BACKGROUND IN THIS COLUMN ONLY)
+            status_val = str(it.get("status", "")).strip().upper()
+            c7 = ws.cell(row=r_idx, column=7, value=status_val)
+            c7.alignment = Alignment(horizontal="center", vertical="center")
+            c7.border = cell_border
+            style_cfg = RYG_STYLES.get(status_val, RYG_STYLES["WHITE"])
+            c7.fill = style_cfg["fill"]
+            c7.font = style_cfg["font"]
+
+        # Totals Row
+        tot_row = start_row + len(items)
+        ws.row_dimensions[tot_row].height = 24
+        ws.cell(row=tot_row, column=1, value="").border = total_border
+
+        c_lbl = ws.cell(row=tot_row, column=2, value="Total")
+        c_lbl.font = Font(name="Calibri", size=11, bold=True)
+        c_lbl.alignment = Alignment(horizontal="center", vertical="center")
+        c_lbl.fill = PatternFill(start_color="FFFEF08A", end_color="FFFEF08A", fill_type="solid")
+        c_lbl.border = total_border
+
+        # Max Qty sum
+        c_tot_mq = ws.cell(row=tot_row, column=3, value=summary.get("total_max_qty", 0))
+        c_tot_mq.number_format = "#,##0"
+        c_tot_mq.font = Font(name="Calibri", size=11, bold=True)
+        c_tot_mq.alignment = Alignment(horizontal="right", vertical="center")
+        c_tot_mq.fill = PatternFill(start_color="FFFEF08A", end_color="FFFEF08A", fill_type="solid")
+        c_tot_mq.border = total_border
+
+        # Sheet Stock sum
+        c_tot_sh = ws.cell(row=tot_row, column=4, value=summary.get("total_sheet_stock", 0))
+        c_tot_sh.number_format = "#,##0"
+        c_tot_sh.font = Font(name="Calibri", size=11, bold=True)
+        c_tot_sh.alignment = Alignment(horizontal="right", vertical="center")
+        c_tot_sh.fill = PatternFill(start_color="FFFEF08A", end_color="FFFEF08A", fill_type="solid")
+        c_tot_sh.border = total_border
+
+        # Stock in KGS sum
+        c_tot_kg = ws.cell(row=tot_row, column=5, value=summary.get("total_stock_kgs", 0.0))
+        c_tot_kg.number_format = "#,##0.00"
+        c_tot_kg.font = Font(name="Calibri", size=11, bold=True)
+        c_tot_kg.alignment = Alignment(horizontal="right", vertical="center")
+        c_tot_kg.fill = PatternFill(start_color="FFFEF08A", end_color="FFFEF08A", fill_type="solid")
+        c_tot_kg.border = total_border
+
+        # Overall capacity %
+        c_tot_pct = ws.cell(row=tot_row, column=6, value=f"{summary.get('overall_capacity_pct', 0.0)}%")
+        c_tot_pct.font = Font(name="Calibri", size=11, bold=True)
+        c_tot_pct.alignment = Alignment(horizontal="right", vertical="center")
+        c_tot_pct.fill = PatternFill(start_color="FFFEF08A", end_color="FFFEF08A", fill_type="solid")
+        c_tot_pct.border = total_border
+
+        ws.cell(row=tot_row, column=7, value="").border = total_border
+
+        # Right-side RYG Distribution Summary (Columns I & J, starting row 3)
+        ws.cell(row=3, column=9, value="RYG").font = Font(name="Calibri", size=11, bold=True, color="FFFFFFFF")
+        ws.cell(row=3, column=9).fill = PatternFill(start_color="FF1E293B", end_color="FF1E293B", fill_type="solid")
+        ws.cell(row=3, column=9).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=3, column=9).border = cell_border
+
+        ws.cell(row=3, column=10, value="Count").font = Font(name="Calibri", size=11, bold=True, color="FFFFFFFF")
+        ws.cell(row=3, column=10).fill = PatternFill(start_color="FF1E293B", end_color="FF1E293B", fill_type="solid")
+        ws.cell(row=3, column=10).alignment = Alignment(horizontal="center", vertical="center")
+        ws.cell(row=3, column=10).border = cell_border
+
+        status_order = ["BLACK", "RED", "YELLOW", "GREEN", "WHITE"]
+        for s_idx, st in enumerate(status_order, 4):
+            ws.row_dimensions[s_idx].height = 20
+            c_s = ws.cell(row=s_idx, column=9, value=st)
+            c_s.alignment = Alignment(horizontal="center", vertical="center")
+            c_s.border = cell_border
+            cfg = RYG_STYLES.get(st, RYG_STYLES["WHITE"])
+            c_s.fill = cfg["fill"]
+            c_s.font = cfg["font"]
+
+            c_cnt = ws.cell(row=s_idx, column=10, value=summary.get(st, 0))
+            c_cnt.alignment = Alignment(horizontal="center", vertical="center")
+            c_cnt.font = Font(name="Calibri", size=11, bold=True)
+            c_cnt.border = cell_border
+
+        gt_row = 4 + len(status_order)
+        c_gt_lbl = ws.cell(row=gt_row, column=9, value="Grand Total")
+        c_gt_lbl.font = Font(name="Calibri", size=11, bold=True)
+        c_gt_lbl.alignment = Alignment(horizontal="center", vertical="center")
+        c_gt_lbl.border = cell_border
+
+        c_gt_val = ws.cell(row=gt_row, column=10, value=summary.get("grand_total", len(items)))
+        c_gt_val.font = Font(name="Calibri", size=11, bold=True)
+        c_gt_val.alignment = Alignment(horizontal="center", vertical="center")
+        c_gt_val.border = cell_border
+
+        # Column widths
+        col_widths = {
+            "A": 9,
+            "B": 26,
+            "C": 16,
+            "D": 15,
+            "E": 17,
+            "F": 12,
+            "G": 14,
+            "H": 4,
+            "I": 14,
+            "J": 12
+        }
+        for col_name, width in col_widths.items():
+            ws.column_dimensions[col_name].width = width
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        return buffer.getvalue()
 
 
 # Singleton Instance

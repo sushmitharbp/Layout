@@ -11401,11 +11401,11 @@ window.renderReviewParts = renderReviewParts;
 // - WHITE : Stock in KGS > 100% Max QTY (Excess / Overstock)
 // ============================================================================
 
-let currentRygCustomer = "AL"; // Unit 1 (PEPIPL)
+let currentRygCustomer = "AL"; // "AL" or "VST"
 let currentRygFilter = "ALL";  // "ALL", "BLACK", "RED", "YELLOW", "GREEN", "WHITE"
 let currentRygSearch = "";
 let currentRygData = null;
-let rygDataCache = { AL: null };
+let rygDataCache = { AL: null, VST: null };
 let activeRygEditingItem = null;
 
 function showReorderLevelView() {
@@ -11434,8 +11434,56 @@ function showReorderLevelView() {
     setActiveNavTab("navTabReorderLevel");
 
     // Instant render from cache if available, then refresh silently
-    if (rygDataCache["AL"]) {
-        applyRygDataToUI(rygDataCache["AL"]);
+    if (rygDataCache[currentRygCustomer]) {
+        applyRygDataToUI(rygDataCache[currentRygCustomer]);
+        loadRygData(true);
+    } else {
+        loadRygData(false);
+    }
+}
+
+function switchRygCustomer(customer) {
+    const cust = (customer || "AL").toUpperCase();
+    if (cust !== "AL" && cust !== "VST") return;
+    currentRygCustomer = cust;
+
+    // Update switcher buttons UI
+    const btnAL = document.getElementById("rygCustomerBtnAL");
+    const btnVST = document.getElementById("rygCustomerBtnVST");
+    if (btnAL && btnVST) {
+        if (cust === "AL") {
+            btnAL.style.background = "#0284c7";
+            btnAL.style.color = "#ffffff";
+            btnAL.style.fontWeight = "700";
+            btnVST.style.background = "transparent";
+            btnVST.style.color = "#475569";
+            btnVST.style.fontWeight = "600";
+        } else {
+            btnVST.style.background = "#0284c7";
+            btnVST.style.color = "#ffffff";
+            btnVST.style.fontWeight = "700";
+            btnAL.style.background = "transparent";
+            btnAL.style.color = "#475569";
+            btnAL.style.fontWeight = "600";
+        }
+    }
+
+    // Update customer header badge
+    const badge = document.getElementById("rygCurrentCustomerBadge");
+    if (badge) {
+        badge.textContent = cust === "AL" ? "Ashok Leyland (AL) • 36 Standards" : "VST Tractors (VST) • 13 Standards";
+    }
+
+    // Reset status filter and search
+    currentRygFilter = "ALL";
+    currentRygSearch = "";
+    const searchInput = document.getElementById("rygSearchInput");
+    if (searchInput) searchInput.value = "";
+    updateRygFilterPillsActiveUI("ALL");
+
+    // Instant switch if cached
+    if (rygDataCache[cust]) {
+        applyRygDataToUI(rygDataCache[cust]);
         loadRygData(true);
     } else {
         loadRygData(false);
@@ -11520,30 +11568,31 @@ function applyRygFiltersAndRender() {
 
 async function loadRygData(silent = false) {
     const tbody = document.getElementById("rygTableBody");
+    const cust = currentRygCustomer || "AL";
     // Only show spinner if not silent and we have no cached data yet
-    if (!silent && !rygDataCache["AL"] && tbody) {
+    if (!silent && !rygDataCache[cust] && tbody) {
         tbody.innerHTML = `
             <tr>
                 <td colspan="7" style="text-align: center; padding: 28px; color: #64748b;">
                     <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.2rem; color: #0284c7;"></i>
-                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.85rem;">Calculating dynamic reorder levels for Unit 1 (PEPIPL)...</div>
+                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.85rem;">Calculating dynamic reorder levels for ${cust === 'VST' ? 'VST Tractors' : 'Ashok Leyland'} (Unit 1)...</div>
                 </td>
             </tr>
         `;
     }
 
     try {
-        const res = await fetch("/api/reorder-level?customer=AL");
+        const res = await fetch(`/api/reorder-level?customer=${encodeURIComponent(cust)}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
 
         // Update memory cache
-        rygDataCache["AL"] = data;
+        rygDataCache[cust] = data;
         applyRygDataToUI(data);
 
     } catch (err) {
         console.error("Failed to load reorder level RYG data:", err);
-        if (tbody && !rygDataCache["AL"]) {
+        if (tbody && !rygDataCache[cust]) {
             tbody.innerHTML = `
                 <tr>
                     <td colspan="7" style="text-align: center; padding: 24px; color: #ef4444;">
@@ -11556,7 +11605,7 @@ async function loadRygData(silent = false) {
 }
 
 function reloadRygData() {
-    delete rygDataCache["AL"];
+    delete rygDataCache[currentRygCustomer];
     loadRygData(false);
 }
 
@@ -11588,8 +11637,12 @@ function handleRygSearch(query) {
     applyRygFiltersAndRender();
 }
 
+function exportRygExcel() {
+    window.location.href = `/api/reorder-level/export-excel?customer=${encodeURIComponent(currentRygCustomer)}`;
+}
+
 function exportRygCsv() {
-    window.location.href = "/api/reorder-level/export-csv?customer=AL";
+    window.location.href = `/api/reorder-level/export-csv?customer=${encodeURIComponent(currentRygCustomer)}`;
 }
 
 function renderRygTable(items, summary) {
@@ -11695,6 +11748,10 @@ function renderRygTable(items, summary) {
     if (footerSheets) footerSheets.textContent = `${Number(summary.total_sheet_stock || 0).toLocaleString('en-IN')} Sheets`;
     if (footerStockKg) footerStockKg.textContent = `${Number(summary.total_stock_kgs || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
     if (footerAvgRatio) footerAvgRatio.textContent = `${summary.overall_capacity_pct ?? 0}%`;
+}
+
+function exportRygExcel() {
+    window.location.href = `/api/reorder-level/export-excel?customer=${encodeURIComponent(currentRygCustomer)}`;
 }
 
 function exportRygCsv() {
@@ -11860,6 +11917,7 @@ window.filterRygByStatus = filterRygByStatus;
 window.handleRygSearch = handleRygSearch;
 window.renderRygTable = renderRygTable;
 window.exportRygCsv = exportRygCsv;
+window.exportRygExcel = exportRygExcel;
 window.openAdjustStockModal = openAdjustStockModal;
 window.closeAdjustStockModal = closeAdjustStockModal;
 window.updateModalRygPreview = updateModalRygPreview;

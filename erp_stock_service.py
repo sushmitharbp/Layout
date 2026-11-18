@@ -15,7 +15,7 @@ import time
 import requests
 try:
     import openpyxl
-except (ImportError, ModuleNotFoundError):
+except Exception:
     openpyxl = None
 from dotenv import load_dotenv
 

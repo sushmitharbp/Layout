@@ -2022,12 +2022,9 @@ def get_reorder_level_endpoint():
     - q: search query string
     - status: filter by RYG status ('BLACK', 'RED', 'YELLOW', 'GREEN', 'WHITE', 'ALL')
     """
-    customer = request.args.get("customer") or session.get("company_short") or "AL"
-    # Map company names/codes to AL or VST
-    if customer.upper() in ("PEPIPL", "UNIT 1", "UNIT1", "AL"):
+    customer = (request.args.get("customer") or "AL").strip().upper()
+    if customer not in ("AL", "VST"):
         customer = "AL"
-    elif customer.upper() in ("PEI2", "UNIT 2", "UNIT2", "VST"):
-        customer = "VST"
 
     q = request.args.get("q", "")
     status_filter = request.args.get("status", "ALL")
@@ -2062,12 +2059,29 @@ def update_reorder_level_max_qty_endpoint():
     return jsonify(res)
 
 
+@app.route("/api/reorder-level/export-excel", methods=["GET"])
+def export_reorder_level_excel_endpoint():
+    """Exports Unit 1 (PEPIPL) AL or VST RYG table as formatted Excel (.xlsx) with highlighted RYG colors"""
+    from flask import Response
+    customer = (request.args.get("customer") or "AL").strip().upper()
+    cust_label = "VST" if customer == "VST" else "AL"
+    excel_bytes = reorder_level_service.generate_excel_report(customer=cust_label)
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    return Response(
+        excel_bytes,
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=PEPIPL_{cust_label}_RM_RYG_{today_str}.xlsx"}
+    )
+
+
 @app.route("/api/reorder-level/export-csv", methods=["GET"])
 def export_reorder_level_csv_endpoint():
-    """Exports Unit 1 (PEPIPL) RYG table as CSV download"""
+    """Exports Unit 1 (PEPIPL) AL or VST RYG table as CSV download"""
     import csv, io
     from flask import Response
-    data = reorder_level_service.get_reorder_level_data(customer="AL")
+    customer = (request.args.get("customer") or "AL").strip().upper()
+    cust_label = "VST" if customer == "VST" else "AL"
+    data = reorder_level_service.get_reorder_level_data(customer=cust_label)
     items = data.get("items", [])
 
     output = io.StringIO()
@@ -2090,7 +2104,7 @@ def export_reorder_level_csv_endpoint():
     return Response(
         csv_data,
         mimetype="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=PEPIPL_Unit1_RM_RYG_{today_str}.csv"}
+        headers={"Content-Disposition": f"attachment; filename=PEPIPL_{cust_label}_RM_RYG_{today_str}.csv"}
     )
 
 
