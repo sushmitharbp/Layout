@@ -2007,6 +2007,94 @@ def upload_mrp_csv_endpoint():
     return jsonify(res), 200
 
 
+# ============================================================================
+# RAW MATERIAL REORDER LEVEL & DYNAMIC RYG MONITOR ENDPOINTS
+# ============================================================================
+
+from reorder_level_service import reorder_level_service
+
+@app.route("/api/reorder-level", methods=["GET"])
+def get_reorder_level_endpoint():
+    """
+    Returns dynamic RYG inventory table & summary metrics for AL or VST
+    Parameters:
+    - customer: 'AL' (default) or 'VST'
+    - q: search query string
+    - status: filter by RYG status ('BLACK', 'RED', 'YELLOW', 'GREEN', 'WHITE', 'ALL')
+    """
+    customer = request.args.get("customer") or session.get("company_short") or "AL"
+    # Map company names/codes to AL or VST
+    if customer.upper() in ("PEPIPL", "UNIT 1", "UNIT1", "AL"):
+        customer = "AL"
+    elif customer.upper() in ("PEI2", "UNIT 2", "UNIT2", "VST"):
+        customer = "VST"
+
+    q = request.args.get("q", "")
+    status_filter = request.args.get("status", "ALL")
+
+    data = reorder_level_service.get_reorder_level_data(customer=customer, search_query=q, status_filter=status_filter)
+    return jsonify(data)
+
+
+@app.route("/api/reorder-level/update-stock", methods=["POST"])
+def update_reorder_level_stock_endpoint():
+    """Allows updating physical sheet stock count for an RM code dynamically"""
+    body = request.json or request.form.to_dict() or {}
+    rm_code = body.get("rm_code")
+    sheet_stock = body.get("sheet_stock")
+    if not rm_code or sheet_stock is None:
+        return jsonify({"error": "rm_code and sheet_stock are required"}), 400
+
+    res = reorder_level_service.update_stock(rm_code, sheet_stock)
+    return jsonify(res)
+
+
+@app.route("/api/reorder-level/update-max-qty", methods=["POST"])
+def update_reorder_level_max_qty_endpoint():
+    """Allows updating Max Qty threshold for an RM code dynamically"""
+    body = request.json or request.form.to_dict() or {}
+    rm_code = body.get("rm_code")
+    max_qty = body.get("max_qty")
+    if not rm_code or max_qty is None:
+        return jsonify({"error": "rm_code and max_qty are required"}), 400
+
+    res = reorder_level_service.update_max_qty(rm_code, max_qty)
+    return jsonify(res)
+
+
+@app.route("/api/reorder-level/export-csv", methods=["GET"])
+def export_reorder_level_csv_endpoint():
+    """Exports Unit 1 (PEPIPL) RYG table as CSV download"""
+    import csv, io
+    from flask import Response
+    data = reorder_level_service.get_reorder_level_data(customer="AL")
+    items = data.get("items", [])
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Sl.No.", "ITEM DESCRIPTIONS", "Max QTY (KGS)", "SHEET STOCK", "STOCK IN KGS", "STOCK %", "RYG STATUS", "ACTION NOTE"])
+    for it in items:
+        writer.writerow([
+            it["sl_no"],
+            it["rm_code"],
+            it["max_qty"],
+            it["sheet_stock"],
+            it["stock_in_kgs"],
+            f"{it['ratio_pct']}%",
+            it["status"],
+            it["action_note"]
+        ])
+
+    csv_data = output.getvalue()
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    return Response(
+        csv_data,
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=PEPIPL_Unit1_RM_RYG_{today_str}.csv"}
+    )
+
+
+
 @app.route("/api/endbits/<endbit_id>")
 def get_endbit_detail(endbit_id):
     """Get single end bit with its parts creation history"""

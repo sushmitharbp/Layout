@@ -2186,14 +2186,18 @@ class MOWorkflowEngine:
         }
 
     def get_db_tables_overview(self):
-        """Returns metadata and exact real-time row counts for all database tables"""
+        """Returns metadata and exact real-time row counts for all database tables (cached 60s)"""
+        now = time.time()
+        if hasattr(self, "_db_tables_cache") and (now - getattr(self, "_db_tables_cache_time", 0)) < 60.0:
+            return self._db_tables_cache
+
         tables = []
         headers = {**self._get_supabase_headers(), "Range": "0-0", "Prefer": "count=exact"}
         for tbl_id, cfg in DB_TABLES_CONFIG.items():
             count = 0
             if self.use_supabase:
                 try:
-                    res = self.session.get(f"{SUPABASE_URL}/rest/v1/{tbl_id}?limit=1", headers=headers, timeout=4)
+                    res = self.session.get(f"{SUPABASE_URL}/rest/v1/{tbl_id}?limit=1", headers=headers, timeout=1.0)
                     cr = res.headers.get("content-range")
                     if cr and "/" in cr:
                         part = cr.split("/")[1]
@@ -2209,6 +2213,8 @@ class MOWorkflowEngine:
                 "description": cfg["description"],
                 "count": count
             })
+        self._db_tables_cache = tables
+        self._db_tables_cache_time = now
         return tables
 
     def get_db_table_data(self, table_name, page=1, limit=25, search_query=None):

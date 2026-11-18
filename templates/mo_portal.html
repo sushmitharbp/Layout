@@ -53,6 +53,12 @@
                         <span>DB Tables</span>
                         <span class="nav-tab-count" id="navDbCountBadge">7</span>
                     </button>
+                    {% if current_company_id != 'PEI2' and current_branch_code != 'PEI2' %}
+                    <button class="mo-nav-tab" id="navTabReorderLevel" onclick="showReorderLevelView()">
+                        <i class="fa-solid fa-traffic-light"></i>
+                        <span>Reorder Level (RYG)</span>
+                    </button>
+                    {% endif %}
                 </nav>
             </div>
 
@@ -628,6 +634,173 @@
                         </div>
                     </form>
                 </div>
+            </div>
+        </main>
+
+        <!-- 5. Raw Material Reorder Level & Dynamic RYG Inventory Monitor View -->
+        <main class="mo-main-content reorder-level-view" id="reorderLevelView" style="display: none; padding: 20px 24px; flex-direction: column; gap: 16px; background: #f8fafc; overflow-y: auto;">
+            <!-- Header Bar -->
+            <div class="view-header-bar" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04); flex-wrap: wrap; gap: 12px;">
+                <div class="view-header-left" style="display: flex; align-items: center; gap: 12px;">
+                    <div class="db-table-icon" style="background: linear-gradient(135deg, #1e293b, #0f172a); color: #38bdf8; width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                        <i class="fa-solid fa-traffic-light"></i>
+                    </div>
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <h2 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">RM Reorder Level &amp; Dynamic RYG Monitor</h2>
+                            <span class="header-count-pill" id="rygCurrentCustomerBadge" style="background: #e0f2fe; color: #0284c7; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem;">
+                                <i class="fa-solid fa-industry"></i> Unit 1 (PEPIPL) • 36 RM Standards
+                            </span>
+                        </div>
+                        <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #64748b;">
+                            Dynamic sheet counts fetched from live ERP &amp; store stock • Automatic ratio % and RYG color code classification
+                        </p>
+                    </div>
+                </div>
+
+                <div class="view-header-right" style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <div class="db-search-box" style="position: relative;">
+                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.85rem;"></i>
+                        <input type="text" id="rygSearchInput" placeholder="Search RM Code / Spec..." oninput="handleRygSearch(this.value)" style="height: 36px; padding-left: 32px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.82rem; width: 220px;">
+                    </div>
+
+                    <button class="btn btn-icon" onclick="reloadRygData()" title="Refresh / Sync ERP Stock" style="height: 36px; width: 36px; border-radius: 6px; border: 1.5px solid #cbd5e1; background: #fff; cursor: pointer;">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                    <button class="btn btn-secondary btn-sm" onclick="exportRygCsv()" title="Download CSV Report" style="height: 36px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600;">
+                        <i class="fa-solid fa-file-csv"></i> Export CSV
+                    </button>
+                </div>
+            </div>
+
+            <!-- RYG KPI Matrix (Exact 5-Color Strip from Spreadsheet) -->
+            <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px;" id="rygKpiStrip">
+                <!-- 1. BLACK (Stockout) -->
+                <div class="mo-stat-card ryg-kpi-card" onclick="filterRygByStatus('BLACK')" style="background: #0f172a; border: 1.5px solid #334155; border-radius: 10px; padding: 14px; cursor: pointer; color: #ffffff; transition: transform 0.15s, box-shadow 0.15s;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #94a3b8;">BLACK</span>
+                        <span style="background: rgba(255,255,255,0.15); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">0% STOCK</span>
+                    </div>
+                    <div id="rygKpiBlack" style="font-size: 1.8rem; font-weight: 800; margin: 4px 0 2px 0; color: #ffffff;">10</div>
+                    <small style="font-size: 0.72rem; color: #94a3b8;">Stockout / Zero Stock</small>
+                </div>
+
+                <!-- 2. RED (Critical Reorder) -->
+                <div class="mo-stat-card ryg-kpi-card" onclick="filterRygByStatus('RED')" style="background: #fee2e2; border: 1.5px solid #fca5a5; border-radius: 10px; padding: 14px; cursor: pointer; color: #991b1b; transition: transform 0.15s, box-shadow 0.15s;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #b91c1c;">RED</span>
+                        <span style="background: rgba(185,28,28,0.12); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">&lt; 50%</span>
+                    </div>
+                    <div id="rygKpiRed" style="font-size: 1.8rem; font-weight: 800; margin: 4px 0 2px 0; color: #b91c1c;">12</div>
+                    <small style="font-size: 0.72rem; color: #dc2626;">Critical Reorder Level</small>
+                </div>
+
+                <!-- 3. YELLOW (Buffer Warning) -->
+                <div class="mo-stat-card ryg-kpi-card" onclick="filterRygByStatus('YELLOW')" style="background: #fef9c3; border: 1.5px solid #fde047; border-radius: 10px; padding: 14px; cursor: pointer; color: #854d0e; transition: transform 0.15s, box-shadow 0.15s;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #a16207;">YELLOW</span>
+                        <span style="background: rgba(161,98,7,0.12); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">50% - 75%</span>
+                    </div>
+                    <div id="rygKpiYellow" style="font-size: 1.8rem; font-weight: 800; margin: 4px 0 2px 0; color: #a16207;">3</div>
+                    <small style="font-size: 0.72rem; color: #ca8a04;">Buffer Warning Level</small>
+                </div>
+
+                <!-- 4. GREEN (Optimal Range) -->
+                <div class="mo-stat-card ryg-kpi-card" onclick="filterRygByStatus('GREEN')" style="background: #dcfce7; border: 1.5px solid #86efac; border-radius: 10px; padding: 14px; cursor: pointer; color: #166534; transition: transform 0.15s, box-shadow 0.15s;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #15803d;">GREEN</span>
+                        <span style="background: rgba(21,128,61,0.12); font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">75% - 100%</span>
+                    </div>
+                    <div id="rygKpiGreen" style="font-size: 1.8rem; font-weight: 800; margin: 4px 0 2px 0; color: #15803d;">2</div>
+                    <small style="font-size: 0.72rem; color: #16a34a;">Optimal Healthy Stock</small>
+                </div>
+
+                <!-- 5. WHITE (Overstock / Excess) -->
+                <div class="mo-stat-card ryg-kpi-card" onclick="filterRygByStatus('WHITE')" style="background: #ffffff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 14px; cursor: pointer; color: #334155; transition: transform 0.15s, box-shadow 0.15s;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #475569;">WHITE</span>
+                        <span style="background: #f1f5f9; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">&gt; 100%</span>
+                    </div>
+                    <div id="rygKpiWhite" style="font-size: 1.8rem; font-weight: 800; margin: 4px 0 2px 0; color: #1e293b;">9</div>
+                    <small style="font-size: 0.72rem; color: #64748b;">Overstock / Excess</small>
+                </div>
+
+                <!-- 6. TOTAL METRICS CARD -->
+                <div class="mo-stat-card" style="background: #f8fafc; border: 1.5px solid #e2e8f0; border-radius: 10px; padding: 14px; color: #1e293b;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 0.72rem; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase; color: #64748b;">TOTAL STOCK</span>
+                        <span id="rygGrandTotalPill" style="background: #e2e8f0; font-size: 0.68rem; padding: 2px 6px; border-radius: 4px; font-weight: 700;">36 Items</span>
+                    </div>
+                    <div id="rygKpiTotalStockKgs" style="font-size: 1.35rem; font-weight: 800; margin: 6px 0 2px 0; color: #0284c7; line-height: 1.2;">102,827.8 kg</div>
+                    <small style="font-size: 0.72rem; color: #64748b;">
+                        Max: <strong id="rygKpiTotalMaxQty">184,500 kg</strong> (<span id="rygCapacityPct">55.7%</span>)
+                    </small>
+                    <div style="background: #e2e8f0; height: 5px; border-radius: 3px; overflow: hidden; margin-top: 6px;">
+                        <div id="rygCapacityBar" style="width: 55.7%; background: #0284c7; height: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Filter Status Bar -->
+            <div style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 16px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 6px;" id="rygFilterPillsGroup">
+                    <span style="font-size: 0.78rem; font-weight: 700; color: #64748b; margin-right: 4px;"><i class="fa-solid fa-filter"></i> Filter:</span>
+                    <button type="button" class="btn btn-ghost btn-sm ryg-filter-pill active" onclick="filterRygByStatus('ALL')" id="rygFilterPillALL" style="padding: 2px 10px; font-size: 0.75rem; font-weight: 700; border-radius: 20px; background: #0284c7; color: #fff;">All (<span id="rygFilterCntAll">36</span>)</button>
+                    <button type="button" class="btn btn-ghost btn-sm ryg-filter-pill" onclick="filterRygByStatus('BLACK')" id="rygFilterPillBLACK" style="padding: 2px 10px; font-size: 0.75rem; font-weight: 600; border-radius: 20px; background: #f1f5f9; color: #0f172a;">Black (<span id="rygFilterCntBlack">10</span>)</button>
+                    <button type="button" class="btn btn-ghost btn-sm ryg-filter-pill" onclick="filterRygByStatus('RED')" id="rygFilterPillRED" style="padding: 2px 10px; font-size: 0.75rem; font-weight: 600; border-radius: 20px; background: #fee2e2; color: #991b1b;">Red (<span id="rygFilterCntRed">12</span>)</button>
+                    <button type="button" class="btn btn-ghost btn-sm ryg-filter-pill" onclick="filterRygByStatus('YELLOW')" id="rygFilterPillYELLOW" style="padding: 2px 10px; font-size: 0.75rem; font-weight: 600; border-radius: 20px; background: #fef9c3; color: #854d0e;">Yellow (<span id="rygFilterCntYellow">3</span>)</button>
+                    <button type="button" class="btn btn-ghost btn-sm ryg-filter-pill" onclick="filterRygByStatus('GREEN')" id="rygFilterPillGREEN" style="padding: 2px 10px; font-size: 0.75rem; font-weight: 600; border-radius: 20px; background: #dcfce7; color: #166534;">Green (<span id="rygFilterCntGreen">2</span>)</button>
+                    <button type="button" class="btn btn-ghost btn-sm ryg-filter-pill" onclick="filterRygByStatus('WHITE')" id="rygFilterPillWHITE" style="padding: 2px 10px; font-size: 0.75rem; font-weight: 600; border-radius: 20px; background: #f8fafc; color: #334155; border: 1px solid #cbd5e1;">White (<span id="rygFilterCntWhite">9</span>)</button>
+                </div>
+                <div style="font-size: 0.75rem; color: #64748b;">
+                    <i class="fa-solid fa-bolt" style="color: #f59e0b;"></i> Stock formula: <code>Stock in KGS = Sheet Count × Sheet Unit Weight</code>
+                </div>
+            </div>
+
+            <!-- Dynamic RYG Table (Exact Replica of Spreadsheet in Screenshot) -->
+            <div class="mo-table-container" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden;">
+                <table class="mo-table" id="rygDataTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #f8fafc; border-bottom: 2px solid #cbd5e1;">
+                            <th style="width: 60px; text-align: center; font-weight: 800; color: #334155; padding: 10px 12px;">Sl.No.</th>
+                            <th style="font-weight: 800; color: #334155; padding: 10px 14px;">ITEM DESCRIPTIONS</th>
+                            <th style="text-align: right; font-weight: 800; color: #334155; padding: 10px 14px;">Max QTY (KGS)</th>
+                            <th style="text-align: center; font-weight: 800; color: #334155; padding: 10px 14px;">SHEET STOCK</th>
+                            <th style="text-align: right; font-weight: 800; color: #334155; padding: 10px 14px;">STOCK IN KGS</th>
+                            <th style="text-align: center; font-weight: 800; color: #334155; padding: 10px 12px;">STOCK %</th>
+                            <th style="width: 140px; text-align: center; font-weight: 800; color: #334155; padding: 10px 14px;">RYG</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rygTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 24px; color: #94a3b8;">
+                                <i class="fa-solid fa-circle-notch fa-spin"></i> Loading live RM reorder levels...
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot style="background: #fffbeb; font-weight: 800; border-top: 2px solid #fde68a;">
+                        <tr>
+                            <td colspan="2" style="padding: 12px 14px; text-align: right; color: #92400e; font-size: 0.95rem;">
+                                Total
+                            </td>
+                            <td style="padding: 12px 14px; text-align: right; color: #92400e; font-size: 1.05rem;" id="rygFooterTotalMaxQty">
+                                184,500
+                            </td>
+                            <td style="padding: 12px 14px; text-align: center; color: #0284c7; font-size: 1rem;" id="rygFooterTotalSheets">
+                                1,062 Sheets
+                            </td>
+                            <td style="padding: 12px 14px; text-align: right; color: #92400e; font-size: 1.05rem;" id="rygFooterTotalStockKgs">
+                                102,827.8 kg
+                            </td>
+                            <td style="padding: 12px 12px; text-align: center; color: #b45309;" id="rygFooterAvgRatio">
+                                55.7%
+                            </td>
+                            <td style="padding: 12px 14px; text-align: center; color: #64748b; font-size: 0.8rem; font-weight: normal;">
+                                Dynamic ERP Calculation
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
             </div>
         </main>
     </div> <!-- mo-workspace-area -->
@@ -2375,12 +2548,11 @@
         </div>
     </div>
 
-
     <!-- PDF Generation Libraries (jsPDF + AutoTable) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=120"></script>
+    <script src="/static/mo_app.js?v=124"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
     <script src="/static/mo_create_v2.js?v=3"></script>
 </body>

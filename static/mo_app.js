@@ -64,6 +64,13 @@ document.addEventListener("DOMContentLoaded", () => {
             updateAutomatedConstraints();
         });
     }
+
+    // Prefetch RYG reorder data in background for instant navigation
+    setTimeout(() => {
+        if (typeof loadRygData === "function") {
+            loadRygData(true);
+        }
+    }, 600);
 });
 
 // Role Management
@@ -4354,7 +4361,7 @@ let dbSearchDebounceTimer = null;
 let currentTableData = null;
 
 function setActiveNavTab(tabId) {
-    const tabs = ["navTabWorkflow", "navTabEndbits", "navTabDbTables"];
+    const tabs = ["navTabWorkflow", "navTabEndbits", "navTabDbTables", "navTabReorderLevel"];
     tabs.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle("active", id === tabId);
@@ -4466,10 +4473,12 @@ function showMoWorkflowView() {
     const explorerView = document.getElementById("dbExplorerView") || document.getElementById("dbTableView");
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
+    const rygView = document.getElementById("reorderLevelView");
     if (workflowView) workflowView.style.display = "flex";
     if (explorerView) explorerView.style.display = "none";
     if (ebView) ebView.style.display = "none";
     if (createEbView) createEbView.style.display = "none";
+    if (rygView) rygView.style.display = "none";
 
     setActiveNavTab("navTabWorkflow");
     renderSidebarTablesList();
@@ -4484,10 +4493,12 @@ async function showEndbitsStoreView() {
     const explorerView = document.getElementById("dbExplorerView") || document.getElementById("dbTableView");
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
+    const rygView = document.getElementById("reorderLevelView");
     if (workflowView) workflowView.style.display = "none";
     if (explorerView) explorerView.style.display = "none";
     if (ebView) ebView.style.display = "flex";
     if (createEbView) createEbView.style.display = "none";
+    if (rygView) rygView.style.display = "none";
 
     setActiveNavTab("navTabEndbits");
     renderSidebarTablesList();
@@ -4510,10 +4521,12 @@ async function showCreateEndbitMoView(preselectedEndbitId = null) {
     const explorerView = document.getElementById("dbExplorerView") || document.getElementById("dbTableView");
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
+    const rygView = document.getElementById("reorderLevelView");
     if (workflowView) workflowView.style.display = "none";
     if (explorerView) explorerView.style.display = "none";
     if (ebView) ebView.style.display = "none";
     if (createEbView) createEbView.style.display = "flex";
+    if (rygView) rygView.style.display = "none";
 
     setActiveNavTab("navTabEndbits");
     // Reset layout attachment state
@@ -4554,10 +4567,12 @@ async function openDbTable(tableName) {
     const explorerView = document.getElementById("dbExplorerView") || document.getElementById("dbTableView");
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
+    const rygView = document.getElementById("reorderLevelView");
     if (workflowView) workflowView.style.display = "none";
     if (explorerView) explorerView.style.display = "flex";
     if (ebView) ebView.style.display = "none";
     if (createEbView) createEbView.style.display = "none";
+    if (rygView) rygView.style.display = "none";
 
     setActiveNavTab("navTabDbTables");
     renderSidebarTablesList();
@@ -11373,4 +11388,480 @@ window.runNonStdCapacityAgentForAllRows = runNonStdCapacityAgentForAllRows;
 window.recalculateAllNonStdTotals = recalculateAllNonStdTotals;
 window.initNonStdPartsRows = initNonStdPartsRows;
 window.renderReviewParts = renderReviewParts;
+
+// ============================================================================
+// RAW MATERIAL REORDER LEVEL & DYNAMIC RYG INVENTORY CONTROLLER
+// Dedicated to Unit 1 (PEPIPL) - 36 RM Standards
+// Dynamic sheet stock calculation from live ERP / Store
+// Status Rules:
+// - BLACK : Sheet Stock == 0 or Stock in KGS == 0 (0% Stockout)
+// - RED   : 0 < Stock in KGS < 50% Max QTY (Critical Reorder)
+// - YELLOW: 50% <= Stock in KGS < 75% Max QTY (Buffer Warning)
+// - GREEN : 75% <= Stock in KGS <= 100% Max QTY (Optimal Stock)
+// - WHITE : Stock in KGS > 100% Max QTY (Excess / Overstock)
+// ============================================================================
+
+let currentRygCustomer = "AL"; // Unit 1 (PEPIPL)
+let currentRygFilter = "ALL";  // "ALL", "BLACK", "RED", "YELLOW", "GREEN", "WHITE"
+let currentRygSearch = "";
+let currentRygData = null;
+let rygDataCache = { AL: null };
+let activeRygEditingItem = null;
+
+function showReorderLevelView() {
+    const activeUnit = (window.AUTH_BRANCH_CODE || window.AUTH_COMPANY_ID || "").toUpperCase();
+    if (activeUnit === "PEI2") {
+        alert("Reorder Level (RYG) is configured specifically for Unit 1 (PEPIPL).");
+        return;
+    }
+
+    currentDbTable = null;
+    const panel = document.getElementById("dbTablesPanel");
+    if (panel) panel.style.display = "none";
+
+    const workflowView = document.getElementById("moWorkflowView");
+    const explorerView = document.getElementById("dbExplorerView") || document.getElementById("dbTableView");
+    const ebView = document.getElementById("endbitsStoreView");
+    const createEbView = document.getElementById("createEndbitMoView");
+    const rygView = document.getElementById("reorderLevelView");
+
+    if (workflowView) workflowView.style.display = "none";
+    if (explorerView) explorerView.style.display = "none";
+    if (ebView) ebView.style.display = "none";
+    if (createEbView) createEbView.style.display = "none";
+    if (rygView) rygView.style.display = "flex";
+
+    setActiveNavTab("navTabReorderLevel");
+
+    // Instant render from cache if available, then refresh silently
+    if (rygDataCache["AL"]) {
+        applyRygDataToUI(rygDataCache["AL"]);
+        loadRygData(true);
+    } else {
+        loadRygData(false);
+    }
+}
+
+function applyRygDataToUI(data) {
+    if (!data) return;
+    currentRygData = data;
+
+    // Update top KPI Summary Cards
+    const sum = data.summary || {};
+    const kpiBlack = document.getElementById("rygKpiBlack");
+    const kpiRed = document.getElementById("rygKpiRed");
+    const kpiYellow = document.getElementById("rygKpiYellow");
+    const kpiGreen = document.getElementById("rygKpiGreen");
+    const kpiWhite = document.getElementById("rygKpiWhite");
+    const kpiTotalStock = document.getElementById("rygKpiTotalStockKgs");
+    const kpiTotalMax = document.getElementById("rygKpiTotalMaxQty");
+    const kpiCapacityPct = document.getElementById("rygCapacityPct");
+    const kpiCapacityBar = document.getElementById("rygCapacityBar");
+    const totalPill = document.getElementById("rygGrandTotalPill");
+
+    if (kpiBlack) kpiBlack.textContent = sum.BLACK ?? 0;
+    if (kpiRed) kpiRed.textContent = sum.RED ?? 0;
+    if (kpiYellow) kpiYellow.textContent = sum.YELLOW ?? 0;
+    if (kpiGreen) kpiGreen.textContent = sum.GREEN ?? 0;
+    if (kpiWhite) kpiWhite.textContent = sum.WHITE ?? 0;
+    if (totalPill) totalPill.textContent = `${sum.grand_total ?? 0} Items`;
+
+    if (kpiTotalStock) {
+        kpiTotalStock.textContent = `${Number(sum.total_stock_kgs || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
+    }
+    if (kpiTotalMax) {
+        kpiTotalMax.textContent = `${Number(sum.total_max_qty || 0).toLocaleString('en-IN')} kg`;
+    }
+    if (kpiCapacityPct) {
+        kpiCapacityPct.textContent = `${sum.overall_capacity_pct ?? 0}%`;
+    }
+    if (kpiCapacityBar) {
+        kpiCapacityBar.style.width = `${Math.min(sum.overall_capacity_pct || 0, 100)}%`;
+    }
+
+    // Update Filter pill badge counts
+    const pillAll = document.getElementById("rygFilterCntAll");
+    const pillBlack = document.getElementById("rygFilterCntBlack");
+    const pillRed = document.getElementById("rygFilterCntRed");
+    const pillYellow = document.getElementById("rygFilterCntYellow");
+    const pillGreen = document.getElementById("rygFilterCntGreen");
+    const pillWhite = document.getElementById("rygFilterCntWhite");
+
+    if (pillAll) pillAll.textContent = sum.grand_total ?? 0;
+    if (pillBlack) pillBlack.textContent = sum.BLACK ?? 0;
+    if (pillRed) pillRed.textContent = sum.RED ?? 0;
+    if (pillYellow) pillYellow.textContent = sum.YELLOW ?? 0;
+    if (pillGreen) pillGreen.textContent = sum.GREEN ?? 0;
+    if (pillWhite) pillWhite.textContent = sum.WHITE ?? 0;
+
+    applyRygFiltersAndRender();
+}
+
+function applyRygFiltersAndRender() {
+    if (!currentRygData) return;
+    const allItems = currentRygData.items || [];
+    const q = (currentRygSearch || "").trim().toLowerCase();
+    const status = currentRygFilter || "ALL";
+
+    let filtered = allItems;
+    if (status !== "ALL") {
+        filtered = filtered.filter(item => (item.status || "").toUpperCase() === status);
+    }
+    if (q) {
+        filtered = filtered.filter(item => {
+            const code = (item.rm_code || "").toLowerCase();
+            const grade = (item.grade || "").toLowerCase();
+            return code.includes(q) || grade.includes(q);
+        });
+    }
+
+    renderRygTable(filtered, currentRygData.summary || {});
+}
+
+async function loadRygData(silent = false) {
+    const tbody = document.getElementById("rygTableBody");
+    // Only show spinner if not silent and we have no cached data yet
+    if (!silent && !rygDataCache["AL"] && tbody) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 28px; color: #64748b;">
+                    <i class="fa-solid fa-circle-notch fa-spin" style="font-size: 1.2rem; color: #0284c7;"></i>
+                    <div style="margin-top: 8px; font-weight: 600; font-size: 0.85rem;">Calculating dynamic reorder levels for Unit 1 (PEPIPL)...</div>
+                </td>
+            </tr>
+        `;
+    }
+
+    try {
+        const res = await fetch("/api/reorder-level?customer=AL");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+
+        // Update memory cache
+        rygDataCache["AL"] = data;
+        applyRygDataToUI(data);
+
+    } catch (err) {
+        console.error("Failed to load reorder level RYG data:", err);
+        if (tbody && !rygDataCache["AL"]) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 24px; color: #ef4444;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Error loading RYG data: ${escapeHtml(err.message || 'Server error')}
+                    </td>
+                </tr>
+            `;
+        }
+    }
+}
+
+function reloadRygData() {
+    delete rygDataCache["AL"];
+    loadRygData(false);
+}
+
+function updateRygFilterPillsActiveUI(status) {
+    const pills = ["ALL", "BLACK", "RED", "YELLOW", "GREEN", "WHITE"];
+    pills.forEach(p => {
+        const btn = document.getElementById(`rygFilterPill${p}`);
+        if (!btn) return;
+        if (p === status) {
+            btn.classList.add("active");
+            btn.style.boxShadow = "0 0 0 2px #0284c7";
+            btn.style.fontWeight = "700";
+        } else {
+            btn.classList.remove("active");
+            btn.style.boxShadow = "none";
+            btn.style.fontWeight = "600";
+        }
+    });
+}
+
+function filterRygByStatus(status) {
+    currentRygFilter = status || "ALL";
+    updateRygFilterPillsActiveUI(currentRygFilter);
+    applyRygFiltersAndRender();
+}
+
+function handleRygSearch(query) {
+    currentRygSearch = (query || "").trim();
+    applyRygFiltersAndRender();
+}
+
+function exportRygCsv() {
+    window.location.href = "/api/reorder-level/export-csv?customer=AL";
+}
+
+function renderRygTable(items, summary) {
+    const tbody = document.getElementById("rygTableBody");
+    if (!tbody) return;
+
+    if (!items || items.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 32px; color: #94a3b8;">
+                    <i class="fa-solid fa-folder-open" style="font-size: 1.5rem; margin-bottom: 6px; display: block;"></i>
+                    No RM standards found matching search/filter "${escapeHtml(currentRygSearch || currentRygFilter)}".
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    let rowsHtml = "";
+    items.forEach(row => {
+        // Status Badge Style matching user spreadsheet
+        let badgeStyle = "";
+        let badgeText = row.status || "BLACK";
+
+        switch (badgeText) {
+            case "BLACK":
+                badgeStyle = "background: #000000; color: #ffffff; border: 1px solid #111;";
+                break;
+            case "RED":
+                badgeStyle = "background: #ff0000; color: #ffffff; font-weight: 800;";
+                break;
+            case "YELLOW":
+                badgeStyle = "background: #ffff00; color: #000000; font-weight: 800;";
+                break;
+            case "GREEN":
+                badgeStyle = "background: #86efac; color: #065f46; font-weight: 800; border: 1px solid #4ade80;";
+                break;
+            case "WHITE":
+            default:
+                badgeStyle = "background: #ffffff; color: #0f172a; font-weight: 700; border: 1.5px solid #cbd5e1;";
+                break;
+        }
+
+        // Sheet stock badge
+        const sheetStockFmt = Number(row.sheet_stock || 0).toLocaleString('en-IN');
+        const maxQtyFmt = Number(row.max_qty || 0).toLocaleString('en-IN');
+        const stockKgFmt = Number(row.stock_in_kgs || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 2});
+
+        // Stock % formatting
+        const ratioPct = row.ratio_pct ?? (row.ratio !== undefined ? (row.ratio * 100).toFixed(1) : 0);
+        let ratioColor = "#475569";
+        if (badgeText === "BLACK") ratioColor = "#0f172a";
+        else if (badgeText === "RED") ratioColor = "#dc2626";
+        else if (badgeText === "YELLOW") ratioColor = "#b45309";
+        else if (badgeText === "GREEN") ratioColor = "#15803d";
+
+        rowsHtml += `
+            <tr style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                <td style="text-align: center; font-weight: 700; color: #64748b; padding: 10px 12px; font-size: 0.82rem;">
+                    ${row.sl_no}
+                </td>
+                <td style="padding: 10px 14px;">
+                    <div style="font-weight: 800; color: #0f172a; font-size: 0.88rem; font-family: monospace;">
+                        ${escapeHtml(row.rm_code)}
+                    </div>
+                    <div style="font-size: 0.73rem; color: #64748b; margin-top: 2px;">
+                        ${escapeHtml(row.grade || '')} • ${row.thickness}×${row.length}×${row.width} mm • ${row.weight_per_sheet} kg/sh
+                    </div>
+                </td>
+                <td style="text-align: right; padding: 10px 14px; font-weight: 700; color: #1e293b; font-size: 0.88rem;">
+                    ${maxQtyFmt}
+                </td>
+                <td style="text-align: center; padding: 10px 14px;">
+                    <span style="font-weight: 800; font-size: 0.92rem; color: ${row.sheet_stock > 0 ? '#0284c7' : '#94a3b8'};">
+                        ${sheetStockFmt}
+                    </span>
+                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">sheets</span>
+                </td>
+                <td style="text-align: right; padding: 10px 14px; font-weight: 800; font-size: 0.9rem; color: #0f172a;">
+                    ${stockKgFmt}
+                </td>
+                <td style="text-align: center; padding: 10px 12px; font-weight: 800; font-size: 0.85rem; color: ${ratioColor};">
+                    ${ratioPct}%
+                </td>
+                <td style="text-align: center; padding: 10px 14px;">
+                    <span style="display: inline-block; width: 92px; padding: 4px 0; border-radius: 4px; font-size: 0.82rem; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 1px 2px rgba(0,0,0,0.06); ${badgeStyle}">
+                        ${badgeText}
+                    </span>
+                </td>
+            </tr>
+        `;
+    });
+
+    tbody.innerHTML = rowsHtml;
+
+    // Update Footer Totals matching spreadsheet
+    const footerMaxQty = document.getElementById("rygFooterTotalMaxQty");
+    const footerSheets = document.getElementById("rygFooterTotalSheets");
+    const footerStockKg = document.getElementById("rygFooterTotalStockKgs");
+    const footerAvgRatio = document.getElementById("rygFooterAvgRatio");
+
+    if (footerMaxQty) footerMaxQty.textContent = Number(summary.total_max_qty || 0).toLocaleString('en-IN');
+    if (footerSheets) footerSheets.textContent = `${Number(summary.total_sheet_stock || 0).toLocaleString('en-IN')} Sheets`;
+    if (footerStockKg) footerStockKg.textContent = `${Number(summary.total_stock_kgs || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
+    if (footerAvgRatio) footerAvgRatio.textContent = `${summary.overall_capacity_pct ?? 0}%`;
+}
+
+function exportRygCsv() {
+    window.location.href = `/api/reorder-level/export-csv?customer=${encodeURIComponent(currentRygCustomer)}`;
+}
+
+// Quick Stock & Max Qty Adjustment Modal
+function openAdjustStockModal(rmCode) {
+    if (!currentRygData || !currentRygData.items) return;
+    const item = currentRygData.items.find(i => i.rm_code === rmCode);
+    if (!item) return;
+
+    activeRygEditingItem = item;
+
+    const modal = document.getElementById("adjustRygStockModal");
+    const codeEl = document.getElementById("modalRygRmCode");
+    const codeInput = document.getElementById("modalRygRmCodeInput");
+    const specEl = document.getElementById("modalRygSpec");
+    const custTag = document.getElementById("modalRygCustomerTag");
+    const sheetInput = document.getElementById("modalRygSheetStockInput");
+    const maxQtyInput = document.getElementById("modalRygMaxQtyInput");
+    const wtInput = document.getElementById("modalRygWtPerSheetInput");
+
+    if (codeEl) codeEl.textContent = item.rm_code;
+    if (codeInput) codeInput.value = item.rm_code;
+    if (wtInput) wtInput.value = item.weight_per_sheet;
+    if (specEl) {
+        specEl.innerHTML = `Grade: <strong>${escapeHtml(item.grade || '')}</strong> • ${item.thickness} × ${item.length} × ${item.width} mm • Unit Wt: <strong>${item.weight_per_sheet} kg/sheet</strong>`;
+    }
+    if (custTag) {
+        custTag.textContent = `${currentRygCustomer} Standard`;
+    }
+    if (sheetInput) sheetInput.value = item.sheet_stock;
+    if (maxQtyInput) maxQtyInput.value = item.max_qty;
+
+    updateModalRygPreview();
+
+    if (modal) modal.style.display = "flex";
+}
+
+function closeAdjustStockModal() {
+    const modal = document.getElementById("adjustRygStockModal");
+    if (modal) modal.style.display = "none";
+    activeRygEditingItem = null;
+}
+
+function updateModalRygPreview() {
+    const sheetInput = document.getElementById("modalRygSheetStockInput");
+    const maxQtyInput = document.getElementById("modalRygMaxQtyInput");
+    const wtInput = document.getElementById("modalRygWtPerSheetInput");
+
+    const sheets = parseFloat(sheetInput?.value || 0) || 0;
+    const maxQty = parseFloat(maxQtyInput?.value || 1) || 1;
+    const wt = parseFloat(wtInput?.value || 0) || 0;
+
+    const stockKgs = Math.round(sheets * wt * 100) / 100;
+    const ratio = maxQty > 0 ? (stockKgs / maxQty) : 0;
+    const ratioPct = (ratio * 100).toFixed(1);
+
+    // Classification
+    let status = "BLACK";
+    let badgeBg = "#000000";
+    let badgeColor = "#ffffff";
+    let border = "1px solid #111";
+
+    if (sheets <= 0 || stockKgs <= 0) {
+        status = "BLACK";
+        badgeBg = "#000000";
+        badgeColor = "#ffffff";
+    } else if (ratio < 0.50) {
+        status = "RED";
+        badgeBg = "#ff0000";
+        badgeColor = "#ffffff";
+    } else if (ratio < 0.75) {
+        status = "YELLOW";
+        badgeBg = "#ffff00";
+        badgeColor = "#000000";
+    } else if (ratio <= 1.00) {
+        status = "GREEN";
+        badgeBg = "#86efac";
+        badgeColor = "#065f46";
+    } else {
+        status = "WHITE";
+        badgeBg = "#ffffff";
+        badgeColor = "#0f172a";
+        border = "1.5px solid #cbd5e1";
+    }
+
+    const prevKgs = document.getElementById("modalRygPreviewKgs");
+    const prevRatio = document.getElementById("modalRygPreviewRatio");
+    const prevBadge = document.getElementById("modalRygPreviewBadge");
+
+    if (prevKgs) prevKgs.textContent = `${stockKgs.toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
+    if (prevRatio) prevRatio.textContent = `${ratioPct}%`;
+    if (prevBadge) {
+        prevBadge.textContent = status;
+        prevBadge.style.background = badgeBg;
+        prevBadge.style.color = badgeColor;
+        prevBadge.style.border = border;
+    }
+}
+
+async function saveAdjustStockModal(event) {
+    if (event) event.preventDefault();
+    if (!activeRygEditingItem) return;
+
+    const rmCode = activeRygEditingItem.rm_code;
+    const sheetInput = document.getElementById("modalRygSheetStockInput");
+    const maxQtyInput = document.getElementById("modalRygMaxQtyInput");
+    const saveBtn = document.getElementById("modalRygSaveBtn");
+
+    const newSheets = parseFloat(sheetInput?.value || 0);
+    const newMaxQty = parseFloat(maxQtyInput?.value || 0);
+
+    if (isNaN(newSheets) || newSheets < 0) {
+        alert("Please enter a valid non-negative sheet count.");
+        return;
+    }
+
+    if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Saving...`;
+    }
+
+    try {
+        // 1. Update Sheet Stock
+        const res1 = await fetch("/api/reorder-level/update-stock", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ rm_code: rmCode, sheet_stock: newSheets })
+        });
+        if (!res1.ok) throw new Error("Failed to update sheet stock");
+
+        // 2. Update Max Qty if modified
+        if (!isNaN(newMaxQty) && newMaxQty > 0 && newMaxQty !== activeRygEditingItem.max_qty) {
+            await fetch("/api/reorder-level/update-max-qty", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ rm_code: rmCode, max_qty: newMaxQty })
+            });
+        }
+
+        closeAdjustStockModal();
+        await loadRygData(false);
+
+    } catch (err) {
+        console.error("Failed to save RYG adjustments:", err);
+        alert(`Error saving adjustments: ${err.message || 'Server error'}`);
+    } finally {
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = `<i class="fa-solid fa-check"></i> Save &amp; Recalculate`;
+        }
+    }
+}
+
+// Window bindings for RYG
+window.showReorderLevelView = showReorderLevelView;
+window.switchRygCustomer = switchRygCustomer;
+window.loadRygData = loadRygData;
+window.reloadRygData = reloadRygData;
+window.filterRygByStatus = filterRygByStatus;
+window.handleRygSearch = handleRygSearch;
+window.renderRygTable = renderRygTable;
+window.exportRygCsv = exportRygCsv;
+window.openAdjustStockModal = openAdjustStockModal;
+window.closeAdjustStockModal = closeAdjustStockModal;
+window.updateModalRygPreview = updateModalRygPreview;
+window.saveAdjustStockModal = saveAdjustStockModal;
 
