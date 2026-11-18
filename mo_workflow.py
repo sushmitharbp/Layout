@@ -641,6 +641,12 @@ class MOWorkflowEngine:
                 app_mo_data = {
                     "mo_no": record.get("mo_number"),
                     "rm_code": record.get("rm_erp"),
+                    "grade": record.get("grade", ""),
+                    "thickness": record.get("thickness"),
+                    "length": record.get("length"),
+                    "width": record.get("width"),
+                    "company_id": company_id,
+                    "branch_code": branch_code,
                     "no_of_rm_sheets": record.get("sheets_required", 1),
                     "parts_produced": record.get("parts", []),
                     "parts_qty": record.get("target_qty", 0),
@@ -654,7 +660,7 @@ class MOWorkflowEngine:
                     "created_by": record.get("created_by_role", "shearing"),
                     "audit_trail": record.get("audit_trail", [])
                 }
-                res = clean_db.create_app_mo(app_mo_data)
+                res = clean_db.create_app_mo(app_mo_data, company_id=company_id)
                 if res.get("success"):
                     saved = True
                     print(f"[MO Workflow] Successfully added {record.get('mo_number')} to clean app_mo table")
@@ -714,8 +720,14 @@ class MOWorkflowEngine:
                     except Exception as e:
                         print(f"[MO Workflow] Supabase query error on {tbl}: {e}")
 
-            if not all_mos:
-                all_mos = self._load_local()
+            # Merge with local backup to guarantee no MO is ever lost or hidden
+            local_mos = self._load_local()
+            existing_mo_nums = set((m.get("mo_no") or m.get("mo_number") or "") for m in all_mos)
+            for lm in local_mos:
+                l_num = lm.get("mo_number") or lm.get("mo_no")
+                if l_num and l_num not in existing_mo_nums:
+                    all_mos.append(lm)
+                    existing_mo_nums.add(l_num)
 
             for m in all_mos:
                 self._normalize_mo(m)
@@ -2529,7 +2541,17 @@ class MOWorkflowEngine:
                     "audit_trail": mo.get("audit_trail", []),
                     "updated_at": datetime.utcnow().isoformat()
                 }
-                self.session.patch(url, headers=self._get_supabase_headers(), json=patch_payload, timeout=6)
+                res = self.session.patch(
+                    url, 
+                    headers={**self._get_supabase_headers(), "Prefer": "return=representation"}, 
+                    json=patch_payload, 
+                    timeout=6
+                )
+                # If MO was not present in app_mo, automatically insert it
+                if res.status_code == 200 and not res.json():
+                    import db_clean as clean_db
+                    cid = mo.get("company_id") or "PEPIPL"
+                    clean_db.create_app_mo(mo, company_id=cid)
             except Exception as e:
                 print(f"[MO Workflow] Error updating app_mo: {e}")
         self._save_local(mo)

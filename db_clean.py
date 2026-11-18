@@ -982,6 +982,81 @@ def generate_next_mo_number():
     # Fallback with timestamp
     return f"{prefix}{int(datetime.now().timestamp()) % 10000:04d}"
 
+def ensure_rm_in_db(rm_code: str, grade: str = "", thickness: float = None, length: float = None, width: float = None, company_id: str = "PEPIPL") -> str:
+    """
+    Ensures that the given rm_code satisfies the foreign key constraint app_mo_rm_code_fkey
+    referencing public.rm(rm_code).
+    1. Checks if rm_code exists in rm table.
+    2. If not, checks normalized variants with grade and hyphens (e.g. 'HR-5.8-2500-1250' vs '5.8*2500*1250').
+    3. If still missing, automatically registers the RM row into rm table.
+    Returns the valid rm_code present in public.rm.
+    """
+    if not rm_code or not SUPABASE_URL or not SUPABASE_KEY:
+        return rm_code or ""
+
+    raw_clean = str(rm_code).strip()
+    headers = _get_headers()
+
+    # 1. Exact match in rm table
+    try:
+        url_check = f"{SUPABASE_URL}/rest/v1/rm?rm_code=eq.{raw_clean}&select=rm_code&limit=1"
+        res = requests.get(url_check, headers=headers, timeout=5)
+        if res.status_code == 200 and res.json():
+            return raw_clean
+    except Exception as e:
+        logger.warning(f"Error checking rm existence: {e}")
+
+    # 2. Variant checks (with grade, hyphens)
+    grd = (grade or "").strip().upper()
+    hyph = raw_clean.replace("*", "-")
+    variants = []
+    if grd:
+        variants.append(f"{grd}-{raw_clean}".replace("*", "-"))
+        variants.append(f"{grd}-{raw_clean}")
+    variants.append(hyph)
+    variants.append(raw_clean.replace(" ", ""))
+    variants = [v for v in variants if v and v != raw_clean]
+
+    for v in variants:
+        try:
+            url_v = f"{SUPABASE_URL}/rest/v1/rm?rm_code=eq.{v}&select=rm_code&limit=1"
+            res_v = requests.get(url_v, headers=headers, timeout=5)
+            if res_v.status_code == 200 and res_v.json():
+                logger.info(f"Resolved RM code from '{raw_clean}' to existing '{v}' in database")
+                return v
+        except Exception:
+            pass
+
+    # 3. If not found anywhere, auto-insert into rm table so foreign key is guaranteed
+    chosen_code = variants[0] if (grd and variants and grd in variants[0]) else (f"{grd}-{hyph}" if grd and not hyph.startswith(grd) else hyph)
+    weight = 0.0
+    if thickness and length and width:
+        try:
+            weight = round(float(thickness) * float(length) * float(width) * 0.00000785, 3)
+        except Exception:
+            weight = 0.0
+
+    insert_payload = {
+        "rm_code": chosen_code,
+        "company_id": company_id or "PEPIPL",
+        "available_sheets": 0,
+        "weight_per_sheet": weight
+    }
+
+    try:
+        url_ins = f"{SUPABASE_URL}/rest/v1/rm"
+        res_ins = requests.post(url_ins, headers={**headers, "Prefer": "return=representation"}, json=insert_payload, timeout=6)
+        if res_ins.status_code in (200, 201):
+            logger.info(f"Auto-registered missing RM code '{chosen_code}' in public.rm table")
+            return chosen_code
+        else:
+            logger.warning(f"Failed to auto-register RM code '{chosen_code}': {res_ins.text}")
+    except Exception as e:
+        logger.error(f"Exception auto-registering RM code: {e}")
+
+    return chosen_code
+
+
 def create_app_mo(data, company_id=None):
     """
     Creates an MO record, deducts RM sheets, logs generated endbits, and records audit trail.
@@ -994,7 +1069,17 @@ def create_app_mo(data, company_id=None):
         data["company_id"] = data.get("company_id") or company_id
 
     mo_no = data.get("mo_no") or generate_next_mo_number()
-    rm_code = data.get("rm_code")
+    raw_rm = data.get("rm_code") or ""
+    grade = data.get("grade") or ""
+    thk = data.get("thickness")
+    lng = data.get("length")
+    wdt = data.get("width")
+    target_company = data.get("company_id") or company_id or "PEPIPL"
+
+    # Ensure RM code satisfies foreign key constraint
+    rm_code = ensure_rm_in_db(raw_rm, grade=grade, thickness=thk, length=lng, width=wdt, company_id=target_company)
+    data["rm_code"] = rm_code
+
     no_of_rm_sheets = float(data.get("no_of_rm_sheets", 0))
     parts_produced = data.get("parts_produced", [])
     parts_qty = float(data.get("parts_qty", 0))

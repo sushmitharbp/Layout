@@ -428,9 +428,9 @@
   },
   {
     "mo_number": "MO-2026-9487",
-    "company_id": "PEI2",
-    "branch_code": "PEI2",
-    "branch": "PEI2",
+    "company_id": "PEPIPL",
+    "branch_code": "PEPIPL",
+    "branch": "PEPIPL",
     "part_no": "F4N25413",
     "base_part": "F4N25413",
     "rm_erp": "BSK-5.8-2326-1250",
@@ -662,8 +662,9 @@
     "endbits": [],
     "image_url": null,
     "layout_record": null,
-    "company_id": "PEI2",
-    "branch_code": "PEI2"
+    "company_id": "PEPIPL",
+    "branch_code": "PEPIPL",
+    "branch": "PEPIPL"
   },
   {
     "mo_number": "MO-2026-9974",
@@ -1074,8 +1075,9 @@
         "updated_at": "2026-11-02T09:07:14.750000Z"
       }
     ],
-    "company_id": "PEI2",
-    "branch_code": "PEI2"
+    "company_id": "PEPIPL",
+    "branch_code": "PEPIPL",
+    "branch": "PEPIPL"
   },
   {
     "mo_number": "MO-2026-7002",
