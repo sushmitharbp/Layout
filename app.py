@@ -366,19 +366,35 @@ def search_parts():
     q = request.args.get("q", "").strip()
     if not q:
         return jsonify([])
-    
+
+    results = []
+    seen_part_nos = set()
+
+    def extract_base_part(p_str):
+        if not p_str:
+            return ""
+        pts = re.split(r'[-_\s]*ITEM[-_\s]*', str(p_str), flags=re.IGNORECASE)
+        return pts[0].strip() if pts else str(p_str).split(" - ")[0].strip()
+
     # 1. Prioritize clean 7-table Supabase DB
     if clean_db.SUPABASE_URL and clean_db.SUPABASE_KEY:
         try:
             company_id = request.args.get("company_id") or request.args.get("branch") or session.get("company_id") or "PEPIPL"
             db_parts = clean_db.search_parts(query=q, limit=20, company_id=company_id)
-            results = []
             for p in (db_parts or []):
+                p_no = p.get("part_no")
+                if not p_no:
+                    continue
+                p_norm = re.sub(r'[^A-Z0-9]', '', p_no.upper())
+                if p_norm in seen_part_nos or p_no in seen_part_nos:
+                    continue
+                seen_part_nos.add(p_no)
+                seen_part_nos.add(p_norm)
                 results.append({
-                    "part_no": p.get("part_no"),
-                    "base_part": p.get("part_no", "").split(" - ")[0],
-                    "part_desc": p.get("part_desc", ""),
-                    "grade": p.get("grade", ""),
+                    "part_no": p_no,
+                    "base_part": extract_base_part(p_no),
+                    "part_desc": p.get("part_desc") or "",
+                    "grade": p.get("grade") or "",
                     "thickness": p.get("thickness", ""),
                     "length": p.get("length", ""),
                     "width": p.get("width", ""),
@@ -387,30 +403,46 @@ def search_parts():
                     "rm_count": 1,
                     "standardized_rm": p.get("standard_rm")
                 })
-            return jsonify(results)
         except Exception as e:
             print("clean_db.search_parts error:", e)
 
+    # 2. Complement with engineering CAD layouts from PARTS & ALL_RECORDS (supports alphanumeric & formatted variants)
     q_norm = normalize_key(q)
-    results = []
-    seen = set()
+    q_clean = re.sub(r'[^A-Z0-9]', '', q.upper())
+    q_variants = {q_norm, q_clean}
+    if "0" in q_clean:
+        q_variants.add(q_clean.replace("0", "O"))
+    if "O" in q_clean:
+        q_variants.add(q_clean.replace("O", "0"))
 
-    # Fallback to local store ONLY if Supabase is offline/not configured
-    if not (clean_db.SUPABASE_URL and clean_db.SUPABASE_KEY):
-        for p_no in PARTS:
-            if q_norm in normalize_key(p_no):
-                if p_no not in seen:
-                    seen.add(p_no)
-                    records = PARTS[p_no]["records"]
-                    results.append({
-                        "part_no": p_no,
-                        "base_part": PARTS[p_no]["base_part"],
-                        "rm_count": len(records),
-                        "standardized_rm": next((r["rm_erp"] for r in records if "standardized" in r["status"].lower()), records[0]["rm_erp"] if records else None)
-                    })
-            if len(results) >= 10:
-                break
-            
+    for p_no, p_data in PARTS.items():
+        if len(results) >= 30:
+            break
+        p_no_norm = normalize_key(p_no)
+        p_no_clean = re.sub(r'[^A-Z0-9]', '', p_no.upper())
+        matches = any(v and (v in p_no_norm or v in p_no_clean or p_no_norm in v or p_no_clean in v) for v in q_variants)
+        if matches:
+            if p_no not in seen_part_nos and p_no_clean not in seen_part_nos:
+                seen_part_nos.add(p_no)
+                seen_part_nos.add(p_no_clean)
+                records = p_data.get("records", [])
+                r0 = records[0] if records else {}
+                p1 = r0.get("part1") or {}
+                bs = p1.get("blank_size") or {}
+                results.append({
+                    "part_no": p_no,
+                    "base_part": p_data.get("base_part") or extract_base_part(p_no),
+                    "part_desc": r0.get("part_desc") or f"{p_no} (Standard CAD Layout)",
+                    "grade": r0.get("grade") or "",
+                    "thickness": bs.get("thickness") or r0.get("thickness", ""),
+                    "length": bs.get("length") or r0.get("length", ""),
+                    "width": bs.get("width") or r0.get("width", ""),
+                    "offtake": p1.get("blank_qty") or r0.get("blank_qty", 1),
+                    "strip_per_blank_qty": p1.get("strip_qty") or r0.get("strip_qty", 1),
+                    "rm_count": len(records),
+                    "standardized_rm": next((r["rm_erp"] for r in records if "standardized" in str(r.get("status", "")).lower()), records[0]["rm_erp"] if records else None)
+                })
+
     return jsonify(results)
 
 
@@ -513,24 +545,26 @@ def get_part_details(part_no):
             matching_rms = clean_db.get_rms_by_spec(grade=db_part.get("grade"), thickness=db_part.get("thickness"), branch=branch, company_id=company_id)
             mrp_rec = clean_db.get_mrp_for_part(target_part_no, company_id=company_id) or clean_db.get_mrp_for_part(part_clean, company_id=company_id) or {}
             
-            # For PEPIPL: check if this part has engineering CAD layout records in layout_records / PARTS!
+            # Check if this part has engineering CAD layout records in layout_records / PARTS
             records = []
-            if company_id == "PEPIPL":
-                layout_recs = get_layout_records_for(part_clean) or get_layout_records_for(target_part_no)
-                for lr in layout_recs:
-                    lr_copy = dict(lr)
-                    # Match available stock from matching_rms if available
-                    rm_dim = lr.get("rm_erp", "")
-                    rm_match = next((rm for rm in matching_rms if rm_spec_matches_dim(rm_dim, rm)), None)
-                    if rm_match:
-                        lr_copy["available_sheets"] = rm_match.get("available_sheets", 0)
-                        lr_copy["weight_per_sheet"] = rm_match.get("weight_per_sheet", 0)
-                        # Ensure grade from matching RM is present
-                        if not lr_copy.get("grade"):
-                            lr_copy["grade"] = rm_match.get("grade")
-                    records.append(lr_copy)
+            layout_recs = get_layout_records_for(part_clean) or get_layout_records_for(target_part_no)
+            for lr in layout_recs:
+                lr_copy = dict(lr)
+                # Match available stock from matching_rms if available
+                rm_dim = lr.get("rm_erp", "")
+                rm_match = next((rm for rm in matching_rms if rm_spec_matches_dim(rm_dim, rm)), None)
+                if rm_match:
+                    lr_copy["available_sheets"] = rm_match.get("available_sheets", 0)
+                    lr_copy["weight_per_sheet"] = rm_match.get("weight_per_sheet", 0)
+                    if not lr_copy.get("grade"):
+                        lr_copy["grade"] = rm_match.get("grade")
+                records.append(lr_copy)
 
-            # If no layout records found from layout_records (e.g. Unit 2 PEI2 or custom parts), construct from matching_rms
+            # If no layout records found from layout_records (e.g. custom parts), construct from matching_rms
+            clean_base = re.split(r'[-_\s]*ITEM[-_\s]*', str(db_part.get("part_no", "")), flags=re.IGNORECASE)[0].strip()
+            if not clean_base:
+                clean_base = str(db_part.get("part_no", "")).split(" - ")[0].strip()
+
             if not records:
                 for rm in matching_rms:
                     rm_grade = rm.get("grade") or db_part.get("grade") or "YS"
@@ -548,7 +582,7 @@ def get_part_details(part_no):
                         "weight_per_sheet": rm.get("weight_per_sheet", 0),
                         "status": "Standardized" if rm.get("rm_code") == db_part.get("standard_rm") else "Active RM Store",
                         "part_no": db_part.get("part_no"),
-                        "base_part": db_part.get("part_no", "").split(" - ")[0],
+                        "base_part": clean_base,
                         "strip_qty": db_part.get("strip_per_blank_qty", 1),
                         "blank_qty": db_part.get("offtake", 1),
                         "part1": {
@@ -568,9 +602,9 @@ def get_part_details(part_no):
                         }
                     })
             return jsonify({
-                "base_part": db_part.get("part_no", "").split(" - ")[0],
+                "base_part": clean_base,
                 "part_no": db_part.get("part_no"),
-                "part_desc": db_part.get("part_desc"),
+                "part_desc": db_part.get("part_desc") or "",
                 "grade": db_part.get("grade"),
                 "thickness": db_part.get("thickness"),
                 "length": db_part.get("length"),
@@ -603,6 +637,14 @@ def get_part_details(part_no):
             matches = find_parts_by_query(part_clean)
             if matches and matches[0] in PARTS:
                 target_part_data = dict(PARTS[matches[0]])
+            else:
+                recs = get_layout_records_for(part_clean)
+                if recs:
+                    for p_no, p_data in PARTS.items():
+                        if p_data.get("records") == recs:
+                            target_part_data = dict(p_data)
+                            target_part_data["part_no"] = p_no
+                            break
 
     if target_part_data:
         mrp_rec = clean_db.get_mrp_for_part(part_clean)

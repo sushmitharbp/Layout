@@ -1133,10 +1133,10 @@ function searchPartsForModal(query) {
                             const offtakeStr = r.offtake !== undefined ? `Offtake: ${r.offtake}` : '';
                             const badgeDetails = [r.grade, sizeStr, offtakeStr].filter(Boolean).join(" • ");
                             return `
-                                <div class="part-dropdown-item" onclick="selectPartForModal('${escapeHtml(r.part_no)}')">
+                                <div class="part-dropdown-item" onmousedown="event.preventDefault(); selectPartForModal('${escapeHtml(r.part_no)}')">
                                     <div style="flex: 1;">
-                                        <strong>${escapeHtml(r.part_no)}</strong>
-                                        ${r.part_desc ? `<small class="text-muted" style="display: block; font-size: 0.75rem;">${escapeHtml(r.part_desc)}</small>` : ''}
+                                        <strong style="color: #0f172a; font-size: 0.88rem;">${escapeHtml(r.part_no)}</strong>
+                                        ${r.part_desc ? `<small style="display: block; font-size: 0.76rem; color: #0284c7; font-weight: 600; margin-top: 1px;">${escapeHtml(r.part_desc)}</small>` : ''}
                                     </div>
                                     <span class="badge" style="background: #f1f5f9; color: #0369a1; border: 1px solid #cbd5e1; font-weight: 600; font-size: 0.75rem;">${escapeHtml(badgeDetails || r.base_part)}</span>
                                 </div>
@@ -1165,6 +1165,9 @@ async function selectPartForModal(partNo) {
         const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
         if (res.ok) {
             selectedPartData = await res.json();
+            if (input && selectedPartData.part_no) {
+                input.value = selectedPartData.part_no;
+            }
             populatePartTechnicalFields(selectedPartData);
 
             // Populate the 3 MRP Cards from clean 7-table Supabase DB
@@ -1239,6 +1242,19 @@ async function selectPartForModal(partNo) {
 
 function populatePartTechnicalFields(partData) {
     if (!partData) return;
+
+    const partNoInput = document.getElementById("partNoInput");
+    if (partNoInput && partData.part_no) {
+        partNoInput.value = partData.part_no;
+    }
+
+    const badgeWrap = document.getElementById("partDescBadgeWrap");
+    const badgeText = document.getElementById("partDescBadgeText");
+    if (badgeWrap && badgeText) {
+        const desc = partData.part_desc || "";
+        badgeText.textContent = desc ? `${partData.part_no} • ${desc}` : partData.part_no;
+        badgeWrap.style.display = "inline-flex";
+    }
 
     // Cache the selected part's real blank specifications
     window._activeBasePartData = {
