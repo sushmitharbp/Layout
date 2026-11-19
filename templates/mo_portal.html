@@ -651,9 +651,6 @@
                             <span class="header-count-pill" style="background: #f1f5f9; color: #334155; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem;">
                                 <i class="fa-solid fa-industry"></i> Unit 1 (PEPIPL)
                             </span>
-                            <span class="header-count-pill" id="rygCurrentCustomerBadge" style="background: #e0f2fe; color: #0284c7; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem;">
-                                Ashok Leyland (AL) • 36 Standards
-                            </span>
                         </div>
                         <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #64748b;">
                             Dynamic sheet counts fetched from live ERP &amp; store stock • Automatic ratio % and RYG color code classification
@@ -855,13 +852,8 @@
                             </label>
                             <div class="part-search-input-wrap">
                                 <i class="fa-solid fa-barcode"></i>
-                                <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault(); if(this.value.trim().length >= 2) selectPartForModal(this.value.trim());}">
+                                <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)" onchange="if(this.value.trim().length >= 2 && (!selectedPartData || selectedPartData.part_no !== this.value.trim())) selectPartForModal(this.value.trim());" onblur="setTimeout(() => { if(this.value.trim().length >= 2 && (!selectedPartData || selectedPartData.part_no !== this.value.trim())) selectPartForModal(this.value.trim()); }, 250);" onkeydown="if(event.key==='Enter'){event.preventDefault(); if(this.value.trim().length >= 2) selectPartForModal(this.value.trim());}">
                                 <div class="part-dropdown-results" id="partDropdownResults" style="display: none;"></div>
-                            </div>
-                            <div id="partDescBadgeWrap" style="display: none; margin-top: 5px; align-items: center; gap: 6px;">
-                                <span style="font-size: 0.76rem; font-weight: 700; color: #0369a1; background: #e0f2fe; padding: 3px 9px; border-radius: 5px; display: inline-flex; align-items: center; gap: 5px; border: 1px solid #bae6fd; max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                                    <i class="fa-solid fa-circle-check" style="color: #0284c7;"></i> <span id="partDescBadgeText"></span>
-                                </span>
                             </div>
                             <input type="hidden" id="basePartInput" name="base_part">
                         </div>
@@ -2575,7 +2567,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=126"></script>
+    <script src="/static/mo_app.js?v=131"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
     <script src="/static/mo_create_v2.js?v=3"></script>
 </body>

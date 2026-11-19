@@ -1,5 +1,23 @@
 [
   {
+    "id": "notif_1795072030659_6dbeef",
+    "target_role": "erp",
+    "type": "MO_CREATED",
+    "mo_number": "MO-2026-TEST99",
+    "title": "New MO MO-2026-TEST99 Received",
+    "message": "New Material Order MO-2026-TEST99 (B1049415ITEM01) created by Shearing. Assigned to ERP Team for clearance.",
+    "sender_role": "shearing",
+    "sender_name": "Shearing (Production) Team",
+    "priority": "normal",
+    "created_at": "2026-11-19T07:07:10.659296Z",
+    "read_by": [],
+    "dismissed_by": [],
+    "extra_data": {
+      "part_no": "B1049415ITEM01",
+      "stage": "ERP"
+    }
+  },
+  {
     "id": "notif_1794815733557_43890c",
     "target_role": "erp",
     "type": "MO_CREATED",

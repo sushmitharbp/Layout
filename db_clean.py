@@ -402,6 +402,30 @@ def get_rm(rm_code, branch=None, company_id=None):
     rows = _safe_supabase_get(url, company_id=target_tenant)
     if rows:
         return parse_rm_specs(rows[0])
+
+    # 2b. Case-insensitive or wildcard match
+    clean_rm = rm_code.replace("*", "-").replace(" ", "")
+    url_ilike = f"{SUPABASE_URL}/rest/v1/rm?rm_code=ilike.*{clean_rm}*&limit=5"
+    rows_ilike = _safe_supabase_get(url_ilike, company_id=target_tenant)
+    if rows_ilike:
+        return parse_rm_specs(rows_ilike[0])
+
+    # 2c. Fallback by dimension parsing: e.g. "3.8*2500*1500" or "BSK-3.8-2500-1500"
+    nums = [float(x) for x in re.findall(r'[\d\.]+', rm_code) if float(x) > 0]
+    if len(nums) >= 3:
+        thk, lng, wid = nums[0], nums[1], nums[2]
+        grd = extract_grade_from_text(rm_code) if "extract_grade_from_text" in globals() else ""
+        cands = get_rms_by_spec(grade=grd, thickness=thk, branch=branch, company_id=company_id)
+        if not cands and grd:
+            cands = get_rms_by_spec(grade=None, thickness=thk, branch=branch, company_id=company_id)
+        for c in cands:
+            c_len = float(c.get("length") or c.get("sheet_length") or 0)
+            c_wid = float(c.get("width") or c.get("sheet_width") or 0)
+            if (abs(c_len - lng) < 1.0 and abs(c_wid - wid) < 1.0) or (abs(c_len - wid) < 1.0 and abs(c_wid - lng) < 1.0):
+                return c
+        if cands:
+            return cands[0]
+
     return None
 
 def update_rm_sheets(rm_code, delta_sheets):
@@ -1080,9 +1104,9 @@ def create_app_mo(data, company_id=None):
     rm_code = ensure_rm_in_db(raw_rm, grade=grade, thickness=thk, length=lng, width=wdt, company_id=target_company)
     data["rm_code"] = rm_code
 
-    no_of_rm_sheets = float(data.get("no_of_rm_sheets", 0))
-    parts_produced = data.get("parts_produced", [])
-    parts_qty = float(data.get("parts_qty", 0))
+    no_of_rm_sheets = float(data.get("no_of_rm_sheets") or 0)
+    parts_produced = data.get("parts_produced") or []
+    parts_qty = float(data.get("parts_qty") or 0)
 
     # Ensure parts_qty represents the complete sum of all parts produced (not just base part)
     if isinstance(parts_produced, str):
@@ -1102,11 +1126,11 @@ def create_app_mo(data, company_id=None):
     if sum_from_parts > 0 and (parts_qty == 0 or sum_from_parts != parts_qty):
         parts_qty = sum_from_parts
 
-    endbits_desc = data.get("endbits", "")
-    endbit_weight = float(data.get("endbit_weight", 0))
-    yield_pct = float(data.get("yield_pct", 0))
-    remarks = data.get("remarks", "")
-    created_by = data.get("created_by", "Shearing Team")
+    endbits_desc = data.get("endbits") or ""
+    endbit_weight = float(data.get("endbit_weight") or 0)
+    yield_pct = float(data.get("yield_pct") or 0)
+    remarks = data.get("remarks") or ""
+    created_by = data.get("created_by") or "Shearing Team"
     row_id = data.get("id") or get_next_id("app_mo")
 
     audit = data.get("audit_trail") or [{
@@ -1232,7 +1256,7 @@ def create_endbit_mo(data, company_id=None):
     
     eb_mo_no = data.get("eb_mo_no") or f"EB-MO-{int(datetime.now().timestamp()) % 10000:04d}"
     endbit_id = data.get("endbit_id")
-    no_of_eb_sheets = float(data.get("no_of_eb_sheets", 0))
+    no_of_eb_sheets = float(data.get("no_of_eb_sheets") or 0)
     row_id = data.get("id") or get_next_id("endbit_mo")
     c_id = data.get("company_id") or company_id or "PEI2"
 
@@ -1243,10 +1267,10 @@ def create_endbit_mo(data, company_id=None):
         "endbit_id": endbit_id,
         "endbit_code": data.get("endbit_code", ""),
         "no_of_eb_sheets": no_of_eb_sheets,
-        "parts_produced": data.get("parts_produced", []),
-        "parts_qty": float(data.get("parts_qty", 0)),
-        "scrap_weight": float(data.get("scrap_weight", 0)),
-        "yield_pct": float(data.get("yield_pct", 0)),
+        "parts_produced": data.get("parts_produced") or [],
+        "parts_qty": float(data.get("parts_qty") or 0),
+        "scrap_weight": float(data.get("scrap_weight") or 0),
+        "yield_pct": float(data.get("yield_pct") or 0),
         "current_stage": data.get("current_stage", "KRYSALIS"),
         "status": data.get("status", "PENDING"),
         "remarks": data.get("remarks", "")

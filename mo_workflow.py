@@ -9,6 +9,7 @@ import re
 import json
 import time
 import math
+import concurrent.futures
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
@@ -647,12 +648,12 @@ class MOWorkflowEngine:
                     "width": record.get("width"),
                     "company_id": company_id,
                     "branch_code": branch_code,
-                    "no_of_rm_sheets": record.get("sheets_required", 1),
-                    "parts_produced": record.get("parts", []),
-                    "parts_qty": record.get("target_qty", 0),
-                    "endbits": str(record.get("endbits", "")),
-                    "endbit_weight": record.get("endbit_weight", 0),
-                    "yield_pct": record.get("yield_pct", 0),
+                    "no_of_rm_sheets": record.get("sheets_required") or 1,
+                    "parts_produced": record.get("parts") or [],
+                    "parts_qty": record.get("target_qty") or 0,
+                    "endbits": str(record.get("endbits") or ""),
+                    "endbit_weight": record.get("endbit_weight") or 0,
+                    "yield_pct": record.get("yield_pct") or 0,
                     "workflow_path": record.get("workflow_path", "DIRECT_ERP"),
                     "current_stage": record.get("current_stage", "KRYSALIS"),
                     "status": record.get("status", "PENDING_KRYSALIS"),
@@ -720,14 +721,9 @@ class MOWorkflowEngine:
                     except Exception as e:
                         print(f"[MO Workflow] Supabase query error on {tbl}: {e}")
 
-            # Merge with local backup to guarantee no MO is ever lost or hidden
-            local_mos = self._load_local()
-            existing_mo_nums = set((m.get("mo_no") or m.get("mo_number") or "") for m in all_mos)
-            for lm in local_mos:
-                l_num = lm.get("mo_number") or lm.get("mo_no")
-                if l_num and l_num not in existing_mo_nums:
-                    all_mos.append(lm)
-                    existing_mo_nums.add(l_num)
+            # Supabase PostgreSQL is the primary database. Fall back to local backup only if Supabase is offline
+            if not all_mos:
+                all_mos = self._load_local()
 
             for m in all_mos:
                 self._normalize_mo(m)
@@ -1512,12 +1508,6 @@ class MOWorkflowEngine:
             processed_endbits.append(eb_record)
 
         if processed_endbits:
-            all_ebs = self._load_endbits_local()
-            existing_ids = {e.get("endbit_id") for e in processed_endbits}
-            all_ebs = [e for e in all_ebs if e.get("endbit_id") not in existing_ids]
-            all_ebs = processed_endbits + all_ebs
-            self._save_endbits_local(all_ebs)
-
             if self.use_supabase:
                 import db_clean as clean_db
                 for eb_r in processed_endbits:
@@ -1528,6 +1518,12 @@ class MOWorkflowEngine:
                         clean_db.log_endbit_batch(mo_id, dim_desc, qty, wt)
                     except Exception as e:
                         print(f"[MO Workflow] Supabase endbit log error: {e}")
+            else:
+                all_ebs = self._load_endbits_local()
+                existing_ids = {e.get("endbit_id") for e in processed_endbits}
+                all_ebs = [e for e in all_ebs if e.get("endbit_id") not in existing_ids]
+                all_ebs = processed_endbits + all_ebs
+                self._save_endbits_local(all_ebs)
 
         return processed_endbits
 
@@ -2137,22 +2133,28 @@ class MOWorkflowEngine:
         # Save to local store
         self._save_local(mo_record)
 
-        # Save to Supabase material_orders
+        # Save to Supabase endbit_mo / app_mo
         if self.use_supabase:
             try:
-                clean_payload = self._sanitize_mo_for_db(mo_record)
-                res = requests.post(
-                    f"{SUPABASE_URL}/rest/v1/material_orders",
-                    headers=self._get_supabase_headers(),
-                    json=clean_payload,
-                    timeout=10
-                )
-                if res.status_code in (200, 201):
-                    print(f"[Create MO From Endbit] Successfully added {mo_record.get('mo_number')} to Supabase material_orders")
-                else:
-                    print(f"[Create MO From Endbit] Supabase insert returned {res.status_code}: {res.text}")
+                import db_clean as clean_db
+                eb_company = mo_record.get("company_id") or "PEPIPL"
+                eb_payload = {
+                    "eb_mo_no": mo_record.get("mo_number"),
+                    "endbit_id": mo_record.get("endbit_id"),
+                    "endbit_code": mo_record.get("rm_erp") or mo_record.get("endbit_code") or "",
+                    "no_of_eb_sheets": mo_record.get("sheets_required") or 1,
+                    "parts_produced": mo_record.get("parts") or [],
+                    "parts_qty": mo_record.get("target_qty") or 0,
+                    "scrap_weight": mo_record.get("scrap_weight") or 0,
+                    "yield_pct": mo_record.get("yield_pct") or 0,
+                    "current_stage": mo_record.get("current_stage") or "ERP",
+                    "status": mo_record.get("status") or "PENDING_ERP",
+                    "remarks": mo_record.get("notes") or "",
+                    "company_id": eb_company
+                }
+                clean_db.create_endbit_mo(eb_payload, company_id=eb_company)
             except Exception as e:
-                print(f"[Create MO From Endbit] Error inserting Supabase material_orders: {e}")
+                print(f"[Create MO From Endbit] Error inserting Supabase endbit_mo: {e}")
 
         # Always keep local backup store synchronized
         self._save_local(mo_record)
@@ -2198,24 +2200,38 @@ class MOWorkflowEngine:
         }
 
     def get_db_tables_overview(self):
-        """Returns metadata and exact real-time row counts for all database tables (cached 60s)"""
+        """Returns metadata and exact real-time row counts for all database tables (cached 120s, parallel fetch)"""
         now = time.time()
-        if hasattr(self, "_db_tables_cache") and (now - getattr(self, "_db_tables_cache_time", 0)) < 60.0:
+        if hasattr(self, "_db_tables_cache") and (now - getattr(self, "_db_tables_cache_time", 0)) < 120.0:
             return self._db_tables_cache
 
-        tables = []
         headers = {**self._get_supabase_headers(), "Range": "0-0", "Prefer": "count=exact"}
-        for tbl_id, cfg in DB_TABLES_CONFIG.items():
-            count = 0
-            if self.use_supabase:
+
+        def fetch_count(tbl_id):
+            if not self.use_supabase:
+                return tbl_id, 0
+            try:
+                res = self.session.get(f"{SUPABASE_URL}/rest/v1/{tbl_id}?limit=1", headers=headers, timeout=2.0)
+                cr = res.headers.get("content-range")
+                if cr and "/" in cr:
+                    part = cr.split("/")[1]
+                    return tbl_id, int(part) if part.isdigit() else 0
+            except Exception:
+                pass
+            return tbl_id, 0
+
+        counts = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(DB_TABLES_CONFIG))) as executor:
+            future_to_tbl = {executor.submit(fetch_count, tid): tid for tid in DB_TABLES_CONFIG.keys()}
+            for f in concurrent.futures.as_completed(future_to_tbl):
                 try:
-                    res = self.session.get(f"{SUPABASE_URL}/rest/v1/{tbl_id}?limit=1", headers=headers, timeout=1.0)
-                    cr = res.headers.get("content-range")
-                    if cr and "/" in cr:
-                        part = cr.split("/")[1]
-                        count = int(part) if part.isdigit() else 0
+                    t_id, c = f.result()
+                    counts[t_id] = c
                 except Exception:
                     pass
+
+        tables = []
+        for tbl_id, cfg in DB_TABLES_CONFIG.items():
             tables.append({
                 "id": tbl_id,
                 "title": cfg["title"],
@@ -2223,7 +2239,7 @@ class MOWorkflowEngine:
                 "category": cfg["category"],
                 "badge_class": cfg["badge_class"],
                 "description": cfg["description"],
-                "count": count
+                "count": counts.get(tbl_id, 0)
             })
         self._db_tables_cache = tables
         self._db_tables_cache_time = now
@@ -2516,6 +2532,8 @@ class MOWorkflowEngine:
             return []
 
     def _save_local(self, record):
+        if self.use_supabase:
+            return  # Supabase is the sole source of truth; avoids disk bloat & redundant I/O
         mos = self._load_local()
         # check duplicate
         updated = False
@@ -2554,5 +2572,6 @@ class MOWorkflowEngine:
                     clean_db.create_app_mo(mo, company_id=cid)
             except Exception as e:
                 print(f"[MO Workflow] Error updating app_mo: {e}")
-        self._save_local(mo)
+        else:
+            self._save_local(mo)
 

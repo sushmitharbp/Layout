@@ -544,6 +544,25 @@ def get_part_details(part_no):
             target_part_no = db_part.get("part_no") or part_clean
             matching_rms = clean_db.get_rms_by_spec(grade=db_part.get("grade"), thickness=db_part.get("thickness"), branch=branch, company_id=company_id)
             mrp_rec = clean_db.get_mrp_for_part(target_part_no, company_id=company_id) or clean_db.get_mrp_for_part(part_clean, company_id=company_id) or {}
+            if not mrp_rec or not mrp_rec.get("monthly_schedule"):
+                try:
+                    erp_mrp = ERP_STOCK_SERVICE.get_mrp_monthly_schedule(target_part_no) or ERP_STOCK_SERVICE.get_mrp_monthly_schedule(part_clean)
+                    if erp_mrp:
+                        chosen = erp_mrp[0] if isinstance(erp_mrp, list) else erp_mrp
+                        ms = chosen.get("monthly_schedule") or chosen
+                        sched = float(ms.get("monthly_total") or ms.get("schedule_qty") or chosen.get("schedule_qty") or chosen.get("total_qty") or 0)
+                        stk = float(ms.get("fg_pc_stock") or chosen.get("inhouse_erp_qty") or chosen.get("current_stock") or 0)
+                        mo_prod = clean_db.get_produced_qty_from_app_mo(target_part_no, company_id=company_id)
+                        eff_stk = stk + mo_prod
+                        mrp_rec = {
+                            "monthly_schedule": int(sched),
+                            "initial_stock": int(stk),
+                            "current_stock": int(eff_stk),
+                            "app_mo_produced": int(mo_prod),
+                            "qty_to_produce": max(0, int(sched - eff_stk))
+                        }
+                except Exception as e:
+                    pass
             
             # Check if this part has engineering CAD layout records in layout_records / PARTS
             records = []
@@ -656,14 +675,19 @@ def get_part_details(part_no):
             }
         else:
             try:
-                mrp_data = ERP_STOCK_SERVICE.get_mrp_monthly_schedule(part_clean) or {}
-                sched = mrp_data.get("monthly_total", 0) or mrp_data.get("monthly_schedule", 0) or 0
-                stk = mrp_data.get("inhouse_stock", 0) or mrp_data.get("current_stock", 0) or 0
-                target_part_data["mrp"] = {
-                    "monthly_schedule": sched,
-                    "current_stock": stk,
-                    "qty_to_produce": max(0, sched - stk) if sched else 0
-                }
+                erp_mrp = ERP_STOCK_SERVICE.get_mrp_monthly_schedule(part_clean) or []
+                if erp_mrp:
+                    chosen = erp_mrp[0] if isinstance(erp_mrp, list) else erp_mrp
+                    ms = chosen.get("monthly_schedule") or chosen
+                    sched = float(ms.get("monthly_total") or ms.get("schedule_qty") or chosen.get("schedule_qty") or chosen.get("total_qty") or 0)
+                    stk = float(ms.get("fg_pc_stock") or chosen.get("inhouse_erp_qty") or chosen.get("current_stock") or 0)
+                    target_part_data["mrp"] = {
+                        "monthly_schedule": int(sched),
+                        "current_stock": int(stk),
+                        "qty_to_produce": max(0, int(sched - stk))
+                    }
+                else:
+                    target_part_data["mrp"] = {"monthly_schedule": 0, "current_stock": 0, "qty_to_produce": 0}
             except Exception:
                 target_part_data["mrp"] = {"monthly_schedule": 0, "current_stock": 0, "qty_to_produce": 0}
         return jsonify(target_part_data)
@@ -1140,8 +1164,9 @@ def get_part_intelligence(part_no):
         if ep and ep != part_clean and ep not in all_req_parts:
             all_req_parts.append(ep)
 
-    company_id = session.get("company_id") or request.args.get("company_id") or "PEI2"
+    company_id = session.get("company_id") or request.args.get("company_id") or request.args.get("branch") or "PEPIPL"
     branch = request.args.get("branch") or company_id
+    sheets_needed = float(request.args.get("sheets") or 1)
 
     # 1. Prioritize clean 7-table Supabase DB (with fallback to ERP service for additional parts)
     try:
@@ -1149,7 +1174,14 @@ def get_part_intelligence(part_no):
         if db_part:
             target_rm = rm_code or db_part.get("standard_rm")
             rm_rec = clean_db.get_rm(target_rm, branch=branch, company_id=company_id) if target_rm else None
-            rm_sheets = rm_rec.get("available_sheets", 0) if rm_rec else 0
+            if not rm_rec and target_rm:
+                grd = request.args.get("grade") or db_part.get("grade")
+                thk = float(request.args.get("thickness") or db_part.get("thickness") or 0)
+                if thk:
+                    cands = clean_db.get_rms_by_spec(grade=grd, thickness=thk, branch=branch, company_id=company_id)
+                    if cands:
+                        rm_rec = cands[0]
+            rm_sheets = float(rm_rec.get("available_sheets", 0) if rm_rec else 0)
 
             parts_planning_list = []
             all_mos_list = []
@@ -1249,8 +1281,12 @@ def get_part_intelligence(part_no):
                 },
                 "previous_mos": all_mos_list,
                 "stock_feasibility": {
-                    "feasible": rm_sheets > 0,
-                    "available_sheets": rm_sheets
+                    "sheets_needed": float(sheets_needed),
+                    "sheets_onhand": float(rm_sheets),
+                    "is_sufficient": rm_sheets >= sheets_needed,
+                    "shortfall": max(0.0, float(sheets_needed) - float(rm_sheets)),
+                    "feasible": rm_sheets >= sheets_needed,
+                    "available_sheets": float(rm_sheets)
                 }
             })
     except Exception as e:

@@ -65,12 +65,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Prefetch RYG reorder data in background for instant navigation
+    // Lazy prefetch RYG reorder data in background after initial page render settles
     setTimeout(() => {
         if (typeof loadRygData === "function") {
             loadRygData(true);
         }
-    }, 600);
+    }, 3500);
 });
 
 // Role Management
@@ -959,6 +959,16 @@ function openCreateModal() {
     const modal = document.getElementById("createMoModal");
     const form = document.getElementById("createMoForm");
     if (form) form.reset();
+
+    // Reset Part search & preview badge
+    const partNoInput = document.getElementById("partNoInput");
+    if (partNoInput) partNoInput.value = "";
+    const badgeWrap = document.getElementById("partDescBadgeWrap");
+    const badgeText = document.getElementById("partDescBadgeText");
+    if (badgeWrap) badgeWrap.style.display = "none";
+    if (badgeText) badgeText.textContent = "";
+    const partDropdown = document.getElementById("partDropdownResults");
+    if (partDropdown) partDropdown.style.display = "none";
     
     // Auto-generate sample MO number & enforce readonly
     const randomMoNum = `MO-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -1104,6 +1114,12 @@ function closeCreateModal() {
     if (ebBanner) ebBanner.style.display = "none";
     const hiddenJson = document.getElementById("moEndbitsJson");
     if (hiddenJson) hiddenJson.value = "[]";
+    const badgeWrap = document.getElementById("partDescBadgeWrap");
+    const badgeText = document.getElementById("partDescBadgeText");
+    if (badgeWrap) badgeWrap.style.display = "none";
+    if (badgeText) badgeText.textContent = "";
+    const partDropdown = document.getElementById("partDropdownResults");
+    if (partDropdown) partDropdown.style.display = "none";
     hideRmAgentSuggestions();
 }
 
@@ -1112,7 +1128,20 @@ let searchDebounceTimer;
 function searchPartsForModal(query) {
     clearTimeout(searchDebounceTimer);
     const dropdown = document.getElementById("partDropdownResults");
-    if (!query || query.length < 2) {
+    const badgeWrap = document.getElementById("partDescBadgeWrap");
+    const badgeText = document.getElementById("partDescBadgeText");
+
+    // Hide badge if input was cleared or user changed the typed text
+    if (!query || query.trim().length === 0) {
+        if (dropdown) dropdown.style.display = "none";
+        if (badgeWrap) badgeWrap.style.display = "none";
+        if (badgeText) badgeText.textContent = "";
+        return;
+    }
+    if (badgeWrap && selectedPartData && selectedPartData.part_no !== query.trim()) {
+        badgeWrap.style.display = "none";
+    }
+    if (query.trim().length < 2) {
         if (dropdown) dropdown.style.display = "none";
         return;
     }
@@ -2158,12 +2187,27 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
     if (feasibility && typeof feasibility.is_sufficient !== "undefined") {
         isStockSufficient = !!feasibility.is_sufficient;
         onhandSheets = feasibility.sheets_onhand;
+    } else if (currentIntelData && currentIntelData.stock_feasibility && typeof currentIntelData.stock_feasibility.is_sufficient !== "undefined") {
+        isStockSufficient = !!currentIntelData.stock_feasibility.is_sufficient;
+        onhandSheets = currentIntelData.stock_feasibility.sheets_onhand;
     } else if (currentIntelData && currentIntelData.rm_opening_stock) {
         onhandSheets = currentIntelData.rm_opening_stock.onhand_stock || 0;
         isStockSufficient = onhandSheets >= sheetsNeeded;
-    } else if (currentIntelData && currentIntelData.stock_feasibility) {
-        isStockSufficient = !!currentIntelData.stock_feasibility.is_sufficient;
-        onhandSheets = currentIntelData.stock_feasibility.sheets_onhand;
+    }
+
+    // Double check with quick stock display and layout record available_sheets
+    if (!isStockSufficient) {
+        const quickStockVal = parseFloat((document.getElementById("rmStockBoxVal")?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
+        if (quickStockVal >= sheetsNeeded) {
+            isStockSufficient = true;
+            onhandSheets = quickStockVal;
+        } else if (layoutRecord && layoutRecord.available_sheets !== undefined) {
+            const recStock = parseFloat(layoutRecord.available_sheets) || 0;
+            if (recStock >= sheetsNeeded) {
+                isStockSufficient = true;
+                onhandSheets = recStock;
+            }
+        }
     }
 
     if (stockHidden) {
@@ -3811,18 +3855,18 @@ async function fetchAndDisplayIntelligence(partNo, rmCode, grade, thickness, len
     }
 
     try {
-        const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
+        const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+        const cid = (activeUnit && activeUnit !== "ALL") ? activeUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
         const params = new URLSearchParams({
             rm: rmCode || "",
             grade: grade || "",
             thickness: thickness || "",
             length: length || "",
             width: width || "",
-            sheets: sheetsNeeded || 1
+            sheets: sheetsNeeded || 1,
+            company_id: cid,
+            branch: cid
         });
-        if (activeUnit && activeUnit !== "ALL") {
-            params.set("branch", activeUnit);
-        }
         if (allLayoutParts && allLayoutParts.length > 0) {
             allLayoutParts.forEach(p => {
                 if (p) params.append("parts", p);
