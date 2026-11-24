@@ -162,9 +162,11 @@ class TaraERPClient:
         - Matches material grade (e.g. BSK, CRCA, HR, YS, BK).
         """
         thk_str = f"{float(thickness):g}" if thickness is not None else "4.8"
-        branches_to_query = [branch_code.strip()] if branch_code else self.branch_codes
+        # Strictly scope branch (default PEPIPL for Unit 1, PEI2 for Unit 2)
+        req_branch = (branch_code or "PEPIPL").strip().upper()
+        branches_to_query = self.branch_codes if req_branch == "ALL" else [req_branch]
         branches_key = "_".join(sorted(branches_to_query))
-        cache_key = f"{material_code}_{thk_str}_{branches_key}"
+        cache_key = f"{material_code}_{thk_str}_{branches_key}_main_stores_only"
         now = time.time()
 
         # Check short in-memory cache
@@ -212,9 +214,15 @@ class TaraERPClient:
         target_grade = (grade or "").strip().upper()
 
         for it in raw_items:
-            store_name = str(it.get("store_desc") or "").strip().lower()
-            # Exclude rejection stores
-            if any(rej in store_name for rej in EXCLUDED_STORES):
+            store_name = str(it.get("store_desc") or "").strip().upper()
+            # STRICT RULE: RM stock must come ONLY from MAIN STORES. Never from FG, WIP, Rejection, Scrap, Maintenance, Welding
+            if "MAIN STORE" not in store_name:
+                continue
+            if any(ex in store_name for ex in ["FG", "WIP", "REJECTION", "SCRAP", "MAINTENANCE", "WELDING"]):
+                continue
+
+            br_code = str(it.get("branch_code") or "").strip().upper()
+            if req_branch != "ALL" and br_code != req_branch:
                 continue
 
             item_code = str(it.get("item_code") or "").strip()

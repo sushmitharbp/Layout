@@ -70,7 +70,7 @@ def get_part_details_endpoint(part_no):
 @api_v2_bp.route('/rm-stock/<path:rm_code>', methods=['GET'])
 def get_rm_stock_endpoint(rm_code):
     """Get live stock and weight for an RM sheet with optional branch/company filtering"""
-    branch = request.args.get("branch") or session.get("company_id") or "PEI2"
+    branch = request.args.get("branch") or request.args.get("company_id") or session.get("company_id") or "PEPIPL"
     rm = db.get_rm(rm_code, branch=branch, company_id=branch)
     if not rm:
         return jsonify({"success": False, "error": "RM not found"}), 404

@@ -330,8 +330,8 @@ def get_rms_by_spec(grade=None, thickness=None, branch=None, company_id=None):
     1. Try live Tara ERP ORDS API first (with optional branch filter e.g. PEPIPL, PEI2).
     2. Fallback to Supabase rm table scoped by company_id.
     """
-    target_tenant = (branch or company_id or "").strip()
-    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else None
+    target_tenant = (branch or company_id or "PEPIPL").strip()
+    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else "PEPIPL"
 
     if thickness is not None:
         try:
@@ -378,19 +378,40 @@ def get_rm(rm_code, branch=None, company_id=None):
     if not rm_code:
         return None
 
-    target_tenant = (branch or company_id or "").strip()
-    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else None
+    target_tenant = (branch or company_id or "PEPIPL").strip()
+    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else "PEPIPL"
 
     # 1. Try Tara ERP Live API
     try:
         from tara_erp_client import tara_erp_client, extract_grade_from_text
-        thk_match = re.search(r'[-*](\d+(?:\.\d+)?)[-*]', rm_code)
-        if thk_match:
-            thk_val = float(thk_match.group(1))
+        nums = [float(x) for x in re.findall(r'(\d+(?:\.\d+)?)', rm_code) if float(x) > 0]
+        thk_val = None
+        for n in nums:
+            if n <= 50.0:  # Sheet thickness is typically <= 50mm
+                thk_val = n
+                break
+        if thk_val is not None:
             grd = extract_grade_from_text(rm_code)
             erp_sheets = tara_erp_client.fetch_rm_sheet_details(thickness=thk_val, grade=grd, branch_code=b_code, include_zero_stock=True)
+            # 1a. Exact match on rm_code or item_code
+            clean_input = rm_code.upper().replace(" ", "").replace("*", "-")
             for s in erp_sheets:
-                if s["rm_code"].upper() == rm_code.upper():
+                s_code = (s.get("rm_code") or s.get("item_code") or "").upper().replace(" ", "").replace("*", "-")
+                if s_code == clean_input:
+                    return s
+            # 1b. Dimension match (length and width within 2mm)
+            if len(nums) >= 3:
+                l_target, w_target = nums[1], nums[2]
+                for s in erp_sheets:
+                    s_len = float(s.get("length") or s.get("sheet_length") or 0)
+                    s_wid = float(s.get("width") or s.get("sheet_width") or 0)
+                    for l, w in [(l_target, w_target), (w_target, l_target)]:
+                        if abs(s_len - l) < 2.0 and abs(s_wid - w) < 2.0:
+                            return s
+            # 1c. Substring match
+            for s in erp_sheets:
+                s_code = (s.get("rm_code") or s.get("item_code") or "").upper().replace(" ", "").replace("*", "-")
+                if clean_input in s_code or s_code in clean_input:
                     return s
     except Exception as e:
         logger.warning(f"Tara ERP single RM fetch fallback: {e}")
@@ -545,6 +566,35 @@ def get_produced_qty_from_app_mo(part_no, company_id=None):
         logger.error(f"get_produced_qty_from_app_mo exception: {e}")
         return 0.0
 
+_MRP_SHEET_DATA = None
+
+def _get_sheet_mrp_data(part_no):
+    global _MRP_SHEET_DATA
+    if _MRP_SHEET_DATA is None:
+        try:
+            mrp_json_path = os.path.join(os.path.dirname(__file__), "data_mrp_mo_produced.json")
+            if os.path.exists(mrp_json_path):
+                with open(mrp_json_path, "r", encoding="utf-8") as f:
+                    _MRP_SHEET_DATA = json.load(f)
+            else:
+                _MRP_SHEET_DATA = {}
+        except Exception as e:
+            logger.warning(f"Failed to load data_mrp_mo_produced.json: {e}")
+            _MRP_SHEET_DATA = {}
+    
+    if not _MRP_SHEET_DATA or not part_no:
+        return {}
+    
+    p_clean = str(part_no).strip().upper()
+    if p_clean in _MRP_SHEET_DATA:
+        return _MRP_SHEET_DATA[p_clean]
+    
+    clean_alnum = re.sub(r'[^A-Z0-9]', '', p_clean)
+    for k, v in _MRP_SHEET_DATA.items():
+        if re.sub(r'[^A-Z0-9]', '', k.upper()) == clean_alnum:
+            return v
+    return {}
+
 def get_mrp_for_part(part_no, month_year=None, company_id=None):
     """
     Fetch MRP record for a part (latest or specific month) scoped by company_id and incorporates
@@ -555,7 +605,7 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
     - qty_to_produce: max(0, monthly_schedule - current_stock)
     Supports robust fallback across normalized variants (e.g. MBA01221 - Item 2 vs MBA01221ITEM02).
     """
-    if not SUPABASE_URL or not SUPABASE_KEY or not part_no:
+    if not part_no:
         return None
     
     part_clean = str(part_no).strip()
@@ -565,8 +615,8 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
     url += "&order=id.desc&limit=1"
 
     try:
-        rows = _safe_supabase_get(url, company_id=company_id)
-        if not rows:
+        rows = _safe_supabase_get(url, company_id=company_id) if (SUPABASE_URL and SUPABASE_KEY) else []
+        if not rows and SUPABASE_URL and SUPABASE_KEY:
             # Case-insensitive
             url_ilike = f"{SUPABASE_URL}/rest/v1/mrp?part_no=ilike.{part_clean}"
             if month_year:
@@ -574,7 +624,7 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
             url_ilike += "&order=id.desc&limit=1"
             rows = _safe_supabase_get(url_ilike, company_id=company_id)
 
-        if not rows:
+        if not rows and SUPABASE_URL and SUPABASE_KEY:
             # Try normalized alphanumeric match using fast exact 'in' query
             clean_alnum = re.sub(r'[^A-Z0-9]', '', part_clean.upper())
             variants = [clean_alnum]
@@ -591,22 +641,63 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
                 rows = v_rows
 
         if not rows:
+            sheet_rec = _get_sheet_mrp_data(part_clean)
+            if sheet_rec:
+                initial_stock = float(sheet_rec.get("current_stock", 0) or 0)
+                monthly_sched = float(sheet_rec.get("monthly_schedule", 0) or 0)
+                sheet_mo_qty = float(sheet_rec.get("mo_produced", 0) or 0)
+                app_mo_qty = get_produced_qty_from_app_mo(part_clean, company_id=company_id)
+                total_produced_qty = sheet_mo_qty + app_mo_qty
+                base_qty_to_produce = max(0.0, monthly_sched - initial_stock - sheet_mo_qty)
+                effective_stock = initial_stock + total_produced_qty
+                balance_to_produce = max(0.0, monthly_sched - initial_stock - total_produced_qty)
+                return {
+                    "company_id": company_id or "PEPIPL",
+                    "part_no": part_clean,
+                    "month_year": sheet_rec.get("month_year", "2026-10"),
+                    "monthly_schedule": monthly_sched,
+                    "initial_stock": initial_stock,
+                    "app_mo_produced": total_produced_qty,
+                    "mo_produced": total_produced_qty,
+                    "current_stock": effective_stock,
+                    "base_qty_to_produce": base_qty_to_produce,
+                    "qty_to_produce": base_qty_to_produce,
+                    "parts_produced": total_produced_qty,
+                    "balance_to_produce": balance_to_produce,
+                    "remaining_quantity": balance_to_produce
+                }
             return None
+
         mrp_row = rows[0]
         actual_part_no = mrp_row.get("part_no") or part_clean
-        produced_mo_qty = get_produced_qty_from_app_mo(actual_part_no, company_id=company_id)
-        initial_stock = float(mrp_row.get("current_stock") or 0)
-        monthly_sched = float(mrp_row.get("monthly_schedule") or 0)
+        sheet_rec = _get_sheet_mrp_data(actual_part_no)
+        sheet_mo_qty = float(sheet_rec.get("mo_produced", 0) or 0)
+        app_mo_qty = get_produced_qty_from_app_mo(actual_part_no, company_id=company_id)
+        total_produced_qty = sheet_mo_qty + app_mo_qty
 
-        effective_stock = initial_stock + produced_mo_qty
-        effective_qty_to_produce = max(0.0, monthly_sched - effective_stock)
+        initial_stock = float(mrp_row.get("current_stock") if mrp_row.get("current_stock") is not None else (sheet_rec.get("current_stock", 0) or 0))
+        monthly_sched = float(mrp_row.get("monthly_schedule") if mrp_row.get("monthly_schedule") is not None else (sheet_rec.get("monthly_schedule", 0) or 0))
+
+        # Card 1: Target Requirement (Qty to Produce = max(0, monthly_schedule - current_stock - mo_produced_excel))
+        base_qty_to_produce = max(0.0, monthly_sched - initial_stock - sheet_mo_qty)
+        # Card 2: MO Produced Qty = sheet MOs (from Excel) + live app MOs
+        effective_stock = initial_stock + total_produced_qty
+        # Card 3: Balance to Produce = max(0, monthly_sched - initial_stock - total_produced_qty)
+        balance_to_produce = max(0.0, monthly_sched - initial_stock - total_produced_qty)
 
         return {
             **mrp_row,
             "initial_stock": initial_stock,
-            "app_mo_produced": produced_mo_qty,
+            "sheet_mo_produced": sheet_mo_qty,
+            "excel_mo_produced": sheet_mo_qty,
+            "app_mo_produced": app_mo_qty,
+            "mo_produced": total_produced_qty,
             "current_stock": effective_stock,
-            "qty_to_produce": effective_qty_to_produce
+            "base_qty_to_produce": base_qty_to_produce,
+            "qty_to_produce": base_qty_to_produce,
+            "parts_produced": total_produced_qty,
+            "balance_to_produce": balance_to_produce,
+            "remaining_quantity": balance_to_produce
         }
     except Exception as e:
         logger.error(f"get_mrp_for_part exception: {e}")
@@ -938,8 +1029,8 @@ def get_mos_for_part(part_no, limit=10, branch=None, company_id=None):
     if not part_no:
         return []
 
-    target_tenant = (branch or company_id or "").strip()
-    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else None
+    target_tenant = (branch or company_id or "PEPIPL").strip()
+    b_code = target_tenant if target_tenant and target_tenant.upper() != "ALL" else "PEPIPL"
 
     # 1. Try Tara ERP Live API
     try:
@@ -1141,7 +1232,7 @@ def create_app_mo(data, company_id=None):
         "notes": remarks
     }]
 
-    company_id = data.get("company_id") or "PEI2"
+    company_id = target_company
     record = {
         "id": row_id,
         "company_id": company_id,

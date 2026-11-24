@@ -1012,10 +1012,80 @@ def allowed_file(filename):
 # =====================================================================
 @app.route("/api/rm-stock/raw-material-sheets")
 def get_raw_material_sheets():
-    """Fetch item codes from RM Main Store stock having category description as RAW MATERIAL SHEET"""
+    """
+    Fetch RM sheet stock for Custom RM Selection:
+    1. Prioritizes Live Tara ERP Main Store inventory scoped to branch (default PEPIPL for Unit 1).
+    2. Includes all RYG Standards (AL & VST) with live stock.
+    3. Merges any additional legacy items from ERP_STOCK_SERVICE.rm_stock.
+    """
     q = request.args.get("q", "").strip().lower()
-    results = []
+    branch = request.args.get("branch") or request.args.get("company_id") or session.get("company_id") or "PEPIPL"
+    if branch.upper() == "ALL":
+        branch = "PEPIPL"
 
+    combined = {}
+
+    # 1. Fetch live Tara ERP Main Stores and RYG standards
+    try:
+        from reorder_level_service import reorder_level_service, AL_RM_STANDARDS, VST_RM_STANDARDS, _norm_code
+        erp_rm_map, erp_dim_map = reorder_level_service._get_tara_erp_rm_map(branch)
+
+        # 1a. Index all RYG Standards (AL & VST)
+        for std in AL_RM_STANDARDS + VST_RM_STANDARDS:
+            code = std["rm_code"]
+            k = _norm_code(code)
+            dim_k = f"{float(std.get('thickness', 0)):g}_{float(std.get('length', 0)):g}_{float(std.get('width', 0)):g}"
+            erp_item = erp_rm_map.get(k) or erp_dim_map.get(dim_k)
+            avail = float(erp_item.get("available_sheets") or 0.0) if erp_item else 0.0
+            t = float(std.get("thickness") or 0)
+            l = float(std.get("length") or 0)
+            w = float(std.get("width") or 0)
+            combined[code.upper()] = {
+                "item_code": code,
+                "item_desc": f"SHEET-{code}",
+                "onhand_stock": avail,
+                "uom": "NOS",
+                "weight": std.get("weight_per_sheet"),
+                "store": f"MAIN STORES ({branch})",
+                "category": "RAW MATERIAL SHEET",
+                "grade": std.get("grade") or code[:2].upper(),
+                "thickness": t,
+                "length": l,
+                "width": w,
+                "sheet_size": f"{t:g} * {l:g} * {w:g}" if (t and l and w) else code
+            }
+
+        # 1b. Add any remaining items from Live Tara ERP Main Stores
+        for erp_item in erp_rm_map.values():
+            code = (erp_item.get("rm_code") or erp_item.get("item_code") or "").strip()
+            if not code:
+                continue
+            t = float(erp_item.get("thickness") or 0)
+            l = float(erp_item.get("length") or erp_item.get("sheet_length") or 0)
+            w = float(erp_item.get("width") or erp_item.get("sheet_width") or 0)
+            avail = float(erp_item.get("available_sheets") or 0.0)
+
+            if code.upper() not in combined:
+                combined[code.upper()] = {
+                    "item_code": code,
+                    "item_desc": erp_item.get("item_desc") or f"SHEET-{code}",
+                    "onhand_stock": avail,
+                    "uom": "NOS",
+                    "weight": float(erp_item.get("weight_per_sheet") or 0.0),
+                    "store": f"MAIN STORES ({branch})",
+                    "category": "RAW MATERIAL SHEET",
+                    "grade": erp_item.get("grade") or code[:2].upper(),
+                    "thickness": t,
+                    "length": l,
+                    "width": w,
+                    "sheet_size": f"{t:g} * {l:g} * {w:g}" if (t and l and w) else (erp_item.get("item_desc") or code)
+                }
+            else:
+                combined[code.upper()]["onhand_stock"] = avail
+    except Exception as e:
+        logger.warning(f"Live Tara ERP fetch in get_raw_material_sheets fallback: {e}")
+
+    # 2. Merge legacy items from ERP_STOCK_SERVICE.rm_stock
     if hasattr(ERP_STOCK_SERVICE, "rm_stock"):
         for item in ERP_STOCK_SERVICE.rm_stock.values():
             cat = (item.get("category") or "").upper()
@@ -1023,20 +1093,16 @@ def get_raw_material_sheets():
                 continue
 
             code = (item.get("item_code") or "").strip()
+            if not code or code.upper() in combined:
+                continue
+
             desc = (item.get("item_desc") or "").strip()
             onhand = float(item.get("onhand_stock") or 0.0)
             uom = item.get("uom") or "NOS"
             weight = item.get("weight")
             store = item.get("store") or "MAIN STORES"
 
-            if q:
-                if q not in code.lower() and q not in desc.lower():
-                    continue
-
-            # Auto-fetch Grade: first 2 letters
             grade = code[:2].upper()
-
-            # Auto-fetch Sheet Size: thickness * length * width
             nums = re.findall(r'\d+(?:\.\d+)?', code)
             t, l, w = None, None, None
             if len(nums) >= 3:
@@ -1054,7 +1120,7 @@ def get_raw_material_sheets():
 
             sheet_sz = f"{_fmt_num(t)} * {_fmt_num(l)} * {_fmt_num(w)}" if (t and l and w) else desc
 
-            results.append({
+            combined[code.upper()] = {
                 "item_code": code,
                 "item_desc": desc,
                 "onhand_stock": onhand,
@@ -1067,9 +1133,24 @@ def get_raw_material_sheets():
                 "length": l,
                 "width": w,
                 "sheet_size": sheet_sz
-            })
+            }
 
-    results.sort(key=lambda x: x["item_code"])
+    # 3. Filter by search query
+    results = []
+    for rec in combined.values():
+        if q:
+            match = (
+                q in rec["item_code"].lower() or
+                q in str(rec.get("item_desc") or "").lower() or
+                q in str(rec.get("grade") or "").lower() or
+                q in str(rec.get("sheet_size") or "").lower()
+            )
+            if not match:
+                continue
+        results.append(rec)
+
+    # 4. Sort: Items with onhand_stock > 0 first, then alphabetically by item_code
+    results.sort(key=lambda x: (-x["onhand_stock"], x["item_code"]))
     return jsonify(results)
 
 def resolve_part_size_info(p_code, rm_code=None):
@@ -1211,18 +1292,26 @@ def get_part_intelligence(part_no):
 
                 all_mos_list.extend(p_mos)
 
-                p_mrp_target = p_mrp.get("monthly_schedule", 0)
-                p_cur_stock = p_mrp.get("current_stock", 0)
-                p_qty_to_prod = p_mrp.get("qty_to_produce", max(0, p_mrp_target - p_cur_stock))
+                p_mrp_target = float(p_mrp.get("monthly_schedule") or 0)
+                p_init_stock = float(p_mrp.get("initial_stock") if p_mrp.get("initial_stock") is not None else (p_mrp.get("current_stock") or 0))
+                p_cur_stock = float(p_mrp.get("current_stock") or 0)
                 
-                if p_mos and any("qty_produced" in m for m in p_mos):
-                    p_produced = sum(m.get("qty_produced", 0) for m in p_mos)
-                elif p_produced_erp:
-                    p_produced = p_produced_erp
-                else:
-                    p_produced = 0
+                # MO produced: prioritize clean_db mrp mo_produced (Excel MO produced + Live App MO produced)
+                p_excel_mo = float(p_mrp.get("sheet_mo_produced") or p_mrp.get("excel_mo_produced") or 0)
+                p_app_mo = float(p_mrp.get("app_mo_produced") or 0)
+                p_produced = float(p_mrp.get("mo_produced") if p_mrp.get("mo_produced") is not None else (p_excel_mo + p_app_mo))
+                if not p_produced:
+                    if p_mos and any("qty_produced" in m for m in p_mos):
+                        p_produced = sum(m.get("qty_produced", 0) for m in p_mos)
+                    elif p_produced_erp:
+                        p_produced = p_produced_erp
+                    else:
+                        p_produced = 0
 
-                p_remaining = max(0, p_qty_to_prod - p_produced) if p_qty_to_prod else max(0, p_mrp_target - p_produced)
+                # Card 1: Target Requirement (Qty to Produce before MOs)
+                p_qty_to_prod = float(p_mrp.get("base_qty_to_produce") if p_mrp.get("base_qty_to_produce") is not None else (p_mrp.get("qty_to_produce") if p_mrp.get("qty_to_produce") is not None else max(0.0, p_mrp_target - p_init_stock)))
+                # Card 3: Balance to Produce = max(0, Card 1 - Card 2)
+                p_remaining = float(p_mrp.get("balance_to_produce") if p_mrp.get("balance_to_produce") is not None else max(0.0, p_qty_to_prod - p_produced))
                 p_size = (p_part.get("part_size") or p_part.get("cut_blank") or "") if p_part else ""
                 p_strip = p_part.get("strip_per_blank_qty") or p_part.get("strip_qty") or 1
 
@@ -1233,10 +1322,16 @@ def get_part_intelligence(part_no):
                     "strip_per_blank_qty": p_strip,
                     "strip_qty": p_strip,
                     "mrp_monthly_target": p_mrp_target,
+                    "initial_stock": p_init_stock,
                     "current_stock": p_cur_stock,
+                    "base_qty_to_produce": p_qty_to_prod,
                     "qty_to_produce": p_qty_to_prod,
+                    "excel_mo_produced": p_excel_mo,
+                    "app_mo_produced": p_app_mo,
+                    "mo_produced": p_produced,
                     "parts_produced": p_produced,
                     "remaining_quantity": p_remaining,
+                    "balance_to_produce": p_remaining,
                     "monthly_mo_records": p_mos,
                     "monthly_mo_count": len(p_mos),
                     "target_month": p_mrp.get("month_year", "2026-10")
@@ -1252,10 +1347,16 @@ def get_part_intelligence(part_no):
                     "child_part_no": part_clean,
                     "part_size": primary_plan.get("part_size", ""),
                     "mrp_monthly_target": primary_plan.get("mrp_monthly_target", 0),
+                    "initial_stock": primary_plan.get("initial_stock", 0),
                     "current_stock": primary_plan.get("current_stock", 0),
+                    "base_qty_to_produce": primary_plan.get("base_qty_to_produce", primary_plan.get("qty_to_produce", 0)),
                     "qty_to_produce": primary_plan.get("qty_to_produce", 0),
+                    "excel_mo_produced": primary_plan.get("excel_mo_produced", 0),
+                    "app_mo_produced": primary_plan.get("app_mo_produced", 0),
+                    "mo_produced": primary_plan.get("mo_produced", primary_plan.get("parts_produced", 0)),
                     "parts_produced": primary_plan.get("parts_produced", 0),
                     "remaining_quantity": primary_plan.get("remaining_quantity", 0),
+                    "balance_to_produce": primary_plan.get("balance_to_produce", primary_plan.get("remaining_quantity", 0)),
                     "rm_sheets_on_hand": rm_sheets,
                     "rm_onhand_sheets": rm_sheets,
                     "target_month": mrp_rec.get("month_year", "2026-10"),
@@ -1547,8 +1648,21 @@ def create_mo():
             "width": float(form.get("width", 0)) if form.get("width") else None,
             "target_qty": int(form.get("target_qty", 1)) if form.get("target_qty") else 1,
             "sheets_required": float(form.get("sheets_required", 1)) if form.get("sheets_required") else 1,
-            "notes": form.get("notes", "")
+            "notes": form.get("notes", ""),
+            "company_id": (form.get("company_id") or "").strip().upper() or None,
+            "branch_code": (form.get("branch_code") or "").strip().upper() or None
         }
+
+        # Check if available sheets in Tara ERP / store is 0: MO cannot be produced!
+        try:
+            rm_rec = clean_db.get_rm(rm_erp_val, branch=data.get("branch_code") or "PEPIPL", company_id=data.get("company_id") or "PEPIPL")
+            avail_sheets = float(rm_rec.get("available_sheets") if rm_rec and rm_rec.get("available_sheets") is not None else 0)
+            if avail_sheets <= 0:
+                return jsonify({
+                    "error": f"Cannot produce MO: Available stock for RM {rm_erp_val} is 0 Sheets in Tara ERP. Please select another sheet or layout."
+                }), 400
+        except Exception as e:
+            logger.warning(f"Error checking RM stock in create_mo: {e}")
 
         # Handle constraints json
         constraints_str = form.get("constraints_status")
@@ -1631,13 +1745,17 @@ def create_mo():
     if created_by != "shearing":
         return jsonify({"error": "Unauthorized: Only the Shearing Production team can create or produce Material Orders. Other departments have view-only access."}), 403
 
-    company_id = session.get("company_id") or data.get("company_id") or "PEPIPL"
-    branch_code = session.get("branch_code") or data.get("branch_code") or data.get("branch") or company_id
+    company_id = data.get("company_id") or session.get("company_id") or "PEPIPL"
+    branch_code = data.get("branch_code") or session.get("branch_code") or company_id
     data["company_id"] = company_id
     data["branch_code"] = branch_code
 
-    record = MO_ENGINE.create_mo(data, created_by_role=created_by)
-    return jsonify(record), 201
+    try:
+        record = MO_ENGINE.create_mo(data, created_by_role=created_by)
+        return jsonify(record), 201
+    except Exception as e:
+        logger.error(f"Error creating MO: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 400
 
 
 @app.route("/api/mo/create-endbit", methods=["POST"])

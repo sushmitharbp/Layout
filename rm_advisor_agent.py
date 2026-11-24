@@ -443,7 +443,7 @@ class RMAdvisorAgent:
         try:
             from tara_erp_client import tara_erp_client
             b_val = state.get("branch") or state.get("company_id")
-            b_code = b_val.strip() if b_val and str(b_val).strip().upper() != "ALL" else None
+            b_code = b_val.strip() if b_val and str(b_val).strip().upper() != "ALL" else "PEPIPL"
             erp_sheets = tara_erp_client.fetch_rm_sheet_details(thickness=t_val, grade=req_grade, branch_code=b_code)
             for r in erp_sheets:
                 sheets_cnt = float(r.get("available_sheets") or 0.0)

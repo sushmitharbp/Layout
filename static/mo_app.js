@@ -1038,13 +1038,13 @@ function openCreateModal() {
     const quickStockEl = document.getElementById("rmStockBoxVal");
     if (quickStockEl) quickStockEl.textContent = "- Sheets";
 
-    // Reset 3 MRP Cards
-    const mrpQEl = document.getElementById("mrpMonthlyQtyVal");
-    const mrpSEl = document.getElementById("mrpCurrentStockVal");
-    const mrpPEl = document.getElementById("mrpQtyToProduceVal");
-    if (mrpQEl) mrpQEl.textContent = "- Nos";
-    if (mrpSEl) mrpSEl.textContent = "- Nos";
-    if (mrpPEl) mrpPEl.textContent = "- Nos";
+    // Reset 3 Demand Cards (1. Qty to Produce, 2. MO Produced, 3. Balance to Produce)
+    const elToProduce = document.getElementById("mrpQtyToProduceVal");
+    const elMoProduced = document.getElementById("mrpMoProducedVal");
+    const elBalance = document.getElementById("mrpBalanceVal");
+    if (elToProduce) elToProduce.textContent = "- Nos";
+    if (elMoProduced) elMoProduced.textContent = "- Nos";
+    if (elBalance) elBalance.textContent = "- Nos";
 
     const rmSelect = document.getElementById("rmErpSelect");
     if (rmSelect) {
@@ -1121,6 +1121,7 @@ function closeCreateModal() {
     const partDropdown = document.getElementById("partDropdownResults");
     if (partDropdown) partDropdown.style.display = "none";
     hideRmAgentSuggestions();
+    setZeroStockUiState(false);
 }
 
 // Search Parts for Create Modal
@@ -1199,64 +1200,92 @@ async function selectPartForModal(partNo) {
             }
             populatePartTechnicalFields(selectedPartData);
 
-            // Populate the 3 MRP Cards from clean 7-table Supabase DB
+            // Populate the 3 Demand Cards:
+            // Card 1: Qty to Produce (Net Requirement = Monthly Schedule - In-House Stock)
+            // Card 2: MO Produced Qty (Quantity produced by MOs: Excel MOs + App MOs)
+            // Card 3: Balance to Produce (Card 1 - Card 2)
             const mrp = selectedPartData.mrp || {};
-            const mrpQty = (mrp.monthly_schedule !== undefined && mrp.monthly_schedule !== null) ? Number(mrp.monthly_schedule) : null;
-            const curStock = (mrp.current_stock !== undefined && mrp.current_stock !== null) ? Number(mrp.current_stock) : null;
-            const initStock = mrp.initial_stock !== undefined ? Number(mrp.initial_stock) : curStock;
-            const producedMo = mrp.app_mo_produced !== undefined ? Number(mrp.app_mo_produced) : 0;
+            const schedQty = (mrp.monthly_schedule !== undefined && mrp.monthly_schedule !== null) ? Number(mrp.monthly_schedule) : null;
+            const initStock = (mrp.initial_stock !== undefined && mrp.initial_stock !== null) ? Number(mrp.initial_stock) : 0;
+            const excelMo = (mrp.excel_mo_produced !== undefined && mrp.excel_mo_produced !== null) ? Number(mrp.excel_mo_produced) : ((mrp.sheet_mo_produced !== undefined) ? Number(mrp.sheet_mo_produced) : 0);
+            const appMo = (mrp.app_mo_produced !== undefined && mrp.app_mo_produced !== null) ? Number(mrp.app_mo_produced) : 0;
+            const moProducedQty = (mrp.mo_produced !== undefined && mrp.mo_produced !== null) ? Number(mrp.mo_produced) : (excelMo + appMo);
 
-            const mrpQtyEl = document.getElementById("mrpMonthlyQtyVal");
-            const curStockEl = document.getElementById("mrpCurrentStockVal");
-            const curStockSub = document.getElementById("mrpCurrentStockSub");
+            // 1. Qty to Produce (First Card: Net Requirement)
+            let baseQtyToProduce = null;
+            if (mrp.base_qty_to_produce !== undefined && mrp.base_qty_to_produce !== null) {
+                baseQtyToProduce = Number(mrp.base_qty_to_produce);
+            } else if (schedQty !== null) {
+                baseQtyToProduce = Math.max(0, schedQty - initStock);
+            } else if (mrp.qty_to_produce !== undefined && mrp.qty_to_produce !== null) {
+                baseQtyToProduce = Number(mrp.qty_to_produce);
+            }
+
+            // 2. MO Produced Qty (Second Card) = moProducedQty
+
+            // 3. Balance to Produce (Third Card: Card 1 - Card 2)
+            let balanceQty = null;
+            if (mrp.balance_to_produce !== undefined && mrp.balance_to_produce !== null) {
+                balanceQty = Math.max(0, Number(mrp.balance_to_produce));
+            } else if (baseQtyToProduce !== null) {
+                balanceQty = Math.max(0, baseQtyToProduce - moProducedQty);
+            }
+
             const toProduceEl = document.getElementById("mrpQtyToProduceVal");
+            const toProduceSub = document.getElementById("mrpQtyToProduceSub");
+            const moProducedEl = document.getElementById("mrpMoProducedVal");
+            const moProducedSub = document.getElementById("mrpMoProducedSub");
+            const balanceEl = document.getElementById("mrpBalanceVal");
+            const balanceSub = document.getElementById("mrpBalanceSub");
             const hintBox = document.getElementById("mrpStockHintBox");
             const hintVal = document.getElementById("mrpStockHintVal");
-            const toProduceSub = document.getElementById("mrpQtyToProduceSub");
 
-            if (mrpQtyEl) mrpQtyEl.textContent = mrpQty !== null ? `${mrpQty.toLocaleString()} Nos` : "- Nos";
-            
-            if (curStockEl) {
-                curStockEl.textContent = curStock !== null ? `${curStock.toLocaleString()} Nos` : "- Nos";
+            // Card 1: Qty to Produce
+            if (toProduceEl) {
+                toProduceEl.textContent = baseQtyToProduce !== null ? `${baseQtyToProduce.toLocaleString()} Nos` : "- Nos";
             }
-            if (curStockSub) {
-                if (producedMo > 0) {
-                    curStockSub.innerHTML = `<span style="color:#047857; font-weight:600;">Stock ${initStock.toLocaleString()}</span> + <span style="color:#0284c7; font-weight:700;">${producedMo.toLocaleString()} MO</span>`;
+            if (toProduceSub) {
+                if (schedQty !== null && initStock > 0) {
+                    toProduceSub.textContent = `Schedule Net (${schedQty.toLocaleString()} - ${initStock.toLocaleString()} Stock)`;
+                } else if (schedQty !== null) {
+                    toProduceSub.textContent = `Schedule Target: ${schedQty.toLocaleString()} Nos`;
                 } else {
-                    curStockSub.textContent = "In-House Stock";
+                    toProduceSub.textContent = "Target Requirement";
                 }
             }
 
-            if (mrpQty !== null && curStock !== null) {
-                if (curStock >= mrpQty) {
-                    // In-house stock + app_mo produced is higher or equal, remaining qty to produce is 0
-                    if (toProduceEl) toProduceEl.textContent = "0 Nos";
-                    if (hintBox) {
-                        hintBox.style.display = "inline-flex";
-                        if (hintVal) hintVal.textContent = curStock.toLocaleString();
-                    }
-                    if (toProduceSub) {
-                        toProduceSub.textContent = producedMo > 0
-                            ? `Covered (Stock ${initStock.toLocaleString()} + MO Produced ${producedMo.toLocaleString()})`
-                            : "Fully Covered by Stock";
-                    }
+            // Card 2: MO Produced Qty
+            if (moProducedEl) {
+                moProducedEl.textContent = `${moProducedQty.toLocaleString()} Nos`;
+            }
+            if (moProducedSub) {
+                let moParts = [];
+                if (excelMo > 0) moParts.push(`${excelMo.toLocaleString()} Excel`);
+                if (appMo > 0) moParts.push(`${appMo.toLocaleString()} App`);
+                moProducedSub.textContent = moParts.length > 0
+                    ? `${moParts.join(" + ")} MOs`
+                    : "Total MOs Produced (0 Nos)";
+            }
+
+            // Card 3: Balance to Produce (Card 1 - Card 2)
+            if (balanceEl) {
+                balanceEl.textContent = balanceQty !== null ? `${balanceQty.toLocaleString()} Nos` : "- Nos";
+            }
+            if (balanceSub) {
+                if (baseQtyToProduce !== null) {
+                    balanceSub.textContent = `Net Balance (${baseQtyToProduce.toLocaleString()} - ${moProducedQty.toLocaleString()})`;
                 } else {
-                    const remaining = mrpQty - curStock;
-                    if (toProduceEl) toProduceEl.textContent = `${remaining.toLocaleString()} Nos`;
-                    if (hintBox) hintBox.style.display = "none";
-                    if (toProduceSub) {
-                        if (producedMo > 0) {
-                            toProduceSub.textContent = `Net Requirement (${mrpQty.toLocaleString()} - ${initStock.toLocaleString()} Stock - ${producedMo.toLocaleString()} Produced)`;
-                        } else {
-                            toProduceSub.textContent = `Net Requirement (${mrpQty.toLocaleString()} - ${curStock.toLocaleString()})`;
-                        }
-                    }
+                    balanceSub.textContent = "Net Balance (Qty - Produced)";
                 }
-            } else {
-                const toProduce = mrp.qty_to_produce !== undefined ? mrp.qty_to_produce : "-";
-                if (toProduceEl) toProduceEl.textContent = toProduce !== "-" ? `${Number(toProduce).toLocaleString()} Nos` : "- Nos";
-                if (hintBox) hintBox.style.display = "none";
-                if (toProduceSub) toProduceSub.textContent = "Net Requirement";
+            }
+
+            if (hintBox) {
+                if (baseQtyToProduce !== null && balanceQty === 0 && baseQtyToProduce > 0) {
+                    hintBox.style.display = "inline-flex";
+                    if (hintVal) hintVal.textContent = baseQtyToProduce.toLocaleString();
+                } else {
+                    hintBox.style.display = "none";
+                }
             }
 
             // Hide inline AI recommendations by default; only show when user clicks AI Advisor
@@ -1319,6 +1348,80 @@ function populatePartTechnicalFields(partData) {
         stripInput.value = `${partData.strip_qty || partData.strip_per_blank_qty || 1} Nos`;
     }
 
+function setZeroStockUiState(isZero, rmCode = "") {
+    const stockBox = document.getElementById("rmStockBox");
+    const stockVal = document.getElementById("rmStockBoxVal");
+    const warnEl = document.getElementById("rmZeroStockWarning");
+    const rmSelect = document.getElementById("rmErpSelect");
+    const submitBtn = document.getElementById("submitMoBtn");
+    const routeBanner = document.getElementById("routePreviewBanner");
+    const routeTitle = document.getElementById("routeTitle");
+    const routeDesc = document.getElementById("routeDesc");
+
+    if (isZero) {
+        if (stockBox) {
+            stockBox.style.background = "#fee2e2";
+            stockBox.style.borderColor = "#f87171";
+            stockBox.style.color = "#b91c1c";
+        }
+        if (stockVal && (stockVal.textContent === "- Sheets" || !stockVal.textContent.includes("0"))) {
+            stockVal.textContent = "0 Sheets";
+        }
+        if (warnEl) {
+            warnEl.style.display = "block";
+            warnEl.innerHTML = `<i class="fa-solid fa-ban"></i> <strong>0 Sheets Available</strong> — MO cannot be produced. Please select another sheet from the dropdown.`;
+        }
+        if (rmSelect) {
+            rmSelect.style.border = "2px solid #ef4444";
+            rmSelect.style.backgroundColor = "#fff5f5";
+        }
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = "0.65";
+            submitBtn.style.cursor = "not-allowed";
+            submitBtn.style.backgroundColor = "#ef4444";
+            submitBtn.style.borderColor = "#dc2626";
+            submitBtn.style.color = "#ffffff";
+            submitBtn.title = "Available RM stock is 0 Sheets. MO cannot be produced. Please select another sheet.";
+            submitBtn.innerHTML = `<i class="fa-solid fa-ban"></i> Cannot Produce MO — RM Available is 0 Sheets (Select Another Sheet)`;
+        }
+        if (routeBanner && routeTitle && routeDesc) {
+            routeBanner.className = "workflow-route-preview danger";
+            routeBanner.style.border = "2px solid #f87171";
+            routeBanner.style.background = "#fef2f2";
+            routeTitle.innerHTML = `<i class="fa-solid fa-ban" style="color: #dc2626;"></i> MO Blocked: 0 RM Sheets Available in Store`;
+            routeDesc.innerHTML = `<strong style="color: #b91c1c;">MO cannot be produced because 0 sheets are available in store.</strong> Please select another sheet or layout from the RM dropdown to proceed.`;
+        }
+    } else {
+        if (stockBox) {
+            stockBox.style.background = "#ecfdf5";
+            stockBox.style.borderColor = "#a7f3d0";
+            stockBox.style.color = "#059669";
+        }
+        if (warnEl) {
+            warnEl.style.display = "none";
+        }
+        if (rmSelect) {
+            rmSelect.style.border = "";
+            rmSelect.style.backgroundColor = "";
+        }
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = "";
+            submitBtn.style.cursor = "";
+            submitBtn.style.backgroundColor = "";
+            submitBtn.style.borderColor = "";
+            submitBtn.style.color = "";
+            submitBtn.title = "";
+            submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Submit Material Order`;
+        }
+        if (routeBanner) {
+            routeBanner.style.border = "";
+            routeBanner.style.background = "";
+        }
+    }
+}
+
     const rmSelect = document.getElementById("rmErpSelect");
     rmSelect.innerHTML = "";
     rmSelect.style.border = "";
@@ -1330,10 +1433,19 @@ function populatePartTechnicalFields(partData) {
     rmSelect.appendChild(placeholderOpt);
 
     const records = partData.records || [];
+    let firstWithStockIdx = -1;
     records.forEach((r, idx) => {
         const opt = document.createElement("option");
         opt.value = r.rm_erp || `RM-${idx}`;
-        opt.textContent = `${r.rm_erp} (${r.grade || 'YS'}) - ${r.status || ''}`;
+        const avail = (r.available_sheets !== undefined && r.available_sheets !== null) ? Number(r.available_sheets) : null;
+        let stockTag = "";
+        if (avail !== null) {
+            stockTag = avail > 0 ? ` • ${avail} Sheets` : ` • [0 Sheets - Out of Stock]`;
+            if (avail > 0 && firstWithStockIdx === -1) {
+                firstWithStockIdx = idx;
+            }
+        }
+        opt.textContent = `${r.rm_erp} (${r.grade || 'YS'})${stockTag} - ${r.status || ''}`;
         opt.dataset.record = JSON.stringify(r);
         rmSelect.appendChild(opt);
     });
@@ -1345,8 +1457,10 @@ function populatePartTechnicalFields(partData) {
     rmSelect.appendChild(customOpt);
 
     if (records.length > 0) {
-        rmSelect.selectedIndex = 1;
-        onRmErpChanged(records[0].rm_erp);
+        // Automatically prefer a layout option with available stock > 0
+        const pickIdx = firstWithStockIdx >= 0 ? firstWithStockIdx : 0;
+        rmSelect.selectedIndex = pickIdx + 1;
+        onRmErpChanged(records[pickIdx].rm_erp);
     } else {
         rmSelect.selectedIndex = 0;
         onRmErpChanged("");
@@ -1471,18 +1585,30 @@ function onRmErpChanged(rmCode) {
     // Immediately display the available stock cached on the record for instant UI feedback
     const quickStockEl = document.getElementById("rmStockBoxVal");
     if (quickStockEl && record.available_sheets !== undefined && record.available_sheets !== null) {
-        quickStockEl.textContent = `${record.available_sheets} Sheets`;
+        const cachedAvail = parseFloat(record.available_sheets) || 0;
+        quickStockEl.textContent = `${cachedAvail} Sheets`;
+        if (cachedAvail <= 0) {
+            setZeroStockUiState(true, rmCode);
+        } else {
+            setZeroStockUiState(false, rmCode);
+        }
     }
 
     // Live RM Available Stock with active unit branch filtering
     if (rmCode && rmCode !== "__custom__") {
-        const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
-        const unitParam = (activeUnit && activeUnit !== "ALL") ? `?branch=${encodeURIComponent(activeUnit)}` : "";
+        const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+        const unitParam = `?branch=${encodeURIComponent(activeUnit && activeUnit !== "ALL" ? activeUnit : (window.AUTH_COMPANY_ID || "PEPIPL"))}`;
         fetch(`/api/v2/rm-stock/${encodeURIComponent(rmCode)}${unitParam}`)
             .then(res => res.json())
             .then(data => {
                 if (data.success && data.available_sheets !== undefined) {
-                    if (quickStockEl) quickStockEl.textContent = `${data.available_sheets} Sheets`;
+                    const liveAvail = parseFloat(data.available_sheets) || 0;
+                    if (quickStockEl) quickStockEl.textContent = `${liveAvail} Sheets`;
+                    if (liveAvail <= 0) {
+                        setZeroStockUiState(true, rmCode);
+                    } else {
+                        setZeroStockUiState(false, rmCode);
+                    }
                 }
             })
             .catch(() => {});
@@ -1592,7 +1718,8 @@ async function onCustomRmSearchInput(query) {
             dropdown.innerHTML = `<div style="padding:12px; color:#6b7280; font-size:12px; text-align:center;"><i class="fa-solid fa-spinner fa-spin"></i> Searching RM Main Store Stock...</div>`;
             dropdown.style.display = "block";
 
-            const res = await fetch(`/api/rm-stock/raw-material-sheets?q=${encodeURIComponent(trimmed)}`);
+            const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+            const res = await fetch(`/api/rm-stock/raw-material-sheets?q=${encodeURIComponent(trimmed)}&branch=${encodeURIComponent(activeUnit && activeUnit !== "ALL" ? activeUnit : "PEPIPL")}`);
             if (!res.ok) throw new Error("Search failed");
             const records = await res.json();
             window._currentCustomRmResults = records || [];
@@ -1721,6 +1848,13 @@ function selectCustomRmRecord(record) {
 
     // 7. Intelligence & Stock Feasibility
     const onhand = parseFloat(record.onhand_stock) || 0;
+    const quickStockEl = document.getElementById("rmStockBoxVal");
+    if (quickStockEl) quickStockEl.textContent = `${onhand} Sheets`;
+    if (onhand <= 0) {
+        setZeroStockUiState(true, record.item_code);
+    } else {
+        setZeroStockUiState(false, record.item_code);
+    }
     currentIntelData = {
         rm_code: record.item_code,
         rm_opening_stock: {
@@ -2040,7 +2174,7 @@ function updateLayoutTypeUI(isStandard) {
     if (nonStdCard) nonStdCard.classList.toggle("active", !isStandard);
     if (uploadBox) uploadBox.style.display = isStandard ? "none" : "block";
     const nonStdPartsBox = document.getElementById("nonStdPartsBox");
-    if (nonStdPartsBox) nonStdPartsBox.style.display = isStandard ? "none" : "block";
+    if (nonStdPartsBox) nonStdPartsBox.style.display = "none";
     const layoutPartsBanner = document.getElementById("layoutPartsBanner");
     if (layoutPartsBanner) layoutPartsBanner.style.display = "flex";
 
@@ -2196,8 +2330,9 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
     }
 
     // Double check with quick stock display and layout record available_sheets
+    const quickStockVal = parseFloat((document.getElementById("rmStockBoxVal")?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
+    const quickStockText = (document.getElementById("rmStockBoxVal")?.textContent || "").trim();
     if (!isStockSufficient) {
-        const quickStockVal = parseFloat((document.getElementById("rmStockBoxVal")?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
         if (quickStockVal >= sheetsNeeded) {
             isStockSufficient = true;
             onhandSheets = quickStockVal;
@@ -2208,6 +2343,14 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
                 onhandSheets = recStock;
             }
         }
+    }
+
+    const isZeroStock = (onhandSheets !== null && onhandSheets <= 0) || (quickStockText === "0 Sheets" || (!isNaN(quickStockVal) && quickStockVal <= 0 && quickStockText !== "- Sheets"));
+    if (isZeroStock) {
+        isStockSufficient = false;
+        setZeroStockUiState(true);
+    } else if (onhandSheets !== null && onhandSheets > 0) {
+        setZeroStockUiState(false);
     }
 
     if (stockHidden) {
@@ -2314,7 +2457,9 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
 
     // 4. Collect Failed Constraints
     const failedConstraints = [];
-    if (!isStockSufficient) {
+    if (isZeroStock) {
+        failedConstraints.push("0 RM Sheets in Store (Cannot Produce MO)");
+    } else if (!isStockSufficient) {
         failedConstraints.push("RM Stock Shortfall");
     }
 
@@ -2465,8 +2610,8 @@ function triggerRmAgentSuggestions(params) {
             if (params.thickness) qParams.set("thickness", params.thickness);
             if (params.grade) qParams.set("grade", params.grade);
             if (params.onhand_stock !== undefined) qParams.set("onhand_stock", params.onhand_stock);
-            const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || "ALL";
-            if (activeUnit && activeUnit !== "ALL") qParams.set("branch", activeUnit);
+            const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+            qParams.set("branch", activeUnit && activeUnit !== "ALL" ? activeUnit : (window.AUTH_COMPANY_ID || "PEPIPL"));
 
             const res = await fetch(`/api/agent/suggest-rm-alternatives?${qParams.toString()}`);
             if (!res.ok) {
@@ -2657,6 +2802,11 @@ async function submitCreateMo(e) {
     const form = document.getElementById("createMoForm");
     const formData = new FormData(form);
 
+    const activeUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+    const cid = (activeUnit && activeUnit !== "ALL") ? activeUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
+    formData.set("company_id", cid);
+    formData.set("branch_code", cid);
+
     const rmErp = formData.get("rm_erp");
     if (!rmErp || rmErp.trim() === "" || rmErp === "__custom__") {
         alert("RM ERP Code is mandatory. Please select a valid RM ERP Code / Layout before submitting.");
@@ -2664,6 +2814,21 @@ async function submitCreateMo(e) {
         if (rmSelect) {
             rmSelect.focus();
             rmSelect.style.border = "2px solid #ef4444";
+        }
+        return;
+    }
+
+    // 0 Available Sheets Guard: MO cannot be produced if RM available is 0!
+    const quickStockText = (document.getElementById("rmStockBoxVal")?.textContent || "").trim();
+    const quickStockNum = parseFloat(quickStockText.replace(/[^\d\.]/g, ""));
+    const isZeroStock = (quickStockText === "0 Sheets" || quickStockText.startsWith("0 ") || (!isNaN(quickStockNum) && quickStockNum <= 0 && quickStockText !== "- Sheets"));
+    if (isZeroStock) {
+        alert(`❌ Cannot Produce Material Order!\n\nAvailable stock for Raw Material (${rmErp}) is 0 Sheets in Tara ERP.\nYou cannot produce this MO on this sheet. Please select another sheet or layout from the RM ERP Code dropdown.`);
+        const rmSelect = document.getElementById("rmErpSelect");
+        if (rmSelect) {
+            rmSelect.focus();
+            rmSelect.style.border = "2px solid #ef4444";
+            rmSelect.scrollIntoView({ behavior: "smooth", block: "center" });
         }
         return;
     }
@@ -3100,9 +3265,16 @@ function renderReviewLayoutEndbits(mo) {
 }
 
 async function openReviewModal(moNumber) {
+    if (!moNumber) return;
+    const modal = document.getElementById("reviewModal");
     try {
-        const res = await fetch(`/api/mo/${encodeURIComponent(moNumber)}`);
-        if (!res.ok) return;
+        const cleanMoNum = String(moNumber).trim();
+        const res = await fetch(`/api/mo/${encodeURIComponent(cleanMoNum)}`);
+        if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            alert(`Unable to load Material Order details for "${cleanMoNum}": ${errJson.error || res.statusText || 'Record not found'}`);
+            return;
+        }
         activeReviewMo = await res.json();
         if (typeof activeReviewMo.parts === "string") {
             try { activeReviewMo.parts = JSON.parse(activeReviewMo.parts); } catch(e) {}
@@ -3113,8 +3285,9 @@ async function openReviewModal(moNumber) {
         if (!activeReviewMo.parts && Array.isArray(activeReviewMo.parts_produced)) {
             activeReviewMo.parts = activeReviewMo.parts_produced;
         }
+
         renderReviewModal(activeReviewMo);
-        document.getElementById("reviewModal").style.display = "flex";
+        if (modal) modal.style.display = "flex";
 
         // Gather all parts from activeReviewMo (parts or layout_parts)
         const allParts = [];
@@ -3148,6 +3321,7 @@ async function openReviewModal(moNumber) {
         );
     } catch (err) {
         console.error("Failed to load MO details:", err);
+        alert(`Error opening Material Order: ${err.message}`);
     }
 }
 
@@ -3440,14 +3614,24 @@ function renderReviewModal(mo) {
     // Render Constraints & Safety Status
     renderReviewConstraints(mo);
 
-    // 3. Render 4 KPI Cards: RM Sheets On Hand, MRP Monthly Target, Parts Produced, Remaining Quantity
+    // 3. Render 4 KPI Cards: RM Sheets On Hand, Qty to Produce, MO Produced Qty, Balance to Produce
+    const initToProduce = (mo.qty_to_produce !== undefined && mo.qty_to_produce !== null)
+        ? mo.qty_to_produce
+        : (mo.mrp_monthly_target !== undefined && mo.mrp_monthly_target !== null && mo.initial_stock !== undefined
+            ? Math.max(0, mo.mrp_monthly_target - mo.initial_stock)
+            : (mo.mrp_monthly_target !== undefined ? mo.mrp_monthly_target : null));
+
+    const initRem = (mo.remaining_quantity !== undefined && mo.remaining_quantity !== null)
+        ? mo.remaining_quantity
+        : (initToProduce !== null ? Math.max(0, initToProduce - (mo.parts_produced || 0)) : null);
+
     renderDefaultSinglePartKpis(
         (mo.rm_onhand !== undefined && mo.rm_onhand !== null) ? mo.rm_onhand : null,
         mo.rm_erp ? { item_code: mo.rm_erp } : null,
-        (mo.mrp_monthly_target !== undefined && mo.mrp_monthly_target !== null) ? mo.mrp_monthly_target : null,
+        initToProduce,
         null,
         mo.parts_produced || 0,
-        (mo.remaining_quantity !== undefined && mo.remaining_quantity !== null) ? mo.remaining_quantity : null,
+        initRem,
         null,
         true
     );
@@ -3908,11 +4092,21 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
     const container = document.getElementById(isReview ? "reviewMoKpiContainer" : "moKpiContainer");
     if (!container) return;
 
-    const mrpValStr = (mrpTarget !== null && mrpTarget !== undefined)
-        ? `${Number(mrpTarget).toLocaleString()} Nos`
-        : (isReview && activeReviewMo?.mrp_monthly_target !== undefined && activeReviewMo?.mrp_monthly_target !== null ? `${Number(activeReviewMo.mrp_monthly_target).toLocaleString()} Nos` : "- Nos");
+    // Target Qty to Produce: prioritize net qty_to_produce (Schedule - In-House Stock = 1st card)
+    const toProduceVal = (plan?.qty_to_produce !== undefined && plan?.qty_to_produce !== null)
+        ? plan.qty_to_produce
+        : (mrpTarget !== null && mrpTarget !== undefined
+            ? mrpTarget
+            : (isReview && activeReviewMo?.qty_to_produce !== undefined && activeReviewMo?.qty_to_produce !== null
+                ? activeReviewMo.qty_to_produce
+                : (isReview && activeReviewMo?.mrp_monthly_target !== undefined && activeReviewMo?.mrp_monthly_target !== null
+                    ? activeReviewMo.mrp_monthly_target
+                    : null)));
+    const toProduceValStr = (toProduceVal !== null && toProduceVal !== undefined)
+        ? `${Number(toProduceVal).toLocaleString()} Nos`
+        : "- Nos";
     const childPart = plan?.child_part_no || mrp?.child_part_no || (isReview ? (activeReviewMo?.part_no || "") : "");
-    const mrpSubStr = childPart ? `${childPart} (Balance)` : "Balance demand";
+    const mrpSubStr = childPart ? `${childPart} (Target Requirement)` : "Target Requirement";
 
     const moCount = (plan && plan.monthly_mo_count !== undefined)
         ? plan.monthly_mo_count
@@ -3984,15 +4178,16 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
                 if (existing) {
                     if (!existing.part_size && rowSize) existing.part_size = rowSize;
                 } else {
-                    const mrpTxt = r.querySelector(`#addPartMrpQty_${idx}`)?.textContent?.replace(/[^0-9]/g, "") || "";
                     const toPTxt = r.querySelector(`#addPartToProduce_${idx}`)?.textContent?.replace(/[^0-9]/g, "") || "";
+                    const moPTxt = r.querySelector(`#addPartMoProduced_${idx}`)?.textContent?.replace(/[^0-9]/g, "") || "";
+                    const balTxt = r.querySelector(`#addPartBalance_${idx}`)?.textContent?.replace(/[^0-9]/g, "") || "";
                     allPartsList.push({
                         part_no: rowPartNo,
                         child_part_no: rowPartNo,
                         part_size: rowSize,
-                        mrp_monthly_target: mrpTxt ? parseInt(mrpTxt) : null,
-                        parts_produced: 0,
-                        remaining_quantity: toPTxt ? parseInt(toPTxt) : null
+                        mrp_monthly_target: toPTxt ? parseInt(toPTxt) : null,
+                        parts_produced: moPTxt ? parseInt(moPTxt) : 0,
+                        remaining_quantity: balTxt ? parseInt(balTxt) : null
                     });
                 }
             });
@@ -4042,27 +4237,27 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
                 </div>
 
                 <div class="mo-kpi-card kpi-mrp-qty">
-                    <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                    <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
                     <div class="mo-kpi-content">
-                        <span class="mo-kpi-label">MRP Monthly Target</span>
-                        <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMrpTarget' : 'kpiMrpTarget'}">${mrpValStr}</div>
+                        <span class="mo-kpi-label">Qty to Produce</span>
+                        <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMrpTarget' : 'kpiMrpTarget'}">${toProduceValStr}</div>
                         <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMrpSubtext' : 'kpiMrpSubtext'}" title="${escapeHtml(mrpSubStr)}">${escapeHtml(mrpSubStr)}</small>
                     </div>
                 </div>
 
                 <div class="mo-kpi-card kpi-mo-produced">
-                    <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
+                    <div class="mo-kpi-icon"><i class="fa-solid fa-clipboard-check"></i></div>
                     <div class="mo-kpi-content">
-                        <span class="mo-kpi-label">Parts Produced</span>
+                        <span class="mo-kpi-label">MO Produced Qty</span>
                         <div class="mo-kpi-value" id="${isReview ? 'kpiReviewMoProduced' : 'kpiMoProduced'}">${partsValStr}</div>
                         <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewMoProducedSubtext' : 'kpiMoProducedSubtext'}" title="${moCount} MO${moCount === 1 ? '' : 's'} produced (${partsCount} parts in ${plan?.target_month || 'month'})">${escapeHtml(moSubStr)}</small>
                     </div>
                 </div>
 
                 <div class="mo-kpi-card kpi-remaining-qty">
-                    <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                    <div class="mo-kpi-icon"><i class="fa-solid fa-scale-balanced"></i></div>
                     <div class="mo-kpi-content">
-                        <span class="mo-kpi-label">Remaining Quantity</span>
+                        <span class="mo-kpi-label">Balance to Produce</span>
                         <div class="mo-kpi-value" id="${isReview ? 'kpiReviewRemainingQty' : 'kpiRemainingQty'}">${remValStr}</div>
                         <small class="mo-kpi-subtext" id="${isReview ? 'kpiReviewRemainingSubtext' : 'kpiRemainingSubtext'}" title="${escapeHtml(remSubStr)}">${escapeHtml(remSubStr)}</small>
                     </div>
@@ -4099,22 +4294,42 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
                     ${allPartsList.map((p, idx) => {
                         const pNo = p.part_no || p.child_part_no || (idx === 0 ? targetPartNo : `Part ${idx + 1}`);
                         const pSize = formatPartSize(p.part_size || (idx === 0 ? formattedPartSize : ""));
-                        const pMrp = (p.mrp_monthly_target !== null && p.mrp_monthly_target !== undefined)
-                            ? `${Number(p.mrp_monthly_target).toLocaleString()} Nos`
-                            : (idx === 0 ? mrpValStr : "- Nos");
-                        const pMoCount = (p.monthly_mo_count !== undefined)
-                            ? p.monthly_mo_count
-                            : (p.monthly_mo_records ? p.monthly_mo_records.length : 0);
-                        const pProducedCount = (p.parts_produced !== null && p.parts_produced !== undefined)
-                            ? Number(p.parts_produced).toLocaleString()
-                            : "0";
-                        const pProducedVal = (p.parts_produced !== null && p.parts_produced !== undefined)
-                            ? `${pProducedCount} Nos`
-                            : (idx === 0 ? partsValStr : "0 Nos");
-                        const pMoSub = `${pMoCount} MO${pMoCount === 1 ? '' : 's'} produced`;
-                        const pRem = (p.remaining_quantity !== null && p.remaining_quantity !== undefined)
-                            ? `${Number(p.remaining_quantity).toLocaleString()} Nos`
-                            : (idx === 0 ? remValStr : "- Nos");
+                        const pSched = (p.mrp_monthly_target !== null && p.mrp_monthly_target !== undefined) ? Number(p.mrp_monthly_target) : null;
+                        const pInitStock = (p.initial_stock !== null && p.initial_stock !== undefined) ? Number(p.initial_stock) : 0;
+                        const pBaseQty = (p.base_qty_to_produce !== null && p.base_qty_to_produce !== undefined)
+                            ? Number(p.base_qty_to_produce)
+                            : ((p.qty_to_produce !== null && p.qty_to_produce !== undefined)
+                                ? Number(p.qty_to_produce)
+                                : (pSched !== null ? Math.max(0, pSched - pInitStock) : (idx === 0 && toProduceVal !== null ? Number(toProduceVal) : null)));
+                        const pToProduce = pBaseQty !== null ? `${pBaseQty.toLocaleString()} Nos` : "- Nos";
+
+                        const pProducedCount = (p.mo_produced !== null && p.mo_produced !== undefined)
+                            ? Number(p.mo_produced)
+                            : ((p.parts_produced !== null && p.parts_produced !== undefined) ? Number(p.parts_produced) : 0);
+                        const pProducedVal = `${pProducedCount.toLocaleString()} Nos`;
+
+                        const pExcelMo = Number(p.excel_mo_produced || 0);
+                        const pAppMo = Number(p.app_mo_produced || 0);
+                        let pMoSub = `${pProducedCount.toLocaleString()} Nos produced`;
+                        if (pExcelMo > 0 && pAppMo > 0) {
+                            pMoSub = `${pExcelMo.toLocaleString()} Excel + ${pAppMo.toLocaleString()} App`;
+                        } else if (pExcelMo > 0) {
+                            pMoSub = `${pExcelMo.toLocaleString()} Excel MOs`;
+                        } else if (pAppMo > 0) {
+                            pMoSub = `${pAppMo.toLocaleString()} App MOs`;
+                        }
+
+                        const pBalanceCount = (p.balance_to_produce !== null && p.balance_to_produce !== undefined)
+                            ? Math.max(0, Number(p.balance_to_produce))
+                            : ((p.remaining_quantity !== null && p.remaining_quantity !== undefined)
+                                ? Math.max(0, Number(p.remaining_quantity))
+                                : (pBaseQty !== null ? Math.max(0, pBaseQty - pProducedCount) : null));
+                        let pRem = pBalanceCount !== null ? `${pBalanceCount.toLocaleString()} Nos` : "- Nos";
+                        if (pBalanceCount === 0 && pBaseQty !== null && pBaseQty > 0) {
+                            pRem = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Complete</small>`;
+                        } else if (pBalanceCount === 0 && pBaseQty === 0) {
+                            pRem = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Stock OK</small>`;
+                        }
                         const pTargetQty = p.target_qty ? `${Number(p.target_qty).toLocaleString()} Nos` : "";
 
                         return `
@@ -4139,29 +4354,29 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
 
                             <div class="mo-kpi-row" style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;">
                                 <div class="mo-kpi-card kpi-mrp-qty">
-                                    <div class="mo-kpi-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                                    <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
                                     <div class="mo-kpi-content">
-                                        <span class="mo-kpi-label">MRP Monthly Target</span>
-                                        <div class="mo-kpi-value">${pMrp}</div>
-                                        <small class="mo-kpi-subtext" title="${escapeHtml(pNo)} (Balance)">${escapeHtml(pNo)} (Balance)</small>
+                                        <span class="mo-kpi-label">Qty to Produce</span>
+                                        <div class="mo-kpi-value">${pToProduce}</div>
+                                        <small class="mo-kpi-subtext" title="${escapeHtml(pNo)} (Target Requirement)">${escapeHtml(pNo)} (Target Requirement)</small>
                                     </div>
                                 </div>
 
                                 <div class="mo-kpi-card kpi-mo-produced">
-                                    <div class="mo-kpi-icon"><i class="fa-solid fa-industry"></i></div>
+                                    <div class="mo-kpi-icon"><i class="fa-solid fa-clipboard-check"></i></div>
                                     <div class="mo-kpi-content">
-                                        <span class="mo-kpi-label">Parts Produced</span>
+                                        <span class="mo-kpi-label">MO Produced Qty</span>
                                         <div class="mo-kpi-value">${pProducedVal}</div>
                                         <small class="mo-kpi-subtext" title="${escapeHtml(pMoSub)}">${escapeHtml(pMoSub)}</small>
                                     </div>
                                 </div>
 
                                 <div class="mo-kpi-card kpi-remaining-qty">
-                                    <div class="mo-kpi-icon"><i class="fa-solid fa-hourglass-half"></i></div>
+                                    <div class="mo-kpi-icon"><i class="fa-solid fa-scale-balanced"></i></div>
                                     <div class="mo-kpi-content">
-                                        <span class="mo-kpi-label">Remaining Quantity</span>
+                                        <span class="mo-kpi-label">Balance to Produce</span>
                                         <div class="mo-kpi-value">${pRem}</div>
-                                        <small class="mo-kpi-subtext" title="MRP Bal - MO Produced">MRP Bal - MO Produced</small>
+                                        <small class="mo-kpi-subtext" title="Target - MO Produced">Target - MO Produced</small>
                                     </div>
                                 </div>
                             </div>
@@ -4250,14 +4465,16 @@ function renderIntelligenceCard(intel, isReview = false) {
         ? plan.rm_onhand_sheets
         : (rm ? rm.onhand_stock : null);
 
-    const mrpTarget = (plan.mrp_monthly_target !== undefined && plan.mrp_monthly_target !== null)
-        ? plan.mrp_monthly_target
-        : (mrp && mrp.monthly_total !== undefined && mrp.monthly_total !== null ? mrp.monthly_total : null);
+    const toProduceTarget = (plan.qty_to_produce !== undefined && plan.qty_to_produce !== null)
+        ? plan.qty_to_produce
+        : (plan.mrp_monthly_target !== undefined && plan.mrp_monthly_target !== null && plan.current_stock !== undefined
+            ? Math.max(0, plan.mrp_monthly_target - plan.current_stock)
+            : (plan.mrp_monthly_target || (mrp && mrp.monthly_total !== undefined && mrp.monthly_total !== null ? mrp.monthly_total : null)));
 
     const partsProduced = plan.parts_produced || 0;
     const remainingQty = (plan.remaining_quantity !== undefined && plan.remaining_quantity !== null)
         ? plan.remaining_quantity
-        : (mrpTarget !== null ? Math.max(0, mrpTarget - partsProduced) : null);
+        : (toProduceTarget !== null ? Math.max(0, toProduceTarget - partsProduced) : null);
 
     const container = document.getElementById(isReview ? "reviewMoKpiContainer" : "moKpiContainer");
 
@@ -4267,7 +4484,7 @@ function renderIntelligenceCard(intel, isReview = false) {
 
         if (container) {
             container.style.display = "block";
-            renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan, true);
+            renderDefaultSinglePartKpis(rmOnHand, rm, toProduceTarget, mrp, partsProduced, remainingQty, plan, true);
         }
         const revCard = document.getElementById("reviewErpIntelCard");
         if (revCard) revCard.style.display = "none";
@@ -4277,7 +4494,7 @@ function renderIntelligenceCard(intel, isReview = false) {
     } else {
         if (container) {
             container.style.display = "block";
-            renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced, remainingQty, plan, false);
+            renderDefaultSinglePartKpis(rmOnHand, rm, toProduceTarget, mrp, partsProduced, remainingQty, plan, false);
         }
         recalculateTargetQtyFromLayout();
     }
@@ -8163,28 +8380,8 @@ function addModalAdditionalPartRow() {
             </div>
         </div>
 
-        <!-- Row 3: 3 Cards/Tabs for this Added Part: MRP Quantity, Current Stock, Qty to Produce -->
+        <!-- Row 3: 3 Cards/Tabs for this Added Part: 1. Qty to Produce, 2. MO Produced Qty, 3. Balance to Produce -->
         <div class="modal-add-part-mrp-tabs" id="addPartMrpRow_${rowIdx}">
-            <div class="modal-add-part-mrp-card" style="background: #f5f3ff; border: 1.5px solid #ddd6fe;">
-                <div style="width: 28px; height: 28px; border-radius: 5px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
-                    <i class="fa-solid fa-calendar-days"></i>
-                </div>
-                <div class="card-info">
-                    <span class="card-title" style="color: #6d28d9;">MRP Quantity</span>
-                    <div class="card-val" id="addPartMrpQty_${rowIdx}" style="color: #5b21b6;">- Nos</div>
-                </div>
-            </div>
-
-            <div class="modal-add-part-mrp-card" style="background: #ecfdf5; border: 1.5px solid #a7f3d0;">
-                <div style="width: 28px; height: 28px; border-radius: 5px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
-                    <i class="fa-solid fa-boxes-stacked"></i>
-                </div>
-                <div class="card-info">
-                    <span class="card-title" style="color: #047857;">Current Stock</span>
-                    <div class="card-val" id="addPartCurStock_${rowIdx}" style="color: #065f46;">- Nos</div>
-                </div>
-            </div>
-
             <div class="modal-add-part-mrp-card" style="background: #fffbeb; border: 1.5px solid #fde68a;">
                 <div style="width: 28px; height: 28px; border-radius: 5px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
                     <i class="fa-solid fa-industry"></i>
@@ -8192,6 +8389,26 @@ function addModalAdditionalPartRow() {
                 <div class="card-info">
                     <span class="card-title" style="color: #b45309;">Qty to Produce</span>
                     <div class="card-val" id="addPartToProduce_${rowIdx}" style="color: #92400e;">- Nos</div>
+                </div>
+            </div>
+
+            <div class="modal-add-part-mrp-card" style="background: #f0f9ff; border: 1.5px solid #bae6fd;">
+                <div style="width: 28px; height: 28px; border-radius: 5px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                    <i class="fa-solid fa-clipboard-check"></i>
+                </div>
+                <div class="card-info">
+                    <span class="card-title" style="color: #0369a1;">MO Produced Qty</span>
+                    <div class="card-val" id="addPartMoProduced_${rowIdx}" style="color: #075985;">- Nos</div>
+                </div>
+            </div>
+
+            <div class="modal-add-part-mrp-card" style="background: #ecfdf5; border: 1.5px solid #a7f3d0;">
+                <div style="width: 28px; height: 28px; border-radius: 5px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                    <i class="fa-solid fa-scale-balanced"></i>
+                </div>
+                <div class="card-info">
+                    <span class="card-title" style="color: #047857;">Balance to Produce</span>
+                    <div class="card-val" id="addPartBalance_${rowIdx}" style="color: #065f46;">- Nos</div>
                 </div>
             </div>
         </div>
@@ -8317,41 +8534,44 @@ async function selectAdditionalPartForModal(rowIdx, partNo) {
             qtyEl.value = offtakeVal;
         }
 
-        // Populate the 3 MRP Cards for this added part (Live from 7-table Supabase DB)
+        // Populate the 3 MRP Cards for this added part (1. Qty to Produce, 2. MO Produced Qty, 3. Balance to Produce)
         const mrp = data.mrp || {};
         const sched = Number(mrp.monthly_schedule || 0);
         const curStock = Number(mrp.current_stock || 0);
-        let remQty = 0;
-        let isCoveredByStock = false;
+        const initStock = mrp.initial_stock !== undefined ? Number(mrp.initial_stock) : curStock;
+        const producedMo = mrp.app_mo_produced !== undefined ? Number(mrp.app_mo_produced) : 0;
 
-        if (mrp.monthly_schedule !== undefined) {
-            if (curStock >= sched) {
-                remQty = 0;
-                isCoveredByStock = true;
-            } else {
-                remQty = sched - curStock;
-            }
-        }
+        // Card 1: Qty to Produce = Math.max(0, sched - initStock)
+        const qtyToProduce = Math.max(0, sched - initStock);
+        // Card 2: MO Produced = producedMo
+        // Card 3: Balance = Math.max(0, qtyToProduce - producedMo)
+        const balance = Math.max(0, qtyToProduce - producedMo);
 
-        const mrpQ = mrp.monthly_schedule !== undefined ? `${sched.toLocaleString()} Nos` : "- Nos";
-        const curS = mrp.current_stock !== undefined ? `${curStock.toLocaleString()} Nos` : "- Nos";
-
+        const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+        const moPEl = document.getElementById(`addPartMoProduced_${rowIdx}`);
+        const balEl = document.getElementById(`addPartBalance_${rowIdx}`);
         const mrpQEl = document.getElementById(`addPartMrpQty_${rowIdx}`);
         const curSEl = document.getElementById(`addPartCurStock_${rowIdx}`);
-        const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
-        if (mrpQEl) mrpQEl.textContent = mrpQ;
-        if (curSEl) curSEl.textContent = curS;
+
         if (toPEl) {
+            toPEl.textContent = mrp.monthly_schedule !== undefined ? `${qtyToProduce.toLocaleString()} Nos` : "- Nos";
+        }
+        if (moPEl) {
+            moPEl.textContent = mrp.monthly_schedule !== undefined ? `${producedMo.toLocaleString()} Nos` : "- Nos";
+        }
+        if (balEl) {
             if (mrp.monthly_schedule !== undefined) {
-                if (isCoveredByStock) {
-                    toPEl.innerHTML = `0 Nos <small style="display:inline-block; margin-left:6px; font-size:0.7rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 6px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Stock: ${curStock.toLocaleString()} Nos</small>`;
+                if (balance === 0 && qtyToProduce > 0) {
+                    balEl.innerHTML = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Complete</small>`;
                 } else {
-                    toPEl.textContent = `${remQty.toLocaleString()} Nos`;
+                    balEl.textContent = `${balance.toLocaleString()} Nos`;
                 }
             } else {
-                toPEl.textContent = "- Nos";
+                balEl.textContent = "- Nos";
             }
         }
+        if (mrpQEl) mrpQEl.textContent = mrp.monthly_schedule !== undefined ? `${sched.toLocaleString()} Nos` : "- Nos";
+        if (curSEl) curSEl.textContent = mrp.current_stock !== undefined ? `${curStock.toLocaleString()} Nos` : "- Nos";
 
         onAddPartQtyChanged();
     } catch (e) {
@@ -8519,28 +8739,8 @@ function renderStandardLayoutCompanionParts(record) {
                 </div>
             </div>
 
-            <!-- Row 2: 3 Cards/Tabs for this Added Part: MRP Quantity, Current Stock, Qty to Produce -->
+            <!-- Row 2: 3 Cards/Tabs for this Added Part: 1. Qty to Produce, 2. MO Produced Qty, 3. Balance to Produce -->
             <div class="modal-add-part-mrp-tabs" id="addPartMrpRow_${rowIdx}">
-                <div class="modal-add-part-mrp-card" style="background: #f5f3ff; border: 1.5px solid #ddd6fe;">
-                    <div style="width: 28px; height: 28px; border-radius: 5px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
-                        <i class="fa-solid fa-calendar-days"></i>
-                    </div>
-                    <div class="card-info">
-                        <span class="card-title" style="color: #6d28d9;">MRP Quantity</span>
-                        <div class="card-val" id="addPartMrpQty_${rowIdx}" style="color: #5b21b6;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
-                    </div>
-                </div>
-
-                <div class="modal-add-part-mrp-card" style="background: #ecfdf5; border: 1.5px solid #a7f3d0;">
-                    <div style="width: 28px; height: 28px; border-radius: 5px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
-                        <i class="fa-solid fa-boxes-stacked"></i>
-                    </div>
-                    <div class="card-info">
-                        <span class="card-title" style="color: #047857;">Current Stock</span>
-                        <div class="card-val" id="addPartCurStock_${rowIdx}" style="color: #065f46;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
-                    </div>
-                </div>
-
                 <div class="modal-add-part-mrp-card" style="background: #fffbeb; border: 1.5px solid #fde68a;">
                     <div style="width: 28px; height: 28px; border-radius: 5px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
                         <i class="fa-solid fa-industry"></i>
@@ -8548,6 +8748,26 @@ function renderStandardLayoutCompanionParts(record) {
                     <div class="card-info">
                         <span class="card-title" style="color: #b45309;">Qty to Produce</span>
                         <div class="card-val" id="addPartToProduce_${rowIdx}" style="color: #92400e;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="modal-add-part-mrp-card" style="background: #f0f9ff; border: 1.5px solid #bae6fd;">
+                    <div style="width: 28px; height: 28px; border-radius: 5px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="card-title" style="color: #0369a1;">MO Produced Qty</span>
+                        <div class="card-val" id="addPartMoProduced_${rowIdx}" style="color: #075985;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
+                    </div>
+                </div>
+
+                <div class="modal-add-part-mrp-card" style="background: #ecfdf5; border: 1.5px solid #a7f3d0;">
+                    <div style="width: 28px; height: 28px; border-radius: 5px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                        <i class="fa-solid fa-scale-balanced"></i>
+                    </div>
+                    <div class="card-info">
+                        <span class="card-title" style="color: #047857;">Balance to Produce</span>
+                        <div class="card-val" id="addPartBalance_${rowIdx}" style="color: #065f46;"><i class="fa-solid fa-spinner fa-spin" style="font-size:0.8rem;"></i> Loading...</div>
                     </div>
                 </div>
             </div>
@@ -8573,12 +8793,16 @@ async function fetchChildPartMrpStats(partNo, companyId, rowIdx) {
         const unitParam = `?branch=${encodeURIComponent(cid)}&company_id=${encodeURIComponent(cid)}`;
         const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
         if (!res.ok) {
+            const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+            const moPEl = document.getElementById(`addPartMoProduced_${rowIdx}`);
+            const balEl = document.getElementById(`addPartBalance_${rowIdx}`);
             const mrpQEl = document.getElementById(`addPartMrpQty_${rowIdx}`);
             const curSEl = document.getElementById(`addPartCurStock_${rowIdx}`);
-            const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+            if (toPEl) toPEl.textContent = "- Nos";
+            if (moPEl) moPEl.textContent = "- Nos";
+            if (balEl) balEl.textContent = "- Nos";
             if (mrpQEl) mrpQEl.textContent = "- Nos";
             if (curSEl) curSEl.textContent = "- Nos";
-            if (toPEl) toPEl.textContent = "- Nos";
             return;
         }
 
@@ -8586,38 +8810,39 @@ async function fetchChildPartMrpStats(partNo, companyId, rowIdx) {
         const mrp = data.mrp || {};
         const sched = (mrp.monthly_schedule !== undefined && mrp.monthly_schedule !== null) ? Number(mrp.monthly_schedule) : null;
         const curStock = (mrp.current_stock !== undefined && mrp.current_stock !== null) ? Number(mrp.current_stock) : null;
-        const initStock = mrp.initial_stock !== undefined ? Number(mrp.initial_stock) : curStock;
-        const producedMo = mrp.app_mo_produced !== undefined ? Number(mrp.app_mo_produced) : 0;
+        const initStock = mrp.initial_stock !== undefined && mrp.initial_stock !== null ? Number(mrp.initial_stock) : (curStock || 0);
+        const excelMo = (mrp.excel_mo_produced !== undefined && mrp.excel_mo_produced !== null) ? Number(mrp.excel_mo_produced) : ((mrp.sheet_mo_produced !== undefined) ? Number(mrp.sheet_mo_produced) : 0);
+        const appMo = (mrp.app_mo_produced !== undefined && mrp.app_mo_produced !== null) ? Number(mrp.app_mo_produced) : 0;
+        const producedMo = (mrp.mo_produced !== undefined && mrp.mo_produced !== null) ? Number(mrp.mo_produced) : (excelMo + appMo);
 
+        const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+        const moPEl = document.getElementById(`addPartMoProduced_${rowIdx}`);
+        const balEl = document.getElementById(`addPartBalance_${rowIdx}`);
         const mrpQEl = document.getElementById(`addPartMrpQty_${rowIdx}`);
         const curSEl = document.getElementById(`addPartCurStock_${rowIdx}`);
-        const toPEl = document.getElementById(`addPartToProduce_${rowIdx}`);
+
+        const baseQtyToProduce = (mrp.base_qty_to_produce !== undefined && mrp.base_qty_to_produce !== null)
+            ? Number(mrp.base_qty_to_produce)
+            : (sched !== null ? Math.max(0, sched - initStock) : (mrp.qty_to_produce !== undefined ? Number(mrp.qty_to_produce) : null));
+
+        const balance = (mrp.balance_to_produce !== undefined && mrp.balance_to_produce !== null)
+            ? Math.max(0, Number(mrp.balance_to_produce))
+            : (baseQtyToProduce !== null ? Math.max(0, baseQtyToProduce - producedMo) : null);
+
+        if (toPEl) toPEl.textContent = baseQtyToProduce !== null ? `${baseQtyToProduce.toLocaleString()} Nos` : "- Nos";
+        if (moPEl) moPEl.textContent = `${producedMo.toLocaleString()} Nos`;
+        if (balEl) {
+            if (balance === 0 && baseQtyToProduce !== null && baseQtyToProduce > 0) {
+                balEl.innerHTML = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Complete</small>`;
+            } else if (balance === 0 && baseQtyToProduce === 0) {
+                balEl.innerHTML = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Stock OK</small>`;
+            } else {
+                balEl.textContent = balance !== null ? `${balance.toLocaleString()} Nos` : "- Nos";
+            }
+        }
 
         if (mrpQEl) mrpQEl.textContent = sched !== null ? `${sched.toLocaleString()} Nos` : "- Nos";
-
-        if (curSEl) {
-            if (curStock !== null) {
-                curSEl.innerHTML = producedMo > 0
-                    ? `${curStock.toLocaleString()} Nos <span style="font-size:0.68rem; color:#0369a1; font-weight:600;">(${initStock.toLocaleString()} + ${producedMo.toLocaleString()} MO)</span>`
-                    : `${curStock.toLocaleString()} Nos`;
-            } else {
-                curSEl.textContent = "- Nos";
-            }
-        }
-
-        if (toPEl) {
-            if (sched !== null && curStock !== null) {
-                if (curStock >= sched) {
-                    toPEl.innerHTML = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Stock: ${curStock.toLocaleString()} Nos</small>`;
-                } else {
-                    const rem = sched - curStock;
-                    toPEl.textContent = `${rem.toLocaleString()} Nos`;
-                }
-            } else {
-                const toProduce = mrp.qty_to_produce !== undefined ? mrp.qty_to_produce : "-";
-                toPEl.textContent = toProduce !== "-" ? `${Number(toProduce).toLocaleString()} Nos` : "- Nos";
-            }
-        }
+        if (curSEl) curSEl.textContent = curStock !== null ? `${curStock.toLocaleString()} Nos` : "- Nos";
     } catch (e) {
         console.error("fetchChildPartMrpStats error:", e);
     }

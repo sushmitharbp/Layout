@@ -525,8 +525,66 @@ class ERPStockService:
         results.sort(key=lambda x: str(x.get("doc_date") or ""), reverse=True)
         return results[:15]
 
-    def get_rm_opening_stock(self, rm_code, grade=None, thickness=None, length=None, width=None):
-        """Find RM opening stock in MAIN STORE with live Supabase query"""
+    def get_rm_opening_stock(self, rm_code, grade=None, thickness=None, length=None, width=None, branch_code=None):
+        """Find RM opening stock in MAIN STORE with live Tara ERP and Supabase queries"""
+        # 1. Try Tara ERP Live First!
+        try:
+            from tara_erp_client import tara_erp_client, extract_grade_from_text
+            b_code = (branch_code or "PEPIPL").strip()
+            t_val = float(thickness) if thickness else None
+            if not t_val and rm_code:
+                nums = [float(x) for x in re.findall(r'(\d+(?:\.\d+)?)', rm_code) if float(x) > 0]
+                for n in nums:
+                    if n <= 50.0:
+                        t_val = n
+                        break
+            if t_val:
+                grd = grade or extract_grade_from_text(rm_code)
+                erp_sheets = tara_erp_client.fetch_rm_sheet_details(thickness=t_val, grade=grd, branch_code=b_code, include_zero_stock=True)
+                if erp_sheets:
+                    clean_input = (rm_code or "").upper().replace(" ", "").replace("*", "-")
+                    # Match by code
+                    for s in erp_sheets:
+                        s_code = (s.get("rm_code") or s.get("item_code") or "").upper().replace(" ", "").replace("*", "-")
+                        if s_code == clean_input:
+                            return {
+                                "item_code": s.get("rm_code") or s.get("item_code"),
+                                "item_desc": s.get("item_desc"),
+                                "onhand_stock": float(s.get("available_sheets", 0)),
+                                "total_weight": float(s.get("total_stock_weight", 0)),
+                                "weight_per_sheet": float(s.get("weight_per_sheet", 0)),
+                                "last_po_price": None
+                            }
+                    # Match by dimensions
+                    if length and width:
+                        for s in erp_sheets:
+                            s_len = float(s.get("length") or s.get("sheet_length") or 0)
+                            s_wid = float(s.get("width") or s.get("sheet_width") or 0)
+                            for l, w in [(length, width), (width, length)]:
+                                if abs(s_len - l) < 2.0 and abs(s_wid - w) < 2.0:
+                                    return {
+                                        "item_code": s.get("rm_code") or s.get("item_code"),
+                                        "item_desc": s.get("item_desc"),
+                                        "onhand_stock": float(s.get("available_sheets", 0)),
+                                        "total_weight": float(s.get("total_stock_weight", 0)),
+                                        "weight_per_sheet": float(s.get("weight_per_sheet", 0)),
+                                        "last_po_price": None
+                                    }
+                    if clean_input:
+                        for s in erp_sheets:
+                            s_code = (s.get("rm_code") or s.get("item_code") or "").upper().replace(" ", "").replace("*", "-")
+                            if clean_input in s_code or s_code in clean_input:
+                                return {
+                                    "item_code": s.get("rm_code") or s.get("item_code"),
+                                    "item_desc": s.get("item_desc"),
+                                    "onhand_stock": float(s.get("available_sheets", 0)),
+                                    "total_weight": float(s.get("total_stock_weight", 0)),
+                                    "weight_per_sheet": float(s.get("weight_per_sheet", 0)),
+                                    "last_po_price": None
+                                }
+        except Exception as e:
+            logger.warning(f"Tara ERP live RM stock fetch error: {e}")
+
         rm_norm = norm_key(rm_code)
         stock_item = None
         
@@ -827,9 +885,48 @@ class ERPStockService:
             except Exception:
                 pass
 
+        # Prioritize clean 7-table database MRP schedule (incorporates Excel MOs + App MOs)
+        try:
+            from db_clean import get_mrp_for_part as clean_get_mrp
+            c_mrp = clean_get_mrp(part_no)
+            if c_mrp and (c_mrp.get("monthly_schedule") is not None):
+                mrp_monthly = float(c_mrp.get("monthly_schedule") or 0)
+                tot_q = mrp_monthly
+                init_stock = float(c_mrp.get("initial_stock") if c_mrp.get("initial_stock") is not None else (c_mrp.get("current_stock") or 0))
+                c_produced = float(c_mrp.get("mo_produced") or c_mrp.get("app_mo_produced") or 0)
+                qty_to_produce = float(c_mrp.get("base_qty_to_produce") if c_mrp.get("base_qty_to_produce") is not None else max(0.0, mrp_monthly - init_stock))
+                total_produced = c_produced
+                remaining_qty = max(0.0, qty_to_produce - total_produced)
+                return {
+                    "part_no": part_no,
+                    "child_part_no": c_mrp.get("part_no") or part_no,
+                    "parent_part_no": primary_item.get("parent_part"),
+                    "mrp_monthly_target": mrp_monthly,
+                    "initial_stock": init_stock,
+                    "current_stock": float(c_mrp.get("current_stock") or 0),
+                    "base_qty_to_produce": qty_to_produce,
+                    "qty_to_produce": qty_to_produce,
+                    "parts_produced": total_produced,
+                    "mo_produced": total_produced,
+                    "remaining_quantity": remaining_qty,
+                    "balance_to_produce": remaining_qty,
+                    "monthly_mo_count": len(monthly_mos),
+                    "monthly_mo_records": monthly_mos,
+                    "total_qty": tot_q,
+                    "inhouse_erp_qty": ih_q,
+                    "outsource_erp_qty": os_q,
+                    "balance_planning": mrp_monthly,
+                    "offtake": primary_item.get("offtake", 1.0),
+                    "target_month": mo_month
+                }
+        except Exception:
+            pass
+
         if mrp_monthly is not None:
-            remaining_qty = max(0.0, mrp_monthly - total_produced)
+            qty_to_produce = mrp_monthly
+            remaining_qty = max(0.0, qty_to_produce - total_produced)
         else:
+            qty_to_produce = None
             remaining_qty = None
 
         return {
@@ -837,8 +934,10 @@ class ERPStockService:
             "child_part_no": primary_item.get("child_part") or child_tag or part_no,
             "parent_part_no": primary_item.get("parent_part"),
             "mrp_monthly_target": mrp_monthly,
+            "qty_to_produce": qty_to_produce,
             "parts_produced": total_produced,
             "remaining_quantity": remaining_qty,
+            "balance_to_produce": remaining_qty,
             "monthly_mo_count": len(monthly_mos),
             "monthly_mo_records": monthly_mos,
             "total_qty": tot_q,
@@ -947,8 +1046,10 @@ class ERPStockService:
             "planning_summary": {
                 "rm_onhand_sheets": onhand_sheets,
                 "mrp_monthly_target": primary_plan.get("mrp_monthly_target"),
+                "qty_to_produce": primary_plan.get("qty_to_produce", primary_plan.get("mrp_monthly_target")),
                 "parts_produced": primary_plan.get("parts_produced", 0),
                 "remaining_quantity": primary_plan.get("remaining_quantity"),
+                "balance_to_produce": primary_plan.get("remaining_quantity"),
                 "child_part_no": primary_plan.get("child_part_no"),
                 "offtake": primary_plan.get("offtake", 1.0),
                 "parent_schedule_qty": primary_item.get("schedule_qty"),

@@ -226,6 +226,43 @@ class ReorderLevelService:
         # High-performance in-memory cache to guarantee instantaneous UI loads
         self._supabase_cache: Dict[str, Any] = {}
         self._cache_ttl = 180.0  # 3 minutes
+        # Tara ERP Live Cache (60s)
+        self._tara_cache: Dict[str, Any] = {}
+        self._tara_cache_ttl = 60.0
+
+    def _get_tara_erp_rm_map(self, target_company: str = "PEPIPL") -> tuple:
+        """Fetches live RM sheet stock from Tara ERP ORDS Main Stores with caching"""
+        now = time.time()
+        cached = self._tara_cache.get(target_company)
+        if cached and (now - cached.get("time", 0)) < self._tara_cache_ttl:
+            return cached.get("rm_map", {}), cached.get("dim_map", {})
+
+        erp_rm_map = {}
+        erp_dim_map = {}
+        try:
+            from tara_erp_client import tara_erp_client
+            all_thks = set(s["thickness"] for s in AL_RM_STANDARDS + VST_RM_STANDARDS if s.get("thickness"))
+            for thk in sorted(all_thks):
+                sheets = tara_erp_client.fetch_rm_sheet_details(
+                    thickness=thk,
+                    branch_code=target_company,
+                    include_zero_stock=True
+                )
+                for s in sheets:
+                    c = s.get("rm_code") or s.get("item_code") or ""
+                    if c:
+                        erp_rm_map[_norm_code(c)] = s
+                    t = float(s.get("thickness") or thk or 0)
+                    l = float(s.get("length") or s.get("sheet_length") or 0)
+                    w = float(s.get("width") or s.get("sheet_width") or 0)
+                    if t and l and w:
+                        erp_dim_map[f"{t:g}_{l:g}_{w:g}"] = s
+                        erp_dim_map[f"{t:g}_{w:g}_{l:g}"] = s
+        except Exception as e:
+            logger.warning(f"Could not load live Tara ERP RM stock for RYG: {e}")
+
+        self._tara_cache[target_company] = {"time": now, "rm_map": erp_rm_map, "dim_map": erp_dim_map}
+        return erp_rm_map, erp_dim_map
 
     def _get_supabase_rm_map(self, target_company: str) -> Dict[str, Any]:
         """Fetches Supabase RM sheet stock with caching and tight 1.5s timeout"""
@@ -276,10 +313,13 @@ class ReorderLevelService:
             cust_name = "Ashok Leyland (AL)"
             cust_code = "AL"
 
-        # 1. Fetch live stock from Supabase public.rm (cached, non-blocking)
+        # 1. Fetch live stock from Tara ERP Main Stores (Primary real-time source)
+        erp_rm_map, erp_dim_map = self._get_tara_erp_rm_map(target_company)
+
+        # 2. Fetch live stock from Supabase public.rm (cached fallback)
         db_rm_map = self._get_supabase_rm_map(target_company)
 
-        # 2. Build rows
+        # 3. Build rows
         items = []
         q_clean = search_query.strip().lower()
         filter_status = status_filter.strip().upper() if status_filter else "ALL"
@@ -287,6 +327,8 @@ class ReorderLevelService:
         for std in standards:
             code = std["rm_code"]
             k = _norm_code(code)
+            dim_k = f"{float(std.get('thickness', 0)):g}_{float(std.get('length', 0)):g}_{float(std.get('width', 0)):g}"
+            erp_item = erp_rm_map.get(k) or erp_dim_map.get(dim_k)
 
             # Max QTY (support custom runtime revision or default norm)
             max_qty = self.custom_max_qtys.get(code, std["max_qty"])
@@ -295,17 +337,21 @@ class ReorderLevelService:
             # Dynamic Sheet Count Resolution:
             # Priority:
             # A) Custom manual stock adjustment made in UI
-            # B) Live Supabase public.rm available_sheets (if found and non-negative)
-            # C) Baseline ERP stock snapshot from the revised RYG spreadsheet (17-Nov-2026)
+            # B) Live Tara ERP Main Store available_sheets
+            # C) Live Supabase public.rm available_sheets (if found and non-negative)
+            # D) Baseline ERP stock snapshot from the revised RYG spreadsheet (17-Nov-2026)
             if code in self.custom_stocks:
                 sheet_stock = self.custom_stocks[code]
                 stock_source = "Live User Update"
+            elif erp_item and erp_item.get("available_sheets") is not None:
+                sheet_stock = float(erp_item.get("available_sheets") or 0)
+                stock_source = "Tara ERP Live"
             elif k in db_rm_map and db_rm_map[k].get("available_sheets") is not None:
                 sheet_stock = float(db_rm_map[k].get("available_sheets") or 0)
                 stock_source = "Supabase Store"
             elif code in baseline_map:
                 sheet_stock = float(baseline_map[code])
-                stock_source = "ERP Live Snapshot"
+                stock_source = "ERP Snapshot (Nov 17)"
             else:
                 sheet_stock = 0.0
                 stock_source = "Out of Stock"
@@ -346,16 +392,20 @@ class ReorderLevelService:
 
             items.append(row)
 
-        # 3. Compute Summary Counts across all standards (unfiltered for summary stats)
+        # 4. Compute Summary Counts across all standards (unfiltered for summary stats)
         all_evals = []
         for std in standards:
             code = std["rm_code"]
             k = _norm_code(code)
+            dim_k = f"{float(std.get('thickness', 0)):g}_{float(std.get('length', 0)):g}_{float(std.get('width', 0)):g}"
+            erp_item = erp_rm_map.get(k) or erp_dim_map.get(dim_k)
             max_q = self.custom_max_qtys.get(code, std["max_qty"])
             wt_sh = std["weight_per_sheet"]
 
             if code in self.custom_stocks:
                 sh = self.custom_stocks[code]
+            elif erp_item and erp_item.get("available_sheets") is not None:
+                sh = float(erp_item.get("available_sheets") or 0)
             elif k in db_rm_map and db_rm_map[k].get("available_sheets") is not None:
                 sh = float(db_rm_map[k].get("available_sheets") or 0)
             elif code in baseline_map:

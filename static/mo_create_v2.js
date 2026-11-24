@@ -46,12 +46,12 @@ window.openV2CreateMoModal = function() {
     if (stripBadge) stripBadge.innerText = '- Nos';
 
     // Reset 3 Live Demand Cards (Support both v2 and standard mo_portal IDs)
-    const elMrp = document.getElementById('mrpMonthlyQtyVal') || document.getElementById('v2BaseMrpVal');
-    const elStock = document.getElementById('mrpCurrentStockVal') || document.getElementById('v2BaseStockVal');
     const elProduce = document.getElementById('mrpQtyToProduceVal') || document.getElementById('v2BaseProduceVal');
-    if (elMrp) elMrp.innerText = '- Nos';
-    if (elStock) elStock.innerText = '- Nos';
+    const elMoProduced = document.getElementById('mrpMoProducedVal') || document.getElementById('mrpCurrentStockVal') || document.getElementById('v2BaseStockVal');
+    const elBalance = document.getElementById('mrpBalanceVal') || document.getElementById('mrpMonthlyQtyVal') || document.getElementById('v2BaseMrpVal');
     if (elProduce) elProduce.innerText = '- Nos';
+    if (elMoProduced) elMoProduced.innerText = '- Nos';
+    if (elBalance) elBalance.innerText = '- Nos';
 
     // Reset RM Section
     const rmSelect = document.getElementById('v2RmSelect');
@@ -164,28 +164,21 @@ window.selectV2BasePart = async function(partNo) {
         const stripBadgeEl = document.getElementById('v2BaseStripBadge');
         if (stripBadgeEl) stripBadgeEl.innerText = `${part.strip_per_blank_qty} Nos`;
 
-        // Update Base Part 3 Live Demand Cards (Supports both mo_portal and v2 element IDs)
+        // Update Base Part 3 Live Demand Cards:
+        // Card 1: Qty to Produce, Card 2: MO Produced Qty, Card 3: Balance to Produce
         const baseProducedMo = mrp.app_mo_produced || 0;
         const baseInitStock = mrp.initial_stock !== undefined ? mrp.initial_stock : (mrp.current_stock || 0);
-        const cardMrp = document.getElementById('mrpMonthlyQtyVal') || document.getElementById('v2BaseMrpVal');
-        const cardStock = document.getElementById('mrpCurrentStockVal') || document.getElementById('v2BaseStockVal');
-        const cardStockSub = document.getElementById('mrpCurrentStockSub');
-        const cardProduce = document.getElementById('mrpQtyToProduceVal') || document.getElementById('v2BaseProduceVal');
+        const sched = mrp.monthly_schedule || 0;
+        const baseQtyToProduce = Math.max(0, sched - baseInitStock);
+        const balanceQty = Math.max(0, baseQtyToProduce - baseProducedMo);
 
-        if (cardMrp) cardMrp.innerText = `${mrp.monthly_schedule || 0} Nos`;
-        if (cardStock) {
-            cardStock.innerHTML = baseProducedMo > 0
-                ? `${mrp.current_stock || 0} Nos <span style="font-size:0.68rem; color:#0369a1; font-weight:600;">(${baseInitStock} + ${baseProducedMo} MO)</span>`
-                : `${mrp.current_stock || 0} Nos`;
-        }
-        if (cardStockSub) {
-            if (baseProducedMo > 0) {
-                cardStockSub.innerHTML = `<span style="color:#047857; font-weight:600;">Stock ${baseInitStock}</span> + <span style="color:#0284c7; font-weight:700;">${baseProducedMo} MO</span>`;
-            } else {
-                cardStockSub.textContent = "In-House Stock";
-            }
-        }
-        if (cardProduce) cardProduce.innerText = `${mrp.qty_to_produce || 0} Nos`;
+        const cardProduce = document.getElementById('mrpQtyToProduceVal') || document.getElementById('v2BaseProduceVal');
+        const cardMoProduced = document.getElementById('mrpMoProducedVal') || document.getElementById('mrpCurrentStockVal') || document.getElementById('v2BaseStockVal');
+        const cardBalance = document.getElementById('mrpBalanceVal') || document.getElementById('mrpMonthlyQtyVal') || document.getElementById('v2BaseMrpVal');
+
+        if (cardProduce) cardProduce.innerText = `${baseQtyToProduce} Nos`;
+        if (cardMoProduced) cardMoProduced.innerText = `${baseProducedMo} Nos`;
+        if (cardBalance) cardBalance.innerText = `${balanceQty} Nos`;
 
         // 2. Auto-load RM Dropdown matching this Base Part!
         populateV2RmDropdown(matchingRms, part.standard_rm);
@@ -229,7 +222,8 @@ function populateV2RmDropdown(matchingRms, standardRm) {
 window.onV2RmSelected = async function(rmCode) {
     if (!rmCode) return;
     try {
-        const res = await fetch(`/api/v2/rm-stock/${encodeURIComponent(rmCode)}`);
+        const activeUnit = document.getElementById("v2UnitSelect")?.value || window.AUTH_COMPANY_ID || "PEPIPL";
+        const res = await fetch(`/api/v2/rm-stock/${encodeURIComponent(rmCode)}?branch=${encodeURIComponent(activeUnit)}`);
         const data = await res.json();
         if (!data.success) return;
 

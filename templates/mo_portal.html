@@ -922,6 +922,9 @@
                                 <option value="">-- Select RM ERP Code --</option>
                                 <option value="__custom__">⚙️ Custom RM / Layout Code...</option>
                             </select>
+                            <div id="rmZeroStockWarning" style="display: none; margin-top: 4px; color: #dc2626; font-size: 0.75rem; font-weight: 700; background: #fef2f2; border: 1.5px solid #fca5a5; padding: 4px 8px; border-radius: 4px;">
+                                <i class="fa-solid fa-ban"></i> 0 Sheets Available — MO cannot be produced. Please select another sheet from the dropdown.
+                            </div>
                         </div>
 
                         <!-- Available Store Stock Box (auto-populated) -->
@@ -982,33 +985,9 @@
                         </div>
                     </div>
 
-                    <!-- 3 Cards for Primary Part: MRP Quantity, Current Stock, Qty to Produce (Live from 7-table Supabase DB) -->
+                    <!-- 3 Cards for Primary Part: 1. Qty to Produce, 2. MO Produced Qty (App MOs), 3. Balance to Produce (Card 1 - Card 2) -->
                     <div class="part-mrp-kpi-row" id="partMrpKpiRow" style="display: flex; gap: 12px; margin-bottom: 14px;">
-                        <!-- 1. MRP Quantity -->
-                        <div class="mrp-kpi-card" style="flex: 1; background: #f5f3ff; border: 1.5px solid #ddd6fe; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 34px; height: 34px; border-radius: 6px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
-                                <i class="fa-solid fa-calendar-days"></i>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.7rem; font-weight: 700; color: #6d28d9; text-transform: uppercase; letter-spacing: 0.5px; display: block;">MRP Quantity</span>
-                                <div id="mrpMonthlyQtyVal" style="font-size: 1.05rem; font-weight: 800; color: #5b21b6; line-height: 1.2;">- Nos</div>
-                                <small id="mrpMonthlyQtySub" style="font-size: 0.68rem; color: #8b5cf6;">Schedule Target</small>
-                            </div>
-                        </div>
-
-                        <!-- 2. Current Stock -->
-                        <div class="mrp-kpi-card" style="flex: 1; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
-                            <div style="width: 34px; height: 34px; border-radius: 6px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
-                                <i class="fa-solid fa-boxes-stacked"></i>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.7rem; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Current Stock</span>
-                                <div id="mrpCurrentStockVal" style="font-size: 1.05rem; font-weight: 800; color: #065f46; line-height: 1.2;">- Nos</div>
-                                <small id="mrpCurrentStockSub" style="font-size: 0.68rem; color: #10b981;">In-House Stock</small>
-                            </div>
-                        </div>
-
-                        <!-- 3. Qty to Produce -->
+                        <!-- 1. Qty to Produce (First Card: Schedule Requirement) -->
                         <div class="mrp-kpi-card" style="flex: 1; background: #fffbeb; border: 1.5px solid #fde68a; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
                             <div style="width: 34px; height: 34px; border-radius: 6px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
                                 <i class="fa-solid fa-industry"></i>
@@ -1016,10 +995,34 @@
                             <div style="flex: 1;">
                                 <span style="font-size: 0.7rem; font-weight: 700; color: #b45309; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Qty to Produce</span>
                                 <div id="mrpQtyToProduceVal" style="font-size: 1.05rem; font-weight: 800; color: #92400e; line-height: 1.2;">- Nos</div>
-                                <div id="mrpStockHintBox" style="display: none; align-items: center; gap: 4px; background: #ecfdf5; border: 1px solid #86efac; color: #065f46; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-top: 2px;" title="Current in-house stock covers full monthly demand. Remaining qty to produce is 0.">
-                                    <i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Stock: <span id="mrpStockHintVal">0</span> Nos
+                                <small id="mrpQtyToProduceSub" style="font-size: 0.68rem; color: #f59e0b;">Target Requirement</small>
+                            </div>
+                        </div>
+
+                        <!-- 2. MO Produced Qty (Second Card: Quantity produced by MOs created in this app) -->
+                        <div class="mrp-kpi-card" style="flex: 1; background: #f0f9ff; border: 1.5px solid #bae6fd; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 6px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                                <i class="fa-solid fa-clipboard-check"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <span style="font-size: 0.7rem; font-weight: 700; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px; display: block;">MO Produced Qty</span>
+                                <div id="mrpMoProducedVal" style="font-size: 1.05rem; font-weight: 800; color: #075985; line-height: 1.2;">- Nos</div>
+                                <small id="mrpMoProducedSub" style="font-size: 0.68rem; color: #0ea5e9;">Produced in App MOs</small>
+                            </div>
+                        </div>
+
+                        <!-- 3. Balance to Produce (Third Card: Card 1 - Card 2 Quantity) -->
+                        <div class="mrp-kpi-card" style="flex: 1; background: #ecfdf5; border: 1.5px solid #a7f3d0; border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 10px;">
+                            <div style="width: 34px; height: 34px; border-radius: 6px; background: #d1fae5; color: #059669; display: flex; align-items: center; justify-content: center; font-size: 1rem;">
+                                <i class="fa-solid fa-scale-balanced"></i>
+                            </div>
+                            <div style="flex: 1;">
+                                <span style="font-size: 0.7rem; font-weight: 700; color: #047857; text-transform: uppercase; letter-spacing: 0.5px; display: block;">Balance to Produce</span>
+                                <div id="mrpBalanceVal" style="font-size: 1.05rem; font-weight: 800; color: #065f46; line-height: 1.2;">- Nos</div>
+                                <div id="mrpStockHintBox" style="display: none; align-items: center; gap: 4px; background: #dcfce7; border: 1px solid #86efac; color: #166534; padding: 2px 6px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; margin-top: 2px;" title="Production target completed!">
+                                    <i class="fa-solid fa-circle-check" style="color: #10b981;"></i> Complete: <span id="mrpStockHintVal">0</span> Nos
                                 </div>
-                                <small id="mrpQtyToProduceSub" style="font-size: 0.68rem; color: #f59e0b;">Net Requirement</small>
+                                <small id="mrpBalanceSub" style="font-size: 0.68rem; color: #10b981;">Net Balance (Qty - Produced)</small>
                             </div>
                         </div>
                     </div>
@@ -1163,55 +1166,6 @@
                                     <div class="radio-desc">Requires mandatory layout document upload and Krysalis review.</div>
                                 </div>
                             </label>
-                        </div>
-                    </div>
-
-                    <!-- 5. Parts to Manufacture for Non-Standard Layout (Manual Adding & AI Capacity / Yield) -->
-                    <div class="form-group non-std-parts-box" id="nonStdPartsBox" style="display: none; background: #f8fafc; border: 1.5px solid #bae6fd; border-radius: 8px; padding: 14px 16px; margin-top: 10px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <div>
-                                <label style="font-weight: 700; font-size: 0.88rem; color: #1e293b; display: flex; align-items: center; gap: 6px; margin: 0;">
-                                    <span style="background: #0284c7; color: #fff; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.75rem;">★</span>
-                                    Parts to Manufacture (Part Number, Size, Qty, Yield)
-                                    <span class="badge-yield-boost" style="background: #e0f2fe; color: #0284c7; font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; font-weight: 700;">
-                                        <i class="fa-solid fa-shapes"></i> Non-Standard Parts
-                                    </span>
-                                </label>
-                                <small style="display: block; font-size: 0.76rem; color: #64748b; margin-top: 3px;">
-                                    Manually add parts to manufacture from this sheet. Enter part #, blank dimensions (T*L*W), quantity, and compute yield %.
-                                </small>
-                            </div>
-                            <div style="display: flex; gap: 8px;">
-                                <button type="button" class="btn btn-sm" onclick="runNonStdCapacityAgentForAllRows()" style="font-size: 0.8rem; padding: 4px 10px; border: 1px solid #0284c7; color: #0284c7; background: #ffffff; font-weight: 600; border-radius: 6px; cursor: pointer;" title="Calculate maximum parts from selected sheet dimensions without exceeding boundaries">
-                                    <i class="fa-solid fa-calculator"></i> Agent: Calculate Max Parts
-                                </button>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="addNonStdPartRow()" style="font-size: 0.8rem; padding: 4px 10px; border: 1px solid #0284c7; color: #0284c7; background: #ffffff; border-radius: 6px; cursor: pointer;">
-                                    <i class="fa-solid fa-plus"></i> Add Part
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Dynamic Parts Rows Container -->
-                        <div id="nonStdPartsContainer" style="display: flex; flex-direction: column; gap: 10px;">
-                            <!-- Populated dynamically with non-standard part rows -->
-                        </div>
-
-                        <!-- Hidden serialized parts JSON -->
-                        <input type="hidden" id="nonStdPartsJson" name="parts" value="[]">
-
-                        <!-- Parts Summary Strip: Total Parts Output & Total Yield -->
-                        <div class="eb-parts-summary-strip" id="nonStdSummaryStrip" style="margin-top: 10px;">
-                            <div>
-                                <span style="font-size: 0.82rem; color: #166534; font-weight: 600;">Total Parts Output:</span>
-                                <strong id="nonStdTotalOutputDisplay" style="color: #15803d; font-size: 1.1rem; margin-left: 6px;">1 Units</strong>
-                            </div>
-                            <div>
-                                <span style="font-size: 0.82rem; color: #166534; font-weight: 600;"><i class="fa-solid fa-chart-pie"></i> Combined Yield:</span>
-                                <strong id="nonStdTotalYieldDisplay" style="color: #15803d; font-size: 1.1rem; margin-left: 6px;">0%</strong>
-                                <button type="button" class="btn btn-secondary btn-sm" onclick="openCutOptimizerForModal()" style="margin-left: 8px; font-size: 0.78rem; padding: 2px 8px; color: #0284c7; border: 1px solid #0284c7; background: #f0f9ff; font-weight: 600; border-radius: 4px; cursor: pointer;">
-                                    <i class="fa-solid fa-scissors"></i> 2D Cut Optimizer
-                                </button>
-                            </div>
                         </div>
                     </div>
 
@@ -2567,9 +2521,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=131"></script>
+    <script src="/static/mo_app.js?v=144"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
-    <script src="/static/mo_create_v2.js?v=3"></script>
+    <script src="/static/mo_create_v2.js?v=4"></script>
 </body>
 
 </html>

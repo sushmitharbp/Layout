@@ -666,9 +666,12 @@ class MOWorkflowEngine:
                     saved = True
                     print(f"[MO Workflow] Successfully added {record.get('mo_number')} to clean app_mo table")
                 else:
-                    print(f"[MO Workflow] app_mo insert notice: {res.get('error')}")
+                    err_msg = res.get("error") or "Unknown database error"
+                    print(f"[MO Workflow] app_mo insert error: {err_msg}")
+                    raise RuntimeError(f"Database insertion failed: {err_msg}")
             except Exception as e:
                 print(f"[MO Workflow] Error saving to app_mo: {e}")
+                raise
 
         # 2. Process and save end bits (offcuts) produced from this MO layout
         created_endbits = self.save_endbits_from_mo(record, mo_data.get("endbits"))
@@ -745,11 +748,14 @@ class MOWorkflowEngine:
 
     def get_mo(self, mo_number):
         """Get single MO by MO number from clean app_mo or local store"""
+        if not mo_number:
+            return None
+        clean_mo = str(mo_number).strip()
         if self.use_supabase:
             for tbl in ["app_mo"]:
                 try:
                     res = requests.get(
-                        f"{SUPABASE_URL}/rest/v1/{tbl}?or=(mo_no.eq.{mo_number},mo_number.eq.{mo_number})&select=*",
+                        f"{SUPABASE_URL}/rest/v1/{tbl}?mo_no=eq.{clean_mo}&select=*",
                         headers=self._get_supabase_headers(),
                         timeout=10
                     )
@@ -757,12 +763,23 @@ class MOWorkflowEngine:
                         items = res.json()
                         if items:
                             return self._normalize_mo(items[0])
+                    # Also try lookup by id if mo_number is numeric
+                    if clean_mo.isdigit():
+                        res_id = requests.get(
+                            f"{SUPABASE_URL}/rest/v1/{tbl}?id=eq.{clean_mo}&select=*",
+                            headers=self._get_supabase_headers(),
+                            timeout=10
+                        )
+                        if res_id.status_code == 200:
+                            items_id = res_id.json()
+                            if items_id:
+                                return self._normalize_mo(items_id[0])
                 except Exception:
                     pass
 
         mos = self._load_local()
         for m in mos:
-            if m.get("mo_number") == mo_number or m.get("mo_no") == mo_number:
+            if m.get("mo_number") == clean_mo or m.get("mo_no") == clean_mo:
                 return self._normalize_mo(m)
         return None
 

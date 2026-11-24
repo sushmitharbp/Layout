@@ -1,0 +1,3578 @@
+{
+  "117102VB1AITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "117102VB1AITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "269512VF0AITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "269512VF0AITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "269512VF1AITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "269512VF1AITEM01",
+    "monthly_schedule": 244.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "510202VE0CITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "510202VE0CITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "510202VE0CITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "510202VE0CITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "510202VE0CITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "510202VE0CITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "960152VE0BITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "960152VE0BITEM01",
+    "monthly_schedule": 99.0,
+    "current_stock": 46.0,
+    "mo_produced": 44.0
+  },
+  "960152VE0BITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "960152VE0BITEM02",
+    "monthly_schedule": 198.0,
+    "current_stock": 151.0,
+    "mo_produced": 44.0
+  },
+  "960152VE0BITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "960152VE0BITEM04",
+    "monthly_schedule": 198.0,
+    "current_stock": 20.0,
+    "mo_produced": 0.0
+  },
+  "995952VE0AITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "995952VE0AITEM01",
+    "monthly_schedule": 1166.0,
+    "current_stock": 1000.0,
+    "mo_produced": 0.0
+  },
+  "995952VE0AITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "995952VE0AITEM02",
+    "monthly_schedule": 4664.0,
+    "current_stock": 2032.0,
+    "mo_produced": 2448.0
+  },
+  "B0103401ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0103401ITEM03",
+    "monthly_schedule": 1911.0,
+    "current_stock": 762.0,
+    "mo_produced": 1242.0
+  },
+  "B0103401ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0103401ITEM04",
+    "monthly_schedule": 1911.0,
+    "current_stock": 817.0,
+    "mo_produced": 0.0
+  },
+  "B0103401ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0103401ITEM05",
+    "monthly_schedule": 1911.0,
+    "current_stock": 845.0,
+    "mo_produced": 1173.0
+  },
+  "B0103401ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0103401ITEM06",
+    "monthly_schedule": 1911.0,
+    "current_stock": 866.0,
+    "mo_produced": 1173.0
+  },
+  "B0103401ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0103401ITEM07",
+    "monthly_schedule": 1911.0,
+    "current_stock": 5233.0,
+    "mo_produced": 0.0
+  },
+  "B0103401ITEM08": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0103401ITEM08",
+    "monthly_schedule": 1911.0,
+    "current_stock": 147.0,
+    "mo_produced": 0.0
+  },
+  "B0993609ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0993609ITEM01",
+    "monthly_schedule": 116.0,
+    "current_stock": 90.0,
+    "mo_produced": 104.0
+  },
+  "B0993609ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0993609ITEM06",
+    "monthly_schedule": 232.0,
+    "current_stock": 50.0,
+    "mo_produced": 64.0
+  },
+  "B0993609ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0993609ITEM07",
+    "monthly_schedule": 116.0,
+    "current_stock": 20.0,
+    "mo_produced": 154.0
+  },
+  "B0E13404ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0E13404ITEM04",
+    "monthly_schedule": 16.0,
+    "current_stock": 1.0,
+    "mo_produced": 0.0
+  },
+  "B0E13404ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0E13404ITEM05",
+    "monthly_schedule": 16.0,
+    "current_stock": 1.0,
+    "mo_produced": 0.0
+  },
+  "B0E13404ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0E13404ITEM06",
+    "monthly_schedule": 16.0,
+    "current_stock": 1.0,
+    "mo_produced": 0.0
+  },
+  "B0E13404ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0E13404ITEM07",
+    "monthly_schedule": 32.0,
+    "current_stock": 26.0,
+    "mo_produced": 0.0
+  },
+  "B0E27109ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0E27109ITEM01",
+    "monthly_schedule": 6.0,
+    "current_stock": 21.0,
+    "mo_produced": 60.0
+  },
+  "B0S07403ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S07403ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0S07403ITEM1B": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S07403ITEM1B",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0S07403ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S07403ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0S07403ITEM10": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S07403ITEM10",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0S07403ITEM11": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S07403ITEM11",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0S07403ITEM08": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S07403ITEM08",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0S07403ITEM09": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S07403ITEM09",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0S10705ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10705ITEM01",
+    "monthly_schedule": 25.0,
+    "current_stock": 121.0,
+    "mo_produced": 0.0
+  },
+  "B0S10705ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10705ITEM02",
+    "monthly_schedule": 25.0,
+    "current_stock": 174.0,
+    "mo_produced": 0.0
+  },
+  "B0S10705ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10705ITEM03",
+    "monthly_schedule": 25.0,
+    "current_stock": 171.0,
+    "mo_produced": 0.0
+  },
+  "B0S10705ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10705ITEM04",
+    "monthly_schedule": 25.0,
+    "current_stock": 37.0,
+    "mo_produced": 0.0
+  },
+  "B0S10705ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10705ITEM05",
+    "monthly_schedule": 25.0,
+    "current_stock": 5.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM01",
+    "monthly_schedule": 10.0,
+    "current_stock": 34.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM02",
+    "monthly_schedule": 30.0,
+    "current_stock": 231.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM03",
+    "monthly_schedule": 10.0,
+    "current_stock": 162.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM04",
+    "monthly_schedule": 10.0,
+    "current_stock": 38.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM06",
+    "monthly_schedule": 20.0,
+    "current_stock": 40.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM07",
+    "monthly_schedule": 10.0,
+    "current_stock": 136.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM09": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM09",
+    "monthly_schedule": 10.0,
+    "current_stock": 13.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM10": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM10",
+    "monthly_schedule": 20.0,
+    "current_stock": 83.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM11": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM11",
+    "monthly_schedule": 10.0,
+    "current_stock": 70.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM13": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM13",
+    "monthly_schedule": 10.0,
+    "current_stock": 152.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM14": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM14",
+    "monthly_schedule": 10.0,
+    "current_stock": 24.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM15": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM15",
+    "monthly_schedule": 10.0,
+    "current_stock": 134.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM16": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM16",
+    "monthly_schedule": 10.0,
+    "current_stock": 128.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM17": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM17",
+    "monthly_schedule": 10.0,
+    "current_stock": 40.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM18": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM18",
+    "monthly_schedule": 10.0,
+    "current_stock": 22.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM24": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM24",
+    "monthly_schedule": 10.0,
+    "current_stock": 50.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM31": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM31",
+    "monthly_schedule": 10.0,
+    "current_stock": 132.0,
+    "mo_produced": 0.0
+  },
+  "B0S10706ITEM32": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0S10706ITEM32",
+    "monthly_schedule": 10.0,
+    "current_stock": 111.0,
+    "mo_produced": 0.0
+  },
+  "B0Y21587ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y21587ITEM01",
+    "monthly_schedule": 1.0,
+    "current_stock": 0.0,
+    "mo_produced": 64.0
+  },
+  "B0Y67711ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM01",
+    "monthly_schedule": 609.0,
+    "current_stock": 113.0,
+    "mo_produced": 280.0
+  },
+  "B0Y67711ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM03",
+    "monthly_schedule": 1218.0,
+    "current_stock": 130.0,
+    "mo_produced": 0.0
+  },
+  "B0Y67711ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM04",
+    "monthly_schedule": 609.0,
+    "current_stock": 30.0,
+    "mo_produced": 0.0
+  },
+  "B0Y67711ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM07",
+    "monthly_schedule": 609.0,
+    "current_stock": 226.0,
+    "mo_produced": 384.0
+  },
+  "B0Y67711ITEM08": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM08",
+    "monthly_schedule": 1218.0,
+    "current_stock": 274.0,
+    "mo_produced": 0.0
+  },
+  "B0Y67711ITEM11": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM11",
+    "monthly_schedule": 609.0,
+    "current_stock": 366.0,
+    "mo_produced": 246.0
+  },
+  "B0Y67711ITEM13": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM13",
+    "monthly_schedule": 609.0,
+    "current_stock": 176.0,
+    "mo_produced": 300.0
+  },
+  "B0Y67711ITEM16": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM16",
+    "monthly_schedule": 609.0,
+    "current_stock": 201.0,
+    "mo_produced": 234.0
+  },
+  "B0Y67711ITEM17": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM17",
+    "monthly_schedule": 609.0,
+    "current_stock": 81.0,
+    "mo_produced": 0.0
+  },
+  "B0Y67711ITEM18": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0Y67711ITEM18",
+    "monthly_schedule": 609.0,
+    "current_stock": 47.0,
+    "mo_produced": 0.0
+  },
+  "B1016410ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1016410ITEM02",
+    "monthly_schedule": 150.0,
+    "current_stock": 188.0,
+    "mo_produced": 0.0
+  },
+  "B1016410ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1016410ITEM01",
+    "monthly_schedule": 300.0,
+    "current_stock": 361.0,
+    "mo_produced": 0.0
+  },
+  "B1016410ITEM1B": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1016410ITEM1B",
+    "monthly_schedule": 300.0,
+    "current_stock": 1215.0,
+    "mo_produced": 0.0
+  },
+  "B1049415ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1049415ITEM01",
+    "monthly_schedule": 464.0,
+    "current_stock": 409.0,
+    "mo_produced": 220.0
+  },
+  "B1049415ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1049415ITEM02",
+    "monthly_schedule": 928.0,
+    "current_stock": 509.0,
+    "mo_produced": 462.0
+  },
+  "B1049415ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1049415ITEM03",
+    "monthly_schedule": 464.0,
+    "current_stock": 552.0,
+    "mo_produced": 69.0
+  },
+  "B1049415ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1049415ITEM04",
+    "monthly_schedule": 464.0,
+    "current_stock": 279.0,
+    "mo_produced": 204.0
+  },
+  "B1049415ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1049415ITEM05",
+    "monthly_schedule": 1856.0,
+    "current_stock": 1079.0,
+    "mo_produced": 766.0
+  },
+  "B1A07201ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07201ITEM01",
+    "monthly_schedule": 157.0,
+    "current_stock": 390.0,
+    "mo_produced": 0.0
+  },
+  "B1A07201ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07201ITEM02",
+    "monthly_schedule": 314.0,
+    "current_stock": 525.0,
+    "mo_produced": 0.0
+  },
+  "B1A07202ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07202ITEM01",
+    "monthly_schedule": 90.0,
+    "current_stock": 279.0,
+    "mo_produced": 0.0
+  },
+  "B1A07202ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07202ITEM02",
+    "monthly_schedule": 90.0,
+    "current_stock": 25.0,
+    "mo_produced": 0.0
+  },
+  "B1A07202ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07202ITEM03",
+    "monthly_schedule": 90.0,
+    "current_stock": 117.0,
+    "mo_produced": 0.0
+  },
+  "B1A07202ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07202ITEM05",
+    "monthly_schedule": 90.0,
+    "current_stock": 353.0,
+    "mo_produced": 0.0
+  },
+  "B1A07204ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07204ITEM01",
+    "monthly_schedule": 113.0,
+    "current_stock": 344.0,
+    "mo_produced": 0.0
+  },
+  "B1A07204ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07204ITEM02",
+    "monthly_schedule": 113.0,
+    "current_stock": 43.0,
+    "mo_produced": 0.0
+  },
+  "B1A07204ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07204ITEM03",
+    "monthly_schedule": 113.0,
+    "current_stock": 119.0,
+    "mo_produced": 0.0
+  },
+  "B1A07204ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1A07204ITEM05",
+    "monthly_schedule": 113.0,
+    "current_stock": 120.0,
+    "mo_produced": 0.0
+  },
+  "B1C00703ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1C00703ITEM01",
+    "monthly_schedule": 2.0,
+    "current_stock": 64.0,
+    "mo_produced": 0.0
+  },
+  "B1C00703ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1C00703ITEM02",
+    "monthly_schedule": 4.0,
+    "current_stock": 60.0,
+    "mo_produced": 0.0
+  },
+  "B1G02901ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1G02901ITEM01",
+    "monthly_schedule": 139.0,
+    "current_stock": 85.0,
+    "mo_produced": 0.0
+  },
+  "B1G02901ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B1G02901ITEM03",
+    "monthly_schedule": 139.0,
+    "current_stock": 52.0,
+    "mo_produced": 0.0
+  },
+  "B5010210ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5010210ITEM01",
+    "monthly_schedule": 1338.0,
+    "current_stock": 266.0,
+    "mo_produced": 540.0
+  },
+  "B5010210ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5010210ITEM02",
+    "monthly_schedule": 1338.0,
+    "current_stock": 0.0,
+    "mo_produced": 513.0
+  },
+  "B5010210ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5010210ITEM06",
+    "monthly_schedule": 1338.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5095904ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5095904ITEM01",
+    "monthly_schedule": 2493.0,
+    "current_stock": 624.0,
+    "mo_produced": 1080.0
+  },
+  "B5095904ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5095904ITEM02",
+    "monthly_schedule": 2493.0,
+    "current_stock": 185.0,
+    "mo_produced": 1026.0
+  },
+  "B5095904ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5095904ITEM03",
+    "monthly_schedule": 4986.0,
+    "current_stock": 1166.0,
+    "mo_produced": 2856.0
+  },
+  "B5095904ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5095904ITEM04",
+    "monthly_schedule": 2493.0,
+    "current_stock": 1625.0,
+    "mo_produced": 480.0
+  },
+  "B5095904ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5095904ITEM05",
+    "monthly_schedule": 2493.0,
+    "current_stock": 5467.0,
+    "mo_produced": 850.0
+  },
+  "B5095904ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5095904ITEM06",
+    "monthly_schedule": 2493.0,
+    "current_stock": 100.0,
+    "mo_produced": 0.0
+  },
+  "B5435404ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435404ITEM02",
+    "monthly_schedule": 3794.0,
+    "current_stock": 376.0,
+    "mo_produced": 1648.0
+  },
+  "F3051413ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3051413ITEM01",
+    "monthly_schedule": 10436.0,
+    "current_stock": 2728.0,
+    "mo_produced": 0.0
+  },
+  "B5435404ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435404ITEM05",
+    "monthly_schedule": 2594.0,
+    "current_stock": 944.0,
+    "mo_produced": 0.0
+  },
+  "B5435404ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435404ITEM06",
+    "monthly_schedule": 7842.0,
+    "current_stock": 2016.0,
+    "mo_produced": 0.0
+  },
+  "F3051613ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3051613ITEM01",
+    "monthly_schedule": 36558.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5435405ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435405ITEM02",
+    "monthly_schedule": 3824.0,
+    "current_stock": 668.0,
+    "mo_produced": 1568.0
+  },
+  "B5435431ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435431ITEM02",
+    "monthly_schedule": 2612.0,
+    "current_stock": 813.0,
+    "mo_produced": 0.0
+  },
+  "B5435431ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435431ITEM03",
+    "monthly_schedule": 2612.0,
+    "current_stock": 371.0,
+    "mo_produced": 820.0
+  },
+  "X0402613ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X0402613ITEM01",
+    "monthly_schedule": 24004.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X3010610-OS": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X3010610-OS",
+    "monthly_schedule": 5226.0,
+    "current_stock": 1031.0,
+    "mo_produced": 0.0
+  },
+  "X3010810-OS": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X3010810-OS",
+    "monthly_schedule": 5226.0,
+    "current_stock": 811.0,
+    "mo_produced": 0.0
+  },
+  "X3010810-A": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X3010810-A",
+    "monthly_schedule": 5226.0,
+    "current_stock": 810.0,
+    "mo_produced": 0.0
+  },
+  "X3010810-B": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X3010810-B",
+    "monthly_schedule": 5226.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5435432ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435432ITEM02",
+    "monthly_schedule": 2614.0,
+    "current_stock": 794.0,
+    "mo_produced": 771.0
+  },
+  "B5435432ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5435432ITEM03",
+    "monthly_schedule": 2614.0,
+    "current_stock": 397.0,
+    "mo_produced": 820.0
+  },
+  "B5640801ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5640801ITEM01",
+    "monthly_schedule": 78.0,
+    "current_stock": 54.0,
+    "mo_produced": 0.0
+  },
+  "B5640802ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5640802ITEM01",
+    "monthly_schedule": 63.0,
+    "current_stock": 25.0,
+    "mo_produced": 0.0
+  },
+  "B5B23902ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B23902ITEM01",
+    "monthly_schedule": 1126.0,
+    "current_stock": 46.0,
+    "mo_produced": 243.0
+  },
+  "B5B23902ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B23902ITEM02",
+    "monthly_schedule": 4504.0,
+    "current_stock": 347.0,
+    "mo_produced": 0.0
+  },
+  "B5B23903ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B23903ITEM01",
+    "monthly_schedule": 590.0,
+    "current_stock": 103.0,
+    "mo_produced": 162.0
+  },
+  "B5B23903ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B23903ITEM04",
+    "monthly_schedule": 1180.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B43301ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B43301ITEM01",
+    "monthly_schedule": 527.0,
+    "current_stock": 0.0,
+    "mo_produced": 252.0
+  },
+  "B5B43501ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B43501ITEM02",
+    "monthly_schedule": 87.0,
+    "current_stock": 70.0,
+    "mo_produced": 0.0
+  },
+  "B5B43501ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B43501ITEM03",
+    "monthly_schedule": 87.0,
+    "current_stock": 56.0,
+    "mo_produced": 0.0
+  },
+  "B5B43501ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B43501ITEM01",
+    "monthly_schedule": 87.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B51201ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B51201ITEM01",
+    "monthly_schedule": 16.0,
+    "current_stock": 85.0,
+    "mo_produced": 0.0
+  },
+  "B5B51201ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B51201ITEM04",
+    "monthly_schedule": 16.0,
+    "current_stock": 20.0,
+    "mo_produced": 0.0
+  },
+  "B5B66906ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B66906ITEM01",
+    "monthly_schedule": 222.0,
+    "current_stock": 107.0,
+    "mo_produced": 0.0
+  },
+  "B5B66906ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B66906ITEM02",
+    "monthly_schedule": 444.0,
+    "current_stock": 331.0,
+    "mo_produced": 0.0
+  },
+  "B5B78203ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B78203ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B78203ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B78203ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B78203ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B78203ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B78203ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B78203ITEM04",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B78203ITEM4.1": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B78203ITEM4.1",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B78203ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B78203ITEM05",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B78203ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B78203ITEM06",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B5B82701ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B82701ITEM01",
+    "monthly_schedule": 1088.0,
+    "current_stock": 169.0,
+    "mo_produced": 835.0
+  },
+  "B5B82701ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5B82701ITEM05",
+    "monthly_schedule": 1088.0,
+    "current_stock": 154.0,
+    "mo_produced": 990.0
+  },
+  "B6N18802ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B6N18802ITEM01",
+    "monthly_schedule": 465.0,
+    "current_stock": 3.0,
+    "mo_produced": 328.0
+  },
+  "B6N18802ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B6N18802ITEM02",
+    "monthly_schedule": 465.0,
+    "current_stock": 165.0,
+    "mo_produced": 240.0
+  },
+  "B7J00805ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B7J00805ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B7J00805ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B7J00805ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B7J00805ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B7J00805ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B7Z02004ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B7Z02004ITEM01",
+    "monthly_schedule": 1078.0,
+    "current_stock": 791.0,
+    "mo_produced": 904.0
+  },
+  "B7Z02004ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B7Z02004ITEM02",
+    "monthly_schedule": 1078.0,
+    "current_stock": 582.0,
+    "mo_produced": 840.0
+  },
+  "B7Z02004ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B7Z02004ITEM03",
+    "monthly_schedule": 1078.0,
+    "current_stock": 99.0,
+    "mo_produced": 0.0
+  },
+  "B7Z02004ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B7Z02004ITEM04",
+    "monthly_schedule": 1078.0,
+    "current_stock": 567.0,
+    "mo_produced": 0.0
+  },
+  "F0469010ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F0469010ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F0469910ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F0469910ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F1136013ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1136013ITEM01",
+    "monthly_schedule": 350.0,
+    "current_stock": 1700.0,
+    "mo_produced": 0.0
+  },
+  "F1E01210ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1E01210ITEM03",
+    "monthly_schedule": 570.0,
+    "current_stock": 368.0,
+    "mo_produced": 0.0
+  },
+  "F1E01210ITEM09": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1E01210ITEM09",
+    "monthly_schedule": 570.0,
+    "current_stock": 40.0,
+    "mo_produced": 0.0
+  },
+  "F1K00813ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1K00813ITEM01",
+    "monthly_schedule": 100.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F1K00913ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1K00913ITEM01",
+    "monthly_schedule": 50.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F1K02114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1K02114ITEM01",
+    "monthly_schedule": 100.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F1K02114ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1K02114ITEM02",
+    "monthly_schedule": 100.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F1K02214ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1K02214ITEM02",
+    "monthly_schedule": 100.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F1S65913ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1S65913ITEM01",
+    "monthly_schedule": 330.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F1Z00514ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F1Z00514ITEM01",
+    "monthly_schedule": 549.0,
+    "current_stock": 753.0,
+    "mo_produced": 1050.0
+  },
+  "F2866013ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2866013ITEM01",
+    "monthly_schedule": 400.0,
+    "current_stock": 197.0,
+    "mo_produced": 0.0
+  },
+  "F2866113ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2866113ITEM01",
+    "monthly_schedule": 347.0,
+    "current_stock": 170.0,
+    "mo_produced": 0.0
+  },
+  "F2A01114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2A01114ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F2A01114ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2A01114ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F2A01114ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2A01114ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F2A05614ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2A05614ITEM01",
+    "monthly_schedule": 500.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F2A05614ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2A05614ITEM02",
+    "monthly_schedule": 500.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F2A05614ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2A05614ITEM03",
+    "monthly_schedule": 500.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F2A05614ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2A05614ITEM04",
+    "monthly_schedule": 500.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F2J02714ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2J02714ITEM01",
+    "monthly_schedule": 150.0,
+    "current_stock": 37.0,
+    "mo_produced": 120.0
+  },
+  "F2Z00614ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F2Z00614ITEM01",
+    "monthly_schedule": 29.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F3B00714ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B00714ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F3B00714ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B00714ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F3B00714ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B00714ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F3B01511ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B01511ITEM01",
+    "monthly_schedule": 102.0,
+    "current_stock": 79.0,
+    "mo_produced": 0.0
+  },
+  "F3B01511ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B01511ITEM02",
+    "monthly_schedule": 102.0,
+    "current_stock": 153.0,
+    "mo_produced": 0.0
+  },
+  "F3B01511ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B01511ITEM03",
+    "monthly_schedule": 102.0,
+    "current_stock": 378.0,
+    "mo_produced": 0.0
+  },
+  "F3B02813ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B02813ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F3B02813ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B02813ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F3B02813ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B02813ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F3B03814ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B03814ITEM01",
+    "monthly_schedule": 894.0,
+    "current_stock": 472.0,
+    "mo_produced": 576.0
+  },
+  "F3B16914ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3B16914ITEM02",
+    "monthly_schedule": 42.0,
+    "current_stock": 41.0,
+    "mo_produced": 83.0
+  },
+  "F3H02410ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3H02410ITEM01",
+    "monthly_schedule": 882.0,
+    "current_stock": 27.0,
+    "mo_produced": 74.0
+  },
+  "F3H02410ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3H02410ITEM02",
+    "monthly_schedule": 1764.0,
+    "current_stock": 50.0,
+    "mo_produced": 158.0
+  },
+  "F3Y01014ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3Y01014ITEM01",
+    "monthly_schedule": 735.0,
+    "current_stock": 111.0,
+    "mo_produced": 180.0
+  },
+  "F3Y01114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3Y01114ITEM01",
+    "monthly_schedule": 717.0,
+    "current_stock": 31.0,
+    "mo_produced": 174.0
+  },
+  "F3Z00411ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F3Z00411ITEM01",
+    "monthly_schedule": 64.0,
+    "current_stock": 340.0,
+    "mo_produced": 0.0
+  },
+  "F4931410ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4931410ITEM01",
+    "monthly_schedule": 14220.0,
+    "current_stock": 4821.0,
+    "mo_produced": 0.0
+  },
+  "F4D00814ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4D00814ITEM01",
+    "monthly_schedule": 854.0,
+    "current_stock": 22.0,
+    "mo_produced": 0.0
+  },
+  "F4D00814ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4D00814ITEM02",
+    "monthly_schedule": 1708.0,
+    "current_stock": 324.0,
+    "mo_produced": 0.0
+  },
+  "F4D00814ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4D00814ITEM03",
+    "monthly_schedule": 1708.0,
+    "current_stock": 893.0,
+    "mo_produced": 0.0
+  },
+  "F4D00814ITEM7&8": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4D00814ITEM7&8",
+    "monthly_schedule": 1708.0,
+    "current_stock": 1357.0,
+    "mo_produced": 0.0
+  },
+  "F4D02513ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4D02513ITEM01",
+    "monthly_schedule": 226.0,
+    "current_stock": 184.0,
+    "mo_produced": 61.0
+  },
+  "F4D02513ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4D02513ITEM02",
+    "monthly_schedule": 452.0,
+    "current_stock": 201.0,
+    "mo_produced": 0.0
+  },
+  "F4G00510ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4G00510ITEM01",
+    "monthly_schedule": 51.0,
+    "current_stock": 91.0,
+    "mo_produced": 0.0
+  },
+  "F4G05914ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4G05914ITEM04",
+    "monthly_schedule": 686.0,
+    "current_stock": 90.0,
+    "mo_produced": 0.0
+  },
+  "F4G05914ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4G05914ITEM05",
+    "monthly_schedule": 686.0,
+    "current_stock": 300.0,
+    "mo_produced": 0.0
+  },
+  "F4G05914ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4G05914ITEM06",
+    "monthly_schedule": 686.0,
+    "current_stock": 187.0,
+    "mo_produced": 0.0
+  },
+  "F4G05914ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4G05914ITEM07",
+    "monthly_schedule": 1372.0,
+    "current_stock": 104.0,
+    "mo_produced": 384.0
+  },
+  "F4K00613ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4K00613ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F4M00514ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4M00514ITEM01",
+    "monthly_schedule": 1191.0,
+    "current_stock": 271.0,
+    "mo_produced": 532.0
+  },
+  "F8M01414ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8M01414ITEM01",
+    "monthly_schedule": 182.0,
+    "current_stock": 10.0,
+    "mo_produced": 0.0
+  },
+  "F4M04914ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4M04914ITEM01",
+    "monthly_schedule": 514.0,
+    "current_stock": 184.0,
+    "mo_produced": 0.0
+  },
+  "F4M05114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4M05114ITEM01",
+    "monthly_schedule": 617.0,
+    "current_stock": 536.0,
+    "mo_produced": 0.0
+  },
+  "F4N64213ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4N64213ITEM01",
+    "monthly_schedule": 131.0,
+    "current_stock": 8.0,
+    "mo_produced": 221.0
+  },
+  "F4N70314ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4N70314ITEM01",
+    "monthly_schedule": 110.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F4T00110ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4T00110ITEM01",
+    "monthly_schedule": 474.0,
+    "current_stock": 28.0,
+    "mo_produced": 404.0
+  },
+  "F4T00110ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4T00110ITEM02",
+    "monthly_schedule": 474.0,
+    "current_stock": 128.0,
+    "mo_produced": 136.0
+  },
+  "F4T00914ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4T00914ITEM01",
+    "monthly_schedule": 76.0,
+    "current_stock": 24.0,
+    "mo_produced": 84.0
+  },
+  "F4T00914ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4T00914ITEM02",
+    "monthly_schedule": 76.0,
+    "current_stock": 90.0,
+    "mo_produced": 0.0
+  },
+  "F4T00914ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4T00914ITEM03",
+    "monthly_schedule": 76.0,
+    "current_stock": 87.0,
+    "mo_produced": 0.0
+  },
+  "F4X00613ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4X00613ITEM01",
+    "monthly_schedule": 158.0,
+    "current_stock": 146.0,
+    "mo_produced": 0.0
+  },
+  "F4X00613ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4X00613ITEM02",
+    "monthly_schedule": 158.0,
+    "current_stock": 114.0,
+    "mo_produced": 0.0
+  },
+  "F4X00613ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4X00613ITEM03",
+    "monthly_schedule": 158.0,
+    "current_stock": 455.0,
+    "mo_produced": 0.0
+  },
+  "F4X00713ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4X00713ITEM01",
+    "monthly_schedule": 184.0,
+    "current_stock": 121.0,
+    "mo_produced": 0.0
+  },
+  "F4X00713ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4X00713ITEM02",
+    "monthly_schedule": 184.0,
+    "current_stock": 384.0,
+    "mo_produced": 0.0
+  },
+  "F4X00713ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4X00713ITEM03",
+    "monthly_schedule": 184.0,
+    "current_stock": 92.0,
+    "mo_produced": 0.0
+  },
+  "F4Z14114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4Z14114ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 1223.0
+  },
+  "F4Z14114ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4Z14114ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 1001.0
+  },
+  "F5P03014ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F5P03014ITEM01",
+    "monthly_schedule": 537.0,
+    "current_stock": 347.0,
+    "mo_produced": 0.0
+  },
+  "F5P03014ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F5P03014ITEM02",
+    "monthly_schedule": 537.0,
+    "current_stock": 304.0,
+    "mo_produced": 0.0
+  },
+  "F5P03014ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F5P03014ITEM03",
+    "monthly_schedule": 537.0,
+    "current_stock": 169.0,
+    "mo_produced": 0.0
+  },
+  "F5P03014ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F5P03014ITEM04",
+    "monthly_schedule": 537.0,
+    "current_stock": 346.0,
+    "mo_produced": 120.0
+  },
+  "F6C01413ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C01413ITEM01",
+    "monthly_schedule": 1058.0,
+    "current_stock": 8.0,
+    "mo_produced": 1008.0
+  },
+  "F6C01413ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C01413ITEM02",
+    "monthly_schedule": 1058.0,
+    "current_stock": 326.0,
+    "mo_produced": 1050.0
+  },
+  "F6C01413ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C01413ITEM06",
+    "monthly_schedule": 1058.0,
+    "current_stock": 450.0,
+    "mo_produced": 0.0
+  },
+  "F6C01413ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C01413ITEM07",
+    "monthly_schedule": 1058.0,
+    "current_stock": 267.0,
+    "mo_produced": 567.0
+  },
+  "F6C03213ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C03213ITEM01",
+    "monthly_schedule": 844.0,
+    "current_stock": 42.0,
+    "mo_produced": 0.0
+  },
+  "F6C03213ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C03213ITEM02",
+    "monthly_schedule": 844.0,
+    "current_stock": 229.0,
+    "mo_produced": 0.0
+  },
+  "F6C03213ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C03213ITEM03",
+    "monthly_schedule": 1688.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F6C03213ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C03213ITEM04",
+    "monthly_schedule": 844.0,
+    "current_stock": 1880.0,
+    "mo_produced": 0.0
+  },
+  "F6C04314ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C04314ITEM01",
+    "monthly_schedule": 860.0,
+    "current_stock": 159.0,
+    "mo_produced": 0.0
+  },
+  "F6C04314ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C04314ITEM02",
+    "monthly_schedule": 860.0,
+    "current_stock": 669.0,
+    "mo_produced": 0.0
+  },
+  "F6C04314ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C04314ITEM03",
+    "monthly_schedule": 1720.0,
+    "current_stock": 3047.0,
+    "mo_produced": 2052.0
+  },
+  "F6C04314ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F6C04314ITEM04",
+    "monthly_schedule": 860.0,
+    "current_stock": 1432.0,
+    "mo_produced": 684.0
+  },
+  "F7962014ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7962014ITEM01",
+    "monthly_schedule": 4526.0,
+    "current_stock": 41.0,
+    "mo_produced": 0.0
+  },
+  "F7962014ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7962014ITEM02",
+    "monthly_schedule": 4526.0,
+    "current_stock": 70.0,
+    "mo_produced": 0.0
+  },
+  "F7962014ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7962014ITEM03",
+    "monthly_schedule": 9052.0,
+    "current_stock": 3127.0,
+    "mo_produced": 6072.0
+  },
+  "F7962014ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7962014ITEM04",
+    "monthly_schedule": 4526.0,
+    "current_stock": 8098.0,
+    "mo_produced": 0.0
+  },
+  "F7962014ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7962014ITEM05",
+    "monthly_schedule": 4526.0,
+    "current_stock": 8.0,
+    "mo_produced": 0.0
+  },
+  "F7962014ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7962014ITEM06",
+    "monthly_schedule": 4526.0,
+    "current_stock": 830.0,
+    "mo_produced": 2070.0
+  },
+  "F7X06514ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7X06514ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F7X06514ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7X06514ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F7X06514ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7X06514ITEM04",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F7Z02014ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7Z02014ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8401204ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8401204ITEM01",
+    "monthly_schedule": 562.0,
+    "current_stock": 215.0,
+    "mo_produced": 0.0
+  },
+  "F8410310ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8410310ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8425114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8425114ITEM01",
+    "monthly_schedule": 137.0,
+    "current_stock": 197.0,
+    "mo_produced": 0.0
+  },
+  "F8425114ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8425114ITEM03",
+    "monthly_schedule": 137.0,
+    "current_stock": 174.0,
+    "mo_produced": 0.0
+  },
+  "F8473014ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8473014ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8473014ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8473014ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8473014ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8473014ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8985114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985114ITEM01",
+    "monthly_schedule": 136.0,
+    "current_stock": 8.0,
+    "mo_produced": 0.0
+  },
+  "F8985114ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985114ITEM03",
+    "monthly_schedule": 136.0,
+    "current_stock": 105.0,
+    "mo_produced": 0.0
+  },
+  "F8985114ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985114ITEM05",
+    "monthly_schedule": 136.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8985114ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985114ITEM06",
+    "monthly_schedule": 272.0,
+    "current_stock": 11.0,
+    "mo_produced": 0.0
+  },
+  "F8985114ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985114ITEM07",
+    "monthly_schedule": 544.0,
+    "current_stock": 484.0,
+    "mo_produced": 0.0
+  },
+  "F8985214ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985214ITEM01",
+    "monthly_schedule": 82.0,
+    "current_stock": 136.0,
+    "mo_produced": 0.0
+  },
+  "F8985214ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985214ITEM03",
+    "monthly_schedule": 82.0,
+    "current_stock": 21.0,
+    "mo_produced": 0.0
+  },
+  "F8985214ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985214ITEM05",
+    "monthly_schedule": 82.0,
+    "current_stock": 10.0,
+    "mo_produced": 0.0
+  },
+  "F8985214ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985214ITEM06",
+    "monthly_schedule": 164.0,
+    "current_stock": 29.0,
+    "mo_produced": 0.0
+  },
+  "F8985214ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8985214ITEM07",
+    "monthly_schedule": 328.0,
+    "current_stock": 222.0,
+    "mo_produced": 0.0
+  },
+  "F8A01213ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A01213ITEM02",
+    "monthly_schedule": 1012.0,
+    "current_stock": 22.0,
+    "mo_produced": 0.0
+  },
+  "F8F00210ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8F00210ITEM01",
+    "monthly_schedule": 304.0,
+    "current_stock": 170.0,
+    "mo_produced": 0.0
+  },
+  "F8F00210ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8F00210ITEM02",
+    "monthly_schedule": 304.0,
+    "current_stock": 2670.0,
+    "mo_produced": 0.0
+  },
+  "F8F00210ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8F00210ITEM03",
+    "monthly_schedule": 304.0,
+    "current_stock": 750.0,
+    "mo_produced": 0.0
+  },
+  "F8F00210ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8F00210ITEM04",
+    "monthly_schedule": 152.0,
+    "current_stock": 1250.0,
+    "mo_produced": 0.0
+  },
+  "F8F00210ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8F00210ITEM05",
+    "monthly_schedule": 152.0,
+    "current_stock": 284.0,
+    "mo_produced": 0.0
+  },
+  "F8F00713ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8F00713ITEM01",
+    "monthly_schedule": 266.0,
+    "current_stock": 136.0,
+    "mo_produced": 0.0
+  },
+  "FC161814ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FC161814ITEM01",
+    "monthly_schedule": 100.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FCF11113ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FCF11113ITEM01",
+    "monthly_schedule": 1263.0,
+    "current_stock": 432.0,
+    "mo_produced": 1002.0
+  },
+  "FHH02114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FHH02114ITEM01",
+    "monthly_schedule": 374.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FHH02114ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FHH02114ITEM02",
+    "monthly_schedule": 374.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FHH02114ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FHH02114ITEM03",
+    "monthly_schedule": 748.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FHH02114ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FHH02114ITEM04",
+    "monthly_schedule": 374.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FHH02114ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FHH02114ITEM05",
+    "monthly_schedule": 374.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FHH02114ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FHH02114ITEM06",
+    "monthly_schedule": 748.0,
+    "current_stock": 388.0,
+    "mo_produced": 0.0
+  },
+  "FHH02114ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FHH02114ITEM07",
+    "monthly_schedule": 2244.0,
+    "current_stock": 5947.0,
+    "mo_produced": 0.0
+  },
+  "FJP33413ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FJP33413ITEM01",
+    "monthly_schedule": 114.0,
+    "current_stock": 23.0,
+    "mo_produced": 72.0
+  },
+  "FJP33413ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FJP33413ITEM02",
+    "monthly_schedule": 228.0,
+    "current_stock": 220.0,
+    "mo_produced": 0.0
+  },
+  "FM100199ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FM100199ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FM100813ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FM100813ITEM01",
+    "monthly_schedule": 29.0,
+    "current_stock": 854.0,
+    "mo_produced": 0.0
+  },
+  "FM103814ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FM103814ITEM01",
+    "monthly_schedule": 8.0,
+    "current_stock": 131.0,
+    "mo_produced": 0.0
+  },
+  "FM103814ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FM103814ITEM02",
+    "monthly_schedule": 16.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "FM115214ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FM115214ITEM02",
+    "monthly_schedule": 76.0,
+    "current_stock": 10.0,
+    "mo_produced": 0.0
+  },
+  "FM137214ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FM137214ITEM01",
+    "monthly_schedule": 679.0,
+    "current_stock": 815.0,
+    "mo_produced": 0.0
+  },
+  "FS462613ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FS462613ITEM01",
+    "monthly_schedule": 1708.0,
+    "current_stock": 743.0,
+    "mo_produced": 0.0
+  },
+  "MB121010-CP": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121010-CP",
+    "monthly_schedule": 1744.0,
+    "current_stock": 1353.0,
+    "mo_produced": 0.0
+  },
+  "MB121010ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121010ITEM01",
+    "monthly_schedule": 722.0,
+    "current_stock": 303.0,
+    "mo_produced": 589.0
+  },
+  "F7950514ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7950514ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 1064.0
+  },
+  "F8A02314ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM03",
+    "monthly_schedule": 872.0,
+    "current_stock": 2990.0,
+    "mo_produced": 0.0
+  },
+  "F8A02314ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM04",
+    "monthly_schedule": 722.0,
+    "current_stock": 216.0,
+    "mo_produced": 360.0
+  },
+  "F8A02314ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM05",
+    "monthly_schedule": 1444.0,
+    "current_stock": 1668.0,
+    "mo_produced": 0.0
+  },
+  "F8A02314ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM07",
+    "monthly_schedule": 872.0,
+    "current_stock": 623.0,
+    "mo_produced": 0.0
+  },
+  "F8A02314ITEM08": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM08",
+    "monthly_schedule": 872.0,
+    "current_stock": 629.0,
+    "mo_produced": 0.0
+  },
+  "F8A02314ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM01",
+    "monthly_schedule": 722.0,
+    "current_stock": 341.0,
+    "mo_produced": 0.0
+  },
+  "FAB08514ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FAB08514ITEM01",
+    "monthly_schedule": 722.0,
+    "current_stock": 285.0,
+    "mo_produced": 396.0
+  },
+  "FAB08514ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "FAB08514ITEM02",
+    "monthly_schedule": 1444.0,
+    "current_stock": 492.0,
+    "mo_produced": 0.0
+  },
+  "X6C16114ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X6C16114ITEM01",
+    "monthly_schedule": 722.0,
+    "current_stock": 202.0,
+    "mo_produced": 440.0
+  },
+  "X6C16114ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X6C16114ITEM03",
+    "monthly_schedule": 1444.0,
+    "current_stock": 700.0,
+    "mo_produced": 0.0
+  },
+  "X6C16114ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X6C16114ITEM02",
+    "monthly_schedule": 1444.0,
+    "current_stock": 504.0,
+    "mo_produced": 0.0
+  },
+  "F8A02314ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM02",
+    "monthly_schedule": 722.0,
+    "current_stock": 329.0,
+    "mo_produced": 0.0
+  },
+  "F8A02314ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02314ITEM06",
+    "monthly_schedule": 722.0,
+    "current_stock": 304.0,
+    "mo_produced": 320.0
+  },
+  "F8A02714ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM04",
+    "monthly_schedule": 203.0,
+    "current_stock": 172.0,
+    "mo_produced": 0.0
+  },
+  "F8A02714ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM05",
+    "monthly_schedule": 203.0,
+    "current_stock": 175.0,
+    "mo_produced": 60.0
+  },
+  "F8A02714ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM06",
+    "monthly_schedule": 203.0,
+    "current_stock": 152.0,
+    "mo_produced": 55.0
+  },
+  "F8A02714ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM07",
+    "monthly_schedule": 177.0,
+    "current_stock": 577.0,
+    "mo_produced": 0.0
+  },
+  "F8A02714ITEM09": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM09",
+    "monthly_schedule": 406.0,
+    "current_stock": 182.0,
+    "mo_produced": 0.0
+  },
+  "F8A02714ITEM10": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM10",
+    "monthly_schedule": 406.0,
+    "current_stock": 426.0,
+    "mo_produced": 0.0
+  },
+  "MB121013ITEM12": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121013ITEM12",
+    "monthly_schedule": 177.0,
+    "current_stock": 90.0,
+    "mo_produced": 0.0
+  },
+  "F8A02714ITEM3A": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM3A",
+    "monthly_schedule": 380.0,
+    "current_stock": 179.0,
+    "mo_produced": 320.0
+  },
+  "F8A02714ITEM08": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM08",
+    "monthly_schedule": 203.0,
+    "current_stock": 269.0,
+    "mo_produced": 140.0
+  },
+  "MB121014ITEM12": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121014ITEM12",
+    "monthly_schedule": 26.0,
+    "current_stock": 331.0,
+    "mo_produced": 0.0
+  },
+  "F8A02714ITEM3B": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM3B",
+    "monthly_schedule": 26.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8A02714ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM01",
+    "monthly_schedule": 203.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F8A02714ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F8A02714ITEM02",
+    "monthly_schedule": 203.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "B0908101CP": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0908101CP",
+    "monthly_schedule": 1904.0,
+    "current_stock": 0.0,
+    "mo_produced": 984.0
+  },
+  "B0908101CP-2": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0908101CP-2",
+    "monthly_schedule": 3808.0,
+    "current_stock": 1708.0,
+    "mo_produced": 1632.0
+  },
+  "MB121018ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121018ITEM01",
+    "monthly_schedule": 1123.0,
+    "current_stock": 377.0,
+    "mo_produced": 300.0
+  },
+  "MB121018ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121018ITEM02",
+    "monthly_schedule": 1123.0,
+    "current_stock": 436.0,
+    "mo_produced": 580.0
+  },
+  "MB121018ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121018ITEM03",
+    "monthly_schedule": 1123.0,
+    "current_stock": 383.0,
+    "mo_produced": 576.0
+  },
+  "MB121018ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121018ITEM04",
+    "monthly_schedule": 1123.0,
+    "current_stock": 334.0,
+    "mo_produced": 552.0
+  },
+  "MB121018ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB121018ITEM05",
+    "monthly_schedule": 2246.0,
+    "current_stock": 2212.0,
+    "mo_produced": 380.0
+  },
+  "MB411050ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411050ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 1152.0
+  },
+  "MB411050ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411050ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 1190.0
+  },
+  "MB411050ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411050ITEM05",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MB411050ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411050ITEM06",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MB411050ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411050ITEM07",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 608.0
+  },
+  "MB411050ITEM08": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411050ITEM08",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 1506.0
+  },
+  "MB411050ITEM09": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411050ITEM09",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MB411064ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411064ITEM01",
+    "monthly_schedule": 324.0,
+    "current_stock": 455.0,
+    "mo_produced": 0.0
+  },
+  "MB411064ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411064ITEM02",
+    "monthly_schedule": 324.0,
+    "current_stock": 438.0,
+    "mo_produced": 0.0
+  },
+  "MB411064ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411064ITEM03",
+    "monthly_schedule": 324.0,
+    "current_stock": 1853.0,
+    "mo_produced": 0.0
+  },
+  "MB411064ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB411064ITEM05",
+    "monthly_schedule": 324.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MB502078ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB502078ITEM01",
+    "monthly_schedule": 2114.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MB502078ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB502078ITEM06",
+    "monthly_schedule": 4228.0,
+    "current_stock": 355.0,
+    "mo_produced": 1040.0
+  },
+  "MB502078ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB502078ITEM07",
+    "monthly_schedule": 2114.0,
+    "current_stock": 0.0,
+    "mo_produced": 960.0
+  },
+  "B5429816ITEM10-1": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B5429816ITEM10-1",
+    "monthly_schedule": 3332.0,
+    "current_stock": 1538.0,
+    "mo_produced": 0.0
+  },
+  "MB502078ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB502078ITEM05",
+    "monthly_schedule": 2114.0,
+    "current_stock": 0.0,
+    "mo_produced": 984.0
+  },
+  "MB502078ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB502078ITEM02",
+    "monthly_schedule": 1666.0,
+    "current_stock": 370.0,
+    "mo_produced": 0.0
+  },
+  "MB502078ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MB502078ITEM04",
+    "monthly_schedule": 2114.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MBA01003ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01003ITEM01",
+    "monthly_schedule": 760.0,
+    "current_stock": 91.0,
+    "mo_produced": 644.0
+  },
+  "MBA01003ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01003ITEM02",
+    "monthly_schedule": 3040.0,
+    "current_stock": 138.0,
+    "mo_produced": 0.0
+  },
+  "MBA01004ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01004ITEM01",
+    "monthly_schedule": 306.0,
+    "current_stock": 35.0,
+    "mo_produced": 0.0
+  },
+  "MBA01004ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01004ITEM02",
+    "monthly_schedule": 1224.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MBA01008ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01008ITEM01",
+    "monthly_schedule": 583.0,
+    "current_stock": 30.0,
+    "mo_produced": 0.0
+  },
+  "MBA01008ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01008ITEM02",
+    "monthly_schedule": 2332.0,
+    "current_stock": 427.0,
+    "mo_produced": 0.0
+  },
+  "MBA01010ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01010ITEM01",
+    "monthly_schedule": 744.0,
+    "current_stock": 307.0,
+    "mo_produced": 293.0
+  },
+  "MBA01023ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01023ITEM01",
+    "monthly_schedule": 1042.0,
+    "current_stock": 167.0,
+    "mo_produced": 0.0
+  },
+  "MBA01023ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01023ITEM02",
+    "monthly_schedule": 4168.0,
+    "current_stock": 388.0,
+    "mo_produced": 0.0
+  },
+  "MBA01024ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01024ITEM01",
+    "monthly_schedule": 22.0,
+    "current_stock": 25.0,
+    "mo_produced": 0.0
+  },
+  "MBA01025ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01025ITEM01",
+    "monthly_schedule": 26.0,
+    "current_stock": 1.0,
+    "mo_produced": 0.0
+  },
+  "MBA01025ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01025ITEM02",
+    "monthly_schedule": 104.0,
+    "current_stock": 43.0,
+    "mo_produced": 0.0
+  },
+  "MBA01089ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01089ITEM01",
+    "monthly_schedule": 15.0,
+    "current_stock": 202.0,
+    "mo_produced": 0.0
+  },
+  "MBA01089ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01089ITEM02",
+    "monthly_schedule": 30.0,
+    "current_stock": 185.0,
+    "mo_produced": 0.0
+  },
+  "MBA01089ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01089ITEM03",
+    "monthly_schedule": 30.0,
+    "current_stock": 291.0,
+    "mo_produced": 0.0
+  },
+  "MBA01094ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01094ITEM02",
+    "monthly_schedule": 2.0,
+    "current_stock": 52.0,
+    "mo_produced": 0.0
+  },
+  "MBA01103ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01103ITEM01",
+    "monthly_schedule": 250.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "MBA01103ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01103ITEM02",
+    "monthly_schedule": 500.0,
+    "current_stock": 269.0,
+    "mo_produced": 0.0
+  },
+  "MBA01104ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01104ITEM01",
+    "monthly_schedule": 476.0,
+    "current_stock": 215.0,
+    "mo_produced": 165.0
+  },
+  "MBA01104ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01104ITEM02",
+    "monthly_schedule": 952.0,
+    "current_stock": 537.0,
+    "mo_produced": 0.0
+  },
+  "MBA01104ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01104ITEM03",
+    "monthly_schedule": 952.0,
+    "current_stock": 2291.0,
+    "mo_produced": 1034.0
+  },
+  "MBA01134ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01134ITEM01",
+    "monthly_schedule": 732.0,
+    "current_stock": 24.0,
+    "mo_produced": 243.0
+  },
+  "MBA01134ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01134ITEM03",
+    "monthly_schedule": 1464.0,
+    "current_stock": 9.0,
+    "mo_produced": 0.0
+  },
+  "MBA01216ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01216ITEM01",
+    "monthly_schedule": 706.0,
+    "current_stock": 498.0,
+    "mo_produced": 0.0
+  },
+  "MBA01216ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01216ITEM02",
+    "monthly_schedule": 706.0,
+    "current_stock": 307.0,
+    "mo_produced": 330.0
+  },
+  "MBA01217ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01217ITEM01",
+    "monthly_schedule": 352.0,
+    "current_stock": 258.0,
+    "mo_produced": 306.0
+  },
+  "MBA01217ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01217ITEM03",
+    "monthly_schedule": 704.0,
+    "current_stock": 406.0,
+    "mo_produced": 0.0
+  },
+  "MBA01217ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01217ITEM02",
+    "monthly_schedule": 704.0,
+    "current_stock": 77.0,
+    "mo_produced": 0.0
+  },
+  "MBA01094ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01094ITEM01",
+    "monthly_schedule": 502.0,
+    "current_stock": 0.0,
+    "mo_produced": 180.0
+  },
+  "MBA01221ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01221ITEM02",
+    "monthly_schedule": 501.0,
+    "current_stock": 67.0,
+    "mo_produced": 109.0
+  },
+  "MBA01221ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01221ITEM03",
+    "monthly_schedule": 501.0,
+    "current_stock": 73.0,
+    "mo_produced": 218.0
+  },
+  "MBA01235ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01235ITEM01",
+    "monthly_schedule": 12.0,
+    "current_stock": 69.0,
+    "mo_produced": 0.0
+  },
+  "MBA01235ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01235ITEM02",
+    "monthly_schedule": 24.0,
+    "current_stock": 7.0,
+    "mo_produced": 0.0
+  },
+  "MBA01236ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01236ITEM01",
+    "monthly_schedule": 7.0,
+    "current_stock": 62.0,
+    "mo_produced": 0.0
+  },
+  "MBA01236ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "MBA01236ITEM02",
+    "monthly_schedule": 14.0,
+    "current_stock": 7.0,
+    "mo_produced": 0.0
+  },
+  "X0450210ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X0450210ITEM01",
+    "monthly_schedule": 25.0,
+    "current_stock": 118.0,
+    "mo_produced": 0.0
+  },
+  "X3003540ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X3003540ITEM01",
+    "monthly_schedule": 77.0,
+    "current_stock": 300.0,
+    "mo_produced": 0.0
+  },
+  "X4102414ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X4102414ITEM01",
+    "monthly_schedule": 205.0,
+    "current_stock": 154.0,
+    "mo_produced": 0.0
+  },
+  "X4108210ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X4108210ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X4108210ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X4108210ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X4601010ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X4601010ITEM01",
+    "monthly_schedule": 800.0,
+    "current_stock": 278.0,
+    "mo_produced": 636.0
+  },
+  "X4601010ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X4601010ITEM02",
+    "monthly_schedule": 800.0,
+    "current_stock": 598.0,
+    "mo_produced": 648.0
+  },
+  "X4601010ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X4601010ITEM03",
+    "monthly_schedule": 2400.0,
+    "current_stock": 987.0,
+    "mo_produced": 1640.0
+  },
+  "X5018414ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X5018414ITEM01",
+    "monthly_schedule": 212.0,
+    "current_stock": 202.0,
+    "mo_produced": 0.0
+  },
+  "X7114910ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7114910ITEM04",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7114910ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7114910ITEM05",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7114910ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7114910ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7114910ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7114910ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7114910ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7114910ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7126810ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7126810ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7126810ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7126810ITEM04",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7126810ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7126810ITEM05",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7159514ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7159514ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "X7184610ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7184610ITEM02",
+    "monthly_schedule": 154.0,
+    "current_stock": 472.0,
+    "mo_produced": 0.0
+  },
+  "X7184610ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7184610ITEM03",
+    "monthly_schedule": 154.0,
+    "current_stock": 1066.0,
+    "mo_produced": 0.0
+  },
+  "X7184610ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7184610ITEM01",
+    "monthly_schedule": 77.0,
+    "current_stock": 14.0,
+    "mo_produced": 0.0
+  },
+  "X7184610ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7184610ITEM05",
+    "monthly_schedule": 154.0,
+    "current_stock": 2424.0,
+    "mo_produced": 0.0
+  },
+  "X7184610ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7184610ITEM04",
+    "monthly_schedule": 77.0,
+    "current_stock": 20.0,
+    "mo_produced": 0.0
+  },
+  "X7184610ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7184610ITEM06",
+    "monthly_schedule": 77.0,
+    "current_stock": 375.0,
+    "mo_produced": 0.0
+  },
+  "X7191310ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7191310ITEM01",
+    "monthly_schedule": 142.0,
+    "current_stock": 262.0,
+    "mo_produced": 0.0
+  },
+  "X7191310ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7191310ITEM02",
+    "monthly_schedule": 142.0,
+    "current_stock": 699.0,
+    "mo_produced": 0.0
+  },
+  "X7191310ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7191310ITEM03",
+    "monthly_schedule": 284.0,
+    "current_stock": 575.0,
+    "mo_produced": 0.0
+  },
+  "X7197910ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "X7197910ITEM01",
+    "monthly_schedule": 406.0,
+    "current_stock": 207.0,
+    "mo_produced": 0.0
+  },
+  "XFG07713ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "XFG07713ITEM01",
+    "monthly_schedule": 638.0,
+    "current_stock": 1.0,
+    "mo_produced": 0.0
+  },
+  "F4J05414ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4J05414ITEM01",
+    "monthly_schedule": 4263.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F7950514-OSLATCHPLATE": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F7950514-OSLATCHPLATE",
+    "monthly_schedule": 2979.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "F4Z14114-OSITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4Z14114-OSITEM01",
+    "monthly_schedule": 2829.0,
+    "current_stock": 714.0,
+    "mo_produced": 0.0
+  },
+  "F4Z14114-OSITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "F4Z14114-OSITEM02",
+    "monthly_schedule": 2829.0,
+    "current_stock": 1294.0,
+    "mo_produced": 0.0
+  },
+  "B0908101ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "B0908101ITEM06",
+    "monthly_schedule": 781.0,
+    "current_stock": 1090.0,
+    "mo_produced": 754.0
+  },
+  "ACD45C00030ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACD45C00030ITEM01",
+    "monthly_schedule": 3437.0,
+    "current_stock": 611.0,
+    "mo_produced": 1200.0
+  },
+  "ACA06C00011ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA06C00011ITEM02",
+    "monthly_schedule": 4898.0,
+    "current_stock": 336.0,
+    "mo_produced": 3245.0
+  },
+  "EEB06A00031ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "EEB06A00031ITEM02",
+    "monthly_schedule": 1450.0,
+    "current_stock": 99.0,
+    "mo_produced": 0.0
+  },
+  "EEB06A00031ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "EEB06A00031ITEM01",
+    "monthly_schedule": 1450.0,
+    "current_stock": 199.0,
+    "mo_produced": 0.0
+  },
+  "ACD45C00000ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACD45C00000ITEM01",
+    "monthly_schedule": 98.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "EEB06A00031ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "EEB06A00031ITEM03",
+    "monthly_schedule": 1450.0,
+    "current_stock": 60.0,
+    "mo_produced": 0.0
+  },
+  "ACD45C00010ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACD45C00010ITEM01",
+    "monthly_schedule": 98.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "ACC45C00080ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACC45C00080ITEM01",
+    "monthly_schedule": 98.0,
+    "current_stock": 55.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM01",
+    "monthly_schedule": 270.0,
+    "current_stock": 216.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM02",
+    "monthly_schedule": 270.0,
+    "current_stock": 193.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM14": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM14",
+    "monthly_schedule": 270.0,
+    "current_stock": 300.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM04",
+    "monthly_schedule": 540.0,
+    "current_stock": 21.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM05",
+    "monthly_schedule": 540.0,
+    "current_stock": 20.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM06",
+    "monthly_schedule": 540.0,
+    "current_stock": 315.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM20": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM20",
+    "monthly_schedule": 270.0,
+    "current_stock": 19.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM03",
+    "monthly_schedule": 270.0,
+    "current_stock": 256.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM15": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM15",
+    "monthly_schedule": 270.0,
+    "current_stock": 10.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM16": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM16",
+    "monthly_schedule": 1080.0,
+    "current_stock": 40.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM10": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM10",
+    "monthly_schedule": 270.0,
+    "current_stock": 10.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM22": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM22",
+    "monthly_schedule": 540.0,
+    "current_stock": 20.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM24": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM24",
+    "monthly_schedule": 540.0,
+    "current_stock": 632.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM27": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM27",
+    "monthly_schedule": 270.0,
+    "current_stock": 12.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM26": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM26",
+    "monthly_schedule": 270.0,
+    "current_stock": 10.0,
+    "mo_produced": 0.0
+  },
+  "GCF47A00001ITEM25": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "GCF47A00001ITEM25",
+    "monthly_schedule": 270.0,
+    "current_stock": 357.0,
+    "mo_produced": 0.0
+  },
+  "ACD37C00001ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACD37C00001ITEM01",
+    "monthly_schedule": 200.0,
+    "current_stock": 17.0,
+    "mo_produced": 0.0
+  },
+  "ACA45A00101ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA45A00101ITEM01",
+    "monthly_schedule": 4139.0,
+    "current_stock": 341.0,
+    "mo_produced": 1634.0
+  },
+  "ACA45A00101ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA45A00101ITEM02",
+    "monthly_schedule": 8278.0,
+    "current_stock": 1102.0,
+    "mo_produced": 3136.0
+  },
+  "ACA45A00101ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA45A00101ITEM03",
+    "monthly_schedule": 4139.0,
+    "current_stock": 520.0,
+    "mo_produced": 840.0
+  },
+  "ACA45A00101ITEM06": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA45A00101ITEM06",
+    "monthly_schedule": 4139.0,
+    "current_stock": 274.0,
+    "mo_produced": 0.0
+  },
+  "ACA45A00101ITEM07": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA45A00101ITEM07",
+    "monthly_schedule": 4139.0,
+    "current_stock": 1686.0,
+    "mo_produced": 0.0
+  },
+  "ACA45A00101ITEM05": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA45A00101ITEM05",
+    "monthly_schedule": 4139.0,
+    "current_stock": 2756.0,
+    "mo_produced": 0.0
+  },
+  "ACA45A00101ITEM04": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA45A00101ITEM04",
+    "monthly_schedule": 4139.0,
+    "current_stock": 387.0,
+    "mo_produced": 0.0
+  },
+  "ADA06A00021ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ADA06A00021ITEM03",
+    "monthly_schedule": 400.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "ACC45C00090ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACC45C00090ITEM01",
+    "monthly_schedule": 98.0,
+    "current_stock": 74.0,
+    "mo_produced": 0.0
+  },
+  "ACA06C00011ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACA06C00011ITEM01",
+    "monthly_schedule": 4898.0,
+    "current_stock": 156.0,
+    "mo_produced": 1519.0
+  },
+  "ACC45C00060ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ACC45C00060ITEM01",
+    "monthly_schedule": 3270.0,
+    "current_stock": 0.0,
+    "mo_produced": 480.0
+  },
+  "EEB01C00181ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "EEB01C00181ITEM02",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "EEB01C00181ITEM03": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "EEB01C00181ITEM03",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "EEB01C00181ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "EEB01C00181ITEM01",
+    "monthly_schedule": 0.0,
+    "current_stock": 0.0,
+    "mo_produced": 0.0
+  },
+  "ADA06A00021ITEM02": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ADA06A00021ITEM02",
+    "monthly_schedule": 400.0,
+    "current_stock": 419.0,
+    "mo_produced": 0.0
+  },
+  "ADA06A00021ITEM01": {
+    "company_id": "PEPIPL",
+    "month_year": "2026-10",
+    "part_no": "ADA06A00021ITEM01",
+    "monthly_schedule": 400.0,
+    "current_stock": 410.0,
+    "mo_produced": 0.0
+  }
+}
