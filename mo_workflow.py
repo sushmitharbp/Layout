@@ -754,35 +754,45 @@ class MOWorkflowEngine:
         if not mo_number:
             return None
         clean_mo = str(mo_number).strip()
+        clean_upper = clean_mo.upper()
         if self.use_supabase:
             for tbl in ["app_mo"]:
                 try:
+                    # 1. Try mo_no column
                     res = requests.get(
                         f"{SUPABASE_URL}/rest/v1/{tbl}?mo_no=eq.{clean_mo}&select=*",
                         headers=self._get_supabase_headers(),
                         timeout=10
                     )
-                    if res.status_code == 200:
-                        items = res.json()
-                        if items:
-                            return self._normalize_mo(items[0])
-                    # Also try lookup by id if mo_number is numeric
+                    if res.status_code == 200 and res.json():
+                        return self._normalize_mo(res.json()[0])
+
+                    # 2. Try mo_number column
+                    res_num = requests.get(
+                        f"{SUPABASE_URL}/rest/v1/{tbl}?mo_number=eq.{clean_mo}&select=*",
+                        headers=self._get_supabase_headers(),
+                        timeout=10
+                    )
+                    if res_num.status_code == 200 and res_num.json():
+                        return self._normalize_mo(res_num.json()[0])
+
+                    # 3. Also try lookup by id if mo_number is numeric
                     if clean_mo.isdigit():
                         res_id = requests.get(
                             f"{SUPABASE_URL}/rest/v1/{tbl}?id=eq.{clean_mo}&select=*",
                             headers=self._get_supabase_headers(),
                             timeout=10
                         )
-                        if res_id.status_code == 200:
-                            items_id = res_id.json()
-                            if items_id:
-                                return self._normalize_mo(items_id[0])
+                        if res_id.status_code == 200 and res_id.json():
+                            return self._normalize_mo(res_id.json()[0])
                 except Exception:
                     pass
 
         mos = self._load_local()
         for m in mos:
-            if m.get("mo_number") == clean_mo or m.get("mo_no") == clean_mo:
+            m_no = str(m.get("mo_number") or m.get("mo_no") or "").strip().upper()
+            m_id = str(m.get("id") or "").strip()
+            if m_no == clean_upper or m_id == clean_mo or (clean_upper in m_no and len(clean_upper) >= 6):
                 return self._normalize_mo(m)
         return None
 

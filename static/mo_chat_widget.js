@@ -6,6 +6,7 @@
 
 let widgetCurrentPart = null;
 let widgetIsOpen = false;
+let widgetChatHistory = [];
 
 document.addEventListener("DOMContentLoaded", () => {
     initChatWidget();
@@ -59,9 +60,9 @@ function initChatWidget() {
                     <p style="margin-top: 4px;">Ask me about <strong>Monthly Yield</strong>, <strong>Scrap Generated</strong>, <strong>Cutting & Production Plans</strong>, or any Part Number.</p>
                     <div class="widget-chips">
                         <button type="button" class="widget-chip" onclick="widgetSendText('monthly yield')">📊 Monthly Yield</button>
-                        <button type="button" class="widget-chip" onclick="widgetSendText('this month scrap generated')">✂️ Scrap Generated</button>
+                        <button type="button" class="widget-chip" onclick="widgetSendText('most scrap weight')">⚖️ Most Scrap Weight</button>
+                        <button type="button" class="widget-chip" onclick="widgetSendText('remaining scrap')">♻️ Remaining Scrap</button>
                         <button type="button" class="widget-chip" onclick="widgetSendText('cutting plan for MBA01010')">📋 Plan: MBA01010</button>
-                        <button type="button" class="widget-chip" onclick="widgetSendText('MBA01008 - Item 1')">MBA01008 - Item 1</button>
                     </div>
                 </div>
             </div>
@@ -165,8 +166,10 @@ async function handleWidgetSubmit(e) {
     if (!text) return;
     if (input) input.value = "";
 
-    // Append User Message
+    // Append User Message & Track History
     appendWidgetMsg("user", text);
+    widgetChatHistory.push({ role: "user", content: text });
+    if (widgetChatHistory.length > 20) widgetChatHistory = widgetChatHistory.slice(-20);
 
     // Typing indicator
     const typingId = "widgetTyping_" + Date.now();
@@ -175,7 +178,7 @@ async function handleWidgetSubmit(e) {
     typingEl.id = typingId;
     typingEl.innerHTML = `
         <div class="widget-msg-avatar"><i class="fa-solid fa-microchip"></i></div>
-        <div class="widget-msg-bubble"><i class="fa-solid fa-circle-notch fa-spin"></i> Searching database...</div>
+        <div class="widget-msg-bubble"><i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing production data...</div>
     `;
     body.appendChild(typingEl);
     body.scrollTop = body.scrollHeight;
@@ -184,7 +187,11 @@ async function handleWidgetSubmit(e) {
         const res = await fetch("/api/chat", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ message: text, current_part: widgetCurrentPart })
+            body: JSON.stringify({
+                message: text,
+                history: widgetChatHistory,
+                current_part: widgetCurrentPart
+            })
         });
 
         const typingNode = document.getElementById(typingId);
@@ -192,6 +199,9 @@ async function handleWidgetSubmit(e) {
 
         if (res.ok) {
             const data = await res.json();
+            if (data.reply) {
+                widgetChatHistory.push({ role: "assistant", content: data.reply });
+            }
             renderWidgetResponse(data);
         } else {
             appendWidgetMsg("bot", "Sorry, I could not process that request. Please try again.");

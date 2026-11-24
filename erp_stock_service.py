@@ -13,11 +13,14 @@ import json
 import glob
 import time
 import requests
+import logging
 try:
     import openpyxl
 except Exception:
     openpyxl = None
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 

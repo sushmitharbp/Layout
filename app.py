@@ -701,16 +701,17 @@ def chat():
     message = (data.get("message") or "").strip()
     current_part = data.get("current_part")
     current_rm = data.get("current_rm")
+    history = data.get("history") or []
 
     if not message:
         return jsonify({
-            "reply": "Please enter a Part Number (for example, `MBA01008 - Item 1` or `MBA01008`), ask for **Monthly Yield**, **Scrap Generated**, or request a **Cutting Plan**.",
+            "reply": "Please enter a Part Number (e.g. `MBA01008 - Item 1`), ask for **Monthly Yield**, **Highest Scrap Weight**, **Remaining Scrap**, or request a **Cutting Plan**.",
             "type": "help",
             "actions": [
                 {"label": "Monthly Yield Analysis", "value": "monthly yield"},
+                {"label": "Highest Scrap Weight", "value": "most scrap weight"},
                 {"label": "Monthly Scrap Report", "value": "this month scrap generated"},
-                {"label": "Cutting Plan: MBA01010", "value": "cutting plan for MBA01010"},
-                {"label": "Part: MBA01008 - Item 1", "value": "MBA01008 - Item 1"}
+                {"label": "Cutting Plan: MBA01010", "value": "cutting plan for MBA01010"}
             ]
         })
 
@@ -719,8 +720,8 @@ def chat():
     if eb_capacity_resp:
         return jsonify(eb_capacity_resp)
 
-    # 0b. Production Planner Agent (Monthly Yield, Monthly Scrap, Cutting & Production Plans)
-    planner_resp = PRODUCTION_PLANNER_AGENT.handle_user_prompt(message, current_part=current_part, current_rm=current_rm)
+    # 0b. Production Planner Agent (Monthly Yield, Most Scrap Weight, Monthly Scrap, Cutting & Production Plans with Memory)
+    planner_resp = PRODUCTION_PLANNER_AGENT.handle_user_prompt(message, history=history, current_part=current_part, current_rm=current_rm)
     if planner_resp:
         return jsonify(planner_resp)
 
@@ -1025,30 +1026,32 @@ def get_raw_material_sheets():
 
     combined = {}
 
-    # 1. Fetch live Tara ERP Main Stores and RYG standards
+    # 1. Fetch unified RYG table data (AL and VST standards)
     try:
-        from reorder_level_service import reorder_level_service, AL_RM_STANDARDS, VST_RM_STANDARDS, _norm_code
-        erp_rm_map, erp_dim_map = reorder_level_service._get_tara_erp_rm_map(branch)
+        from reorder_level_service import reorder_level_service, _norm_code
+        al_data = reorder_level_service.get_reorder_level_data(customer="AL", search_query="", status_filter="")
+        vst_data = reorder_level_service.get_reorder_level_data(customer="VST", search_query="", status_filter="")
 
-        # 1a. Index all RYG Standards (AL & VST)
-        for std in AL_RM_STANDARDS + VST_RM_STANDARDS:
-            code = std["rm_code"]
-            k = _norm_code(code)
-            dim_k = f"{float(std.get('thickness', 0)):g}_{float(std.get('length', 0)):g}_{float(std.get('width', 0)):g}"
-            erp_item = erp_rm_map.get(k) or erp_dim_map.get(dim_k)
-            avail = float(erp_item.get("available_sheets") or 0.0) if erp_item else 0.0
-            t = float(std.get("thickness") or 0)
-            l = float(std.get("length") or 0)
-            w = float(std.get("width") or 0)
+        for row in (al_data.get("items", []) + vst_data.get("items", [])):
+            code = (row.get("rm_code") or "").strip()
+            if not code:
+                continue
+            stk = float(row.get("sheet_stock") or 0.0)
+            t = float(row.get("thickness") or 0)
+            l = float(row.get("length") or 0)
+            w = float(row.get("width") or 0)
+            wt = float(row.get("weight_per_sheet") or 0.0)
+            grade = row.get("grade") or code[:2].upper()
+
             combined[code.upper()] = {
                 "item_code": code,
                 "item_desc": f"SHEET-{code}",
-                "onhand_stock": avail,
+                "onhand_stock": stk,
                 "uom": "NOS",
-                "weight": std.get("weight_per_sheet"),
+                "weight": wt,
                 "store": f"MAIN STORES ({branch})",
                 "category": "RAW MATERIAL SHEET",
-                "grade": std.get("grade") or code[:2].upper(),
+                "grade": grade,
                 "thickness": t,
                 "length": l,
                 "width": w,
@@ -1056,6 +1059,7 @@ def get_raw_material_sheets():
             }
 
         # 1b. Add any remaining items from Live Tara ERP Main Stores
+        erp_rm_map, erp_dim_map = reorder_level_service._get_tara_erp_rm_map(branch)
         for erp_item in erp_rm_map.values():
             code = (erp_item.get("rm_code") or erp_item.get("item_code") or "").strip()
             if not code:
@@ -1080,12 +1084,12 @@ def get_raw_material_sheets():
                     "width": w,
                     "sheet_size": f"{t:g} * {l:g} * {w:g}" if (t and l and w) else (erp_item.get("item_desc") or code)
                 }
-            else:
+            elif avail > 0 and combined[code.upper()]["onhand_stock"] == 0:
                 combined[code.upper()]["onhand_stock"] = avail
     except Exception as e:
         logger.warning(f"Live Tara ERP fetch in get_raw_material_sheets fallback: {e}")
 
-    # 2. Merge legacy items from ERP_STOCK_SERVICE.rm_stock
+    # 2. Merge legacy items from ERP_STOCK_SERVICE.rm_stock ONLY if not in RYG/Tara
     if hasattr(ERP_STOCK_SERVICE, "rm_stock"):
         for item in ERP_STOCK_SERVICE.rm_stock.values():
             cat = (item.get("category") or "").upper()

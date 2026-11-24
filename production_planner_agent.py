@@ -276,6 +276,160 @@ class ProductionPlannerAgent:
         }
 
     # =========================================================================
+    # 2b. MOST SCRAP WEIGHT / SCRAP LEADERBOARD INTELLIGENCE
+    # =========================================================================
+
+    def analyze_most_scrap_parts(self, target_month: Optional[str] = None, limit: int = 5) -> Dict[str, Any]:
+        """
+        Ranks manufactured parts by total scrap weight (kg) generated.
+        Scrap (kg) = Sheets Required * Sheet Weight (kg) * (1 - Yield %).
+        Provides engineering recommendations to recover yield or salvage endbits.
+        """
+        all_mos = self._get_all_mos()
+        if not target_month:
+            target_month = datetime.utcnow().strftime("%Y-%m")
+
+        month_label = self._format_month_label(target_month)
+
+        # Accumulate scrap per part
+        part_stats = {}
+
+        for mo in all_mos:
+            mo_date = mo.get("date") or mo.get("created_at") or ""
+            if target_month and mo_date and target_month not in mo_date:
+                continue
+
+            p_no = mo.get("part_no")
+            if not p_no:
+                parts = mo.get("parts") or mo.get("parts_produced") or []
+                if isinstance(parts, list) and parts:
+                    p_no = parts[0].get("part_no") if isinstance(parts[0], dict) else str(parts[0])
+            if not p_no:
+                continue
+
+            rm_code = mo.get("rm_erp") or mo.get("rm_code") or ""
+            sheets = float(mo.get("sheets_required") or mo.get("no_of_rm_sheets") or 1.0)
+            yield_pct = float(mo.get("yield_pct") or self._lookup_layout_yield(p_no, rm_code) or 85.0)
+            scrap_pct = max(0.0, 100.0 - yield_pct)
+
+            # Calculate sheet weight
+            dims = [float(x) for x in re.findall(r'[\d.]+', rm_code)]
+            if len(dims) >= 3:
+                sheet_wt = (dims[1] / 1000.0) * (dims[2] / 1000.0) * dims[0] * 7.85
+            elif len(dims) == 2:
+                sheet_wt = (dims[0] / 1000.0) * (dims[1] / 1000.0) * 4.8 * 7.85
+            else:
+                sheet_wt = 111.86  # standard 3.8 x 2500 x 1500
+
+            total_rm_kg = sheets * sheet_wt
+            scrap_kg = total_rm_kg * (scrap_pct / 100.0)
+            base_part = mo.get("base_part") or p_no.split(" - ")[0]
+
+            if p_no not in part_stats:
+                part_stats[p_no] = {
+                    "part_no": p_no,
+                    "base_part": base_part,
+                    "rm_code": rm_code,
+                    "total_sheets": 0.0,
+                    "total_rm_kg": 0.0,
+                    "total_scrap_kg": 0.0,
+                    "weighted_yield_sum": 0.0,
+                    "mo_count": 0
+                }
+
+            part_stats[p_no]["total_sheets"] += sheets
+            part_stats[p_no]["total_rm_kg"] += total_rm_kg
+            part_stats[p_no]["total_scrap_kg"] += scrap_kg
+            part_stats[p_no]["weighted_yield_sum"] += yield_pct * sheets
+            part_stats[p_no]["mo_count"] += 1
+
+        # If empty (e.g. no date match), aggregate all MOs
+        if not part_stats:
+            for mo in all_mos:
+                p_no = mo.get("part_no")
+                if not p_no:
+                    parts = mo.get("parts") or mo.get("parts_produced") or []
+                    if isinstance(parts, list) and parts:
+                        p_no = parts[0].get("part_no") if isinstance(parts[0], dict) else str(parts[0])
+                if not p_no:
+                    continue
+                rm_code = mo.get("rm_erp") or mo.get("rm_code") or ""
+                sheets = float(mo.get("sheets_required") or mo.get("no_of_rm_sheets") or 1.0)
+                yield_pct = float(mo.get("yield_pct") or self._lookup_layout_yield(p_no, rm_code) or 85.0)
+                scrap_pct = max(0.0, 100.0 - yield_pct)
+
+                dims = [float(x) for x in re.findall(r'[\d.]+', rm_code)]
+                sheet_wt = (dims[1] / 1000.0) * (dims[2] / 1000.0) * dims[0] * 7.85 if len(dims) >= 3 else 111.86
+                total_rm_kg = sheets * sheet_wt
+                scrap_kg = total_rm_kg * (scrap_pct / 100.0)
+                base_part = mo.get("base_part") or p_no.split(" - ")[0]
+
+                if p_no not in part_stats:
+                    part_stats[p_no] = {
+                        "part_no": p_no,
+                        "base_part": base_part,
+                        "rm_code": rm_code,
+                        "total_sheets": 0.0,
+                        "total_rm_kg": 0.0,
+                        "total_scrap_kg": 0.0,
+                        "weighted_yield_sum": 0.0,
+                        "mo_count": 0
+                    }
+
+                part_stats[p_no]["total_sheets"] += sheets
+                part_stats[p_no]["total_rm_kg"] += total_rm_kg
+                part_stats[p_no]["total_scrap_kg"] += scrap_kg
+                part_stats[p_no]["weighted_yield_sum"] += yield_pct * sheets
+                part_stats[p_no]["mo_count"] += 1
+
+        # Sort descending by total_scrap_kg
+        ranked = sorted(part_stats.values(), key=lambda x: x["total_scrap_kg"], reverse=True)[:limit]
+        avg_price_kg = 65.0  # standard price per kg for scrap value estimation
+
+        lines = [
+            f"### Highest Scrap Weight Parts Leaderboard ({month_label})",
+            "",
+            f"Ranking of manufactured parts generating the **highest scrap tonnage** across all production orders:",
+            "",
+            "| Rank | Part Number | RM Sheet Used | Sheared Sheets | Avg Yield | Scrap Weight (kg) | Est. Wastage Cost |",
+            "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |"
+        ]
+
+        for i, r in enumerate(ranked, 1):
+            avg_y = round(r["weighted_yield_sum"] / r["total_sheets"], 1) if r["total_sheets"] > 0 else 85.0
+            cost = int(r["total_scrap_kg"] * avg_price_kg)
+            lines.append(f"| **#{i}** | **{r['part_no']}** | `{r['rm_code']}` | {int(r['total_sheets'])} sheets | **{avg_y}%** | **{round(r['total_scrap_kg'], 1):,} kg** | ₹{cost:,} |")
+
+        lines.extend([
+            "",
+            "### Engineering Scrap Reduction Recommendations:",
+        ])
+
+        if ranked:
+            top_p = ranked[0]
+            lines.append(f"1. **Primary Wastage Target ({top_p['part_no']}):** Accounts for **{round(top_p['total_scrap_kg'], 1)} kg** of drop-off scrap. Consider re-nesting with smaller secondary parts on `{top_p['rm_code']}` to elevate yield beyond 92%.")
+        if len(ranked) > 1:
+            sec_p = ranked[1]
+            lines.append(f"2. **Secondary Target ({sec_p['part_no']}):** Generates **{round(sec_p['total_scrap_kg'], 1)} kg** scrap. Ensure shearing drop-offs are registered into the End Bit Store for bracket production.")
+
+        lines.append("\n> **Quick Action:** Click a suggestion below to view cutting plans or explore end-bit inventory:")
+
+        actions = [
+            {"label": "View Monthly Material Yield", "value": "monthly yield"},
+            {"label": "Remaining Scrap Intelligence", "value": "remaining scrap generated"}
+        ]
+        if ranked:
+            actions.insert(0, {"label": f"Cutting Plan for {ranked[0]['part_no']}", "value": f"cutting plan for {ranked[0]['part_no']}"})
+
+        return {
+            "reply": "\n".join(lines),
+            "type": "most_scrap_analysis",
+            "month": target_month,
+            "ranked_parts": ranked,
+            "actions": actions
+        }
+
+    # =========================================================================
     # 3. PRODUCTION & CUTTING PLAN GENERATION
     # =========================================================================
 
@@ -461,32 +615,65 @@ class ProductionPlannerAgent:
     # 4. INTENT ROUTER & NATURAL LANGUAGE DISPATCHER
     # =========================================================================
 
-    def handle_user_prompt(self, message: str, current_part: Optional[str] = None, current_rm: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    def handle_user_prompt(self, message: str, history: Optional[List[Dict[str, str]]] = None, current_part: Optional[str] = None, current_rm: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Detects if query relates to monthly yield, monthly scrap, or production plans,
-        and executes the corresponding agent node.
+        Detects if query relates to monthly yield, monthly scrap, most scrap parts, or production plans,
+        and executes the corresponding agent node with multi-turn memory.
         """
         if not message:
             return None
 
         m_lower = message.lower().strip()
 
+        # Multi-turn memory: resolve referenced part or rm from previous turns if not provided
+        resolved_part = current_part or self._extract_part_from_text(message)
+        resolved_rm = current_rm
+
+        if not resolved_part and history:
+            for turn in reversed(history):
+                content = (turn.get("content") or turn.get("text") or "").strip()
+                p_cand = self._extract_part_from_text(content)
+                if p_cand:
+                    resolved_part = p_cand
+                    break
+
+        if not resolved_rm and history:
+            for turn in reversed(history):
+                content = (turn.get("content") or turn.get("text") or "").strip()
+                # Check for RM pattern (e.g. HR-5.8-2500-1250, BSK-3.8-2500-1500)
+                rm_match = re.search(r'\b(HR|CR|CRCA|BSK|YS|BK)[-_][\d\.]+(?:[-_x*][\d\.]+)+\b', content, re.IGNORECASE)
+                if rm_match:
+                    resolved_rm = rm_match.group(0).upper()
+                    break
+
+        # Intent 0: Most Scrap Weight / Highest Scrap Parts Ranking
+        is_most_scrap_query = any(k in m_lower for k in [
+            "most scrap weight", "most scrap", "highest scrap", "top scrap", "maximum scrap",
+            "which part has most scrap", "which part generates most scrap", "parts with most scrap",
+            "scrap leaderboard", "scrap weight", "highest wastage parts"
+        ])
+
+        if is_most_scrap_query:
+            month = self._extract_month_from_text(m_lower)
+            return self.analyze_most_scrap_parts(month)
+
         # Intent 1: Monthly Yield
         is_yield_query = any(k in m_lower for k in [
             "monthly yield", "this month yield", "month yield", "average yield",
             "yield this month", "yield rate this month", "yield percentage this month",
-            "what is monthly yield", "monthly material yield"
+            "what is monthly yield", "monthly material yield", "current yield", "overall yield"
         ])
 
         if is_yield_query:
             month = self._extract_month_from_text(m_lower)
             return self.analyze_monthly_yield(month)
 
-        # Intent 2: Monthly Scrap / Wastage Generation
+        # Intent 2: Monthly Scrap / Wastage Generation / Remaining Scrap
         is_scrap_query = any(k in m_lower for k in [
             "monthly scrap", "this month scrap", "scrap generated", "scrap generated this month",
             "wastage generated", "scrap cost", "how much scrap", "total scrap this month",
-            "scrap rate this month", "scrap generated etc"
+            "scrap rate this month", "scrap generated etc", "remaining scrap", "endbit scrap",
+            "salvaged scrap", "unrecoverable scrap"
         ])
 
         if is_scrap_query:
@@ -497,17 +684,15 @@ class ProductionPlannerAgent:
         is_plan_query = any(k in m_lower for k in [
             "give a plan", "give me a plan", "cutting plan", "production plan", "shearing plan",
             "give plan", "how to produce", "plan for part", "plan for", "manufacturing plan",
-            "generate plan", "need a plan"
+            "generate plan", "need a plan", "show plan", "how to cut"
         ]) or (m_lower.startswith("plan") and len(m_lower.split()) <= 4)
 
         if is_plan_query:
-            # Extract part from message or use context
-            detected_part = self._extract_part_from_text(message) or current_part
             # Extract target qty if mentioned e.g. "for 500 units" or "qty 200"
             qty_match = re.search(r'(?:qty|quantity|units?|nos?|target)\s*(?:of|is|:)?\s*(\d+)', m_lower)
             target_qty = int(qty_match.group(1)) if qty_match else None
 
-            return self.generate_cutting_plan(part_query=detected_part, target_qty=target_qty, rm_erp=current_rm)
+            return self.generate_cutting_plan(part_query=resolved_part, target_qty=target_qty, rm_erp=resolved_rm)
 
         return None
 
@@ -516,6 +701,13 @@ class ProductionPlannerAgent:
     # =========================================================================
 
     def _get_all_mos(self) -> List[Dict[str, Any]]:
+        if self.mo_engine and hasattr(self.mo_engine, "list_mos"):
+            try:
+                mos = self.mo_engine.list_mos()
+                if mos:
+                    return mos
+            except Exception:
+                pass
         if self.mo_engine and hasattr(self.mo_engine, "material_orders"):
             return list(self.mo_engine.material_orders.values())
         mo_path = os.path.join(os.path.dirname(__file__), "data_mo_store.json")
