@@ -16,8 +16,10 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-SUPABASE_URL = os.getenv("SUPABASE_URL", "").rstrip("/")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY")
+from db_clean import DEFAULT_SUPABASE_URL, DEFAULT_SUPABASE_KEY
+
+SUPABASE_URL = (os.getenv("SUPABASE_URL") or DEFAULT_SUPABASE_URL).rstrip("/")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY") or os.getenv("SUPABASE_ANON_KEY") or DEFAULT_SUPABASE_KEY
 LOCAL_MO_FILE = "data_mo_store.json"
 LOCAL_ENDBITS_FILE = "data_endbits_store.json"
 from cut_optimizer import calculate_max_guillotine_capacity
@@ -737,7 +739,8 @@ class MOWorkflowEngine:
         mos = all_mos
         if company_id:
             c_id = str(company_id).strip().upper()
-            mos = [m for m in mos if (m.get("company_id") or "PEI2").strip().upper() == c_id]
+            if c_id != "ALL":
+                mos = [m for m in mos if (m.get("company_id") or m.get("branch_code") or m.get("branch") or "PEPIPL").strip().upper() == c_id]
         if stage:
             mos = [m for m in mos if m.get("current_stage") == stage]
         if status:
