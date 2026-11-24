@@ -647,34 +647,38 @@ class ProductionPlannerAgent:
                     break
 
         # Intent 0: Most Scrap Weight / Highest Scrap Parts Ranking
-        is_most_scrap_query = any(k in m_lower for k in [
-            "most scrap weight", "most scrap", "highest scrap", "top scrap", "maximum scrap",
-            "which part has most scrap", "which part generates most scrap", "parts with most scrap",
-            "scrap leaderboard", "scrap weight", "highest wastage parts"
+        has_scrap = ("scrap" in m_lower or "wastage" in m_lower)
+        is_most_scrap_query = has_scrap and any(k in m_lower for k in [
+            "most", "highest", "top", "maximum", "worst", "weight", "leaderboard",
+            "heaviest", "rank", "parts with", "which part"
         ])
 
         if is_most_scrap_query:
             month = self._extract_month_from_text(m_lower)
             return self.analyze_most_scrap_parts(month)
 
-        # Intent 1: Monthly Yield
-        is_yield_query = any(k in m_lower for k in [
-            "monthly yield", "this month yield", "month yield", "average yield",
-            "yield this month", "yield rate this month", "yield percentage this month",
-            "what is monthly yield", "monthly material yield", "current yield", "overall yield"
-        ])
+        # Intent 1: Monthly Yield / Total Yield / Specific Yield Figure
+        has_yield = "yield" in m_lower
+        yield_context = any(k in m_lower for k in [
+            "month", "total", "average", "overall", "what is", "what's", "tell me",
+            "current", "rate", "percentage", "%", "performance", "shop", "plant",
+            "shearing", "production", "this month", "today", "now", "november", "how much"
+        ]) or (len(m_lower.split()) <= 4 and has_yield)
+
+        is_yield_query = has_yield and (yield_context or not resolved_part)
 
         if is_yield_query:
             month = self._extract_month_from_text(m_lower)
             return self.analyze_monthly_yield(month)
 
         # Intent 2: Monthly Scrap / Wastage Generation / Remaining Scrap
-        is_scrap_query = any(k in m_lower for k in [
-            "monthly scrap", "this month scrap", "scrap generated", "scrap generated this month",
-            "wastage generated", "scrap cost", "how much scrap", "total scrap this month",
-            "scrap rate this month", "scrap generated etc", "remaining scrap", "endbit scrap",
-            "salvaged scrap", "unrecoverable scrap"
-        ])
+        scrap_context = any(k in m_lower for k in [
+            "month", "total", "generated", "remaining", "loss", "cost", "how much",
+            "endbit", "offcut", "salvage", "unrecoverable", "this month", "november",
+            "rate", "percentage", "kg", "tonnage"
+        ]) or (len(m_lower.split()) <= 4 and has_scrap)
+
+        is_scrap_query = has_scrap and (scrap_context or not resolved_part)
 
         if is_scrap_query:
             month = self._extract_month_from_text(m_lower)

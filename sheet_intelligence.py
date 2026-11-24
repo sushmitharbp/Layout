@@ -215,7 +215,9 @@ class SheetIntelligenceEngine:
                 "type": "text"
             }
 
-        if not target_part and ("material yield" in q_lower or "yield" in q_lower) and any(w in q_lower for w in ["what", "how", "calculate", "formula", "definition", "meaning", "explain"]):
+        if not target_part and ("material yield" in q_lower or "yield" in q_lower):
+            if hasattr(self, 'planner_agent') and self.planner_agent:
+                return self.planner_agent.analyze_monthly_yield()
             return {
                 "reply": (
                     "### Material Yield in Sheet Metal Standardization\n\n"
@@ -244,7 +246,9 @@ class SheetIntelligenceEngine:
                 "type": "text"
             }
 
-        if ("end bit" in q_lower or "endbit" in q_lower or "scrap" in q_lower) and any(w in q_lower for w in ["what", "meaning", "definition", "explain"]):
+        if ("end bit" in q_lower or "endbit" in q_lower or "scrap" in q_lower) and any(w in q_lower for w in ["what", "meaning", "definition", "explain", "how much", "total", "month"]):
+            if hasattr(self, 'planner_agent') and self.planner_agent:
+                return self.planner_agent.analyze_monthly_scrap()
             return {
                 "reply": (
                     "### Definition: End-Bit (Off-Cut Scrap)\n\n"
