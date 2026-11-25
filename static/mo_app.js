@@ -11834,7 +11834,7 @@ function applyRygFiltersAndRender() {
     if (!currentRygData) return;
     const allItems = currentRygData.items || [];
     const q = (currentRygSearch || "").trim().toLowerCase();
-    const status = currentRygFilter || "ALL";
+    const status = (currentRygFilter || "ALL").toUpperCase();
 
     let filtered = allItems;
     if (status !== "ALL") {
@@ -11848,7 +11848,61 @@ function applyRygFiltersAndRender() {
         });
     }
 
-    renderRygTable(filtered, currentRygData.summary || {});
+    // 1. Calculate dynamically aggregated summary for currently filtered items
+    let filterMaxQty = 0;
+    let filterSheetStock = 0;
+    let filterStockKg = 0;
+
+    filtered.forEach(it => {
+        filterMaxQty += parseFloat(it.max_qty || 0);
+        filterSheetStock += parseFloat(it.sheet_stock || 0);
+        filterStockKg += parseFloat(it.stock_in_kgs || it.stock_kg || 0);
+    });
+
+    const filterCapacityPct = filterMaxQty > 0 ? ((filterStockKg / filterMaxQty) * 100).toFixed(1) : "0.0";
+
+    const filteredSummary = {
+        total_max_qty: filterMaxQty,
+        total_sheet_stock: filterSheetStock,
+        total_stock_kgs: filterStockKg,
+        overall_capacity_pct: filterCapacityPct,
+        filtered_count: filtered.length,
+        filter_status: status,
+        is_filtered: status !== "ALL" || Boolean(q)
+    };
+
+    // 2. Update Top Total Stock KPI Card according to active filter
+    const totalPill = document.getElementById("rygGrandTotalPill");
+    const kpiTotalStock = document.getElementById("rygKpiTotalStockKgs");
+    const kpiTotalMax = document.getElementById("rygKpiTotalMaxQty");
+    const kpiCapacityPct = document.getElementById("rygCapacityPct");
+    const kpiCapacityBar = document.getElementById("rygCapacityBar");
+
+    if (totalPill) {
+        if (!filteredSummary.is_filtered) {
+            totalPill.textContent = `${filtered.length} Items`;
+            totalPill.style.background = "#e2e8f0";
+            totalPill.style.color = "#1e293b";
+        } else {
+            totalPill.textContent = `${filtered.length} Items (${status}${q ? ` • "${q}"` : ""})`;
+            totalPill.style.background = "#0284c7";
+            totalPill.style.color = "#ffffff";
+        }
+    }
+    if (kpiTotalStock) {
+        kpiTotalStock.textContent = `${Number(filterStockKg).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
+    }
+    if (kpiTotalMax) {
+        kpiTotalMax.textContent = `${Number(filterMaxQty).toLocaleString('en-IN')} kg`;
+    }
+    if (kpiCapacityPct) {
+        kpiCapacityPct.textContent = `${filterCapacityPct}%`;
+    }
+    if (kpiCapacityBar) {
+        kpiCapacityBar.style.width = `${Math.min(parseFloat(filterCapacityPct) || 0, 100)}%`;
+    }
+
+    renderRygTable(filtered, filteredSummary);
 }
 
 async function loadRygData(silent = false) {
@@ -11943,96 +11997,108 @@ function renderRygTable(items, summary) {
                 </td>
             </tr>
         `;
-        return;
+    } else {
+        let rowsHtml = "";
+        items.forEach(row => {
+            // Status Badge Style matching user spreadsheet
+            let badgeStyle = "";
+            let badgeText = row.status || "BLACK";
+
+            switch (badgeText) {
+                case "BLACK":
+                    badgeStyle = "background: #000000; color: #ffffff; border: 1px solid #111;";
+                    break;
+                case "RED":
+                    badgeStyle = "background: #ff0000; color: #ffffff; font-weight: 800;";
+                    break;
+                case "YELLOW":
+                    badgeStyle = "background: #ffff00; color: #000000; font-weight: 800;";
+                    break;
+                case "GREEN":
+                    badgeStyle = "background: #86efac; color: #065f46; font-weight: 800; border: 1px solid #4ade80;";
+                    break;
+                case "WHITE":
+                default:
+                    badgeStyle = "background: #ffffff; color: #0f172a; font-weight: 700; border: 1.5px solid #cbd5e1;";
+                    break;
+            }
+
+            // Sheet stock badge
+            const sheetStockFmt = Number(row.sheet_stock || 0).toLocaleString('en-IN');
+            const maxQtyFmt = Number(row.max_qty || 0).toLocaleString('en-IN');
+            const stockKgFmt = Number(row.stock_in_kgs || row.stock_kg || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 2});
+
+            // Stock % formatting
+            const ratioPct = row.ratio_pct ?? (row.ratio !== undefined ? (row.ratio * 100).toFixed(1) : 0);
+            let ratioColor = "#475569";
+            if (badgeText === "BLACK") ratioColor = "#0f172a";
+            else if (badgeText === "RED") ratioColor = "#dc2626";
+            else if (badgeText === "YELLOW") ratioColor = "#b45309";
+            else if (badgeText === "GREEN") ratioColor = "#15803d";
+
+            rowsHtml += `
+                <tr style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                    <td style="text-align: center; font-weight: 700; color: #64748b; padding: 10px 12px; font-size: 0.82rem;">
+                        ${row.sl_no}
+                    </td>
+                    <td style="padding: 10px 14px;">
+                        <div style="font-weight: 800; color: #0f172a; font-size: 0.88rem; font-family: monospace;">
+                            ${escapeHtml(row.rm_code)}
+                        </div>
+                        <div style="font-size: 0.73rem; color: #64748b; margin-top: 2px;">
+                            ${escapeHtml(row.grade || '')} • ${row.thickness}×${row.length}×${row.width} mm • ${row.weight_per_sheet} kg/sh
+                        </div>
+                    </td>
+                    <td style="text-align: right; padding: 10px 14px; font-weight: 700; color: #1e293b; font-size: 0.88rem;">
+                        ${maxQtyFmt}
+                    </td>
+                    <td style="text-align: center; padding: 10px 14px;">
+                        <span style="font-weight: 800; font-size: 0.92rem; color: ${row.sheet_stock > 0 ? '#0284c7' : '#94a3b8'};">
+                            ${sheetStockFmt}
+                        </span>
+                        <span style="font-size: 0.72rem; color: #94a3b8; display: block;">sheets</span>
+                    </td>
+                    <td style="text-align: right; padding: 10px 14px; font-weight: 800; font-size: 0.9rem; color: #0f172a;">
+                        ${stockKgFmt}
+                    </td>
+                    <td style="text-align: center; padding: 10px 12px; font-weight: 800; font-size: 0.85rem; color: ${ratioColor};">
+                        ${ratioPct}%
+                    </td>
+                    <td style="text-align: center; padding: 10px 14px;">
+                        <span style="display: inline-block; width: 92px; padding: 4px 0; border-radius: 4px; font-size: 0.82rem; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 1px 2px rgba(0,0,0,0.06); ${badgeStyle}">
+                            ${badgeText}
+                        </span>
+                    </td>
+                </tr>
+            `;
+        });
+        tbody.innerHTML = rowsHtml;
     }
 
-    let rowsHtml = "";
-    items.forEach(row => {
-        // Status Badge Style matching user spreadsheet
-        let badgeStyle = "";
-        let badgeText = row.status || "BLACK";
-
-        switch (badgeText) {
-            case "BLACK":
-                badgeStyle = "background: #000000; color: #ffffff; border: 1px solid #111;";
-                break;
-            case "RED":
-                badgeStyle = "background: #ff0000; color: #ffffff; font-weight: 800;";
-                break;
-            case "YELLOW":
-                badgeStyle = "background: #ffff00; color: #000000; font-weight: 800;";
-                break;
-            case "GREEN":
-                badgeStyle = "background: #86efac; color: #065f46; font-weight: 800; border: 1px solid #4ade80;";
-                break;
-            case "WHITE":
-            default:
-                badgeStyle = "background: #ffffff; color: #0f172a; font-weight: 700; border: 1.5px solid #cbd5e1;";
-                break;
-        }
-
-        // Sheet stock badge
-        const sheetStockFmt = Number(row.sheet_stock || 0).toLocaleString('en-IN');
-        const maxQtyFmt = Number(row.max_qty || 0).toLocaleString('en-IN');
-        const stockKgFmt = Number(row.stock_in_kgs || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 2});
-
-        // Stock % formatting
-        const ratioPct = row.ratio_pct ?? (row.ratio !== undefined ? (row.ratio * 100).toFixed(1) : 0);
-        let ratioColor = "#475569";
-        if (badgeText === "BLACK") ratioColor = "#0f172a";
-        else if (badgeText === "RED") ratioColor = "#dc2626";
-        else if (badgeText === "YELLOW") ratioColor = "#b45309";
-        else if (badgeText === "GREEN") ratioColor = "#15803d";
-
-        rowsHtml += `
-            <tr style="border-bottom: 1px solid #e2e8f0; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
-                <td style="text-align: center; font-weight: 700; color: #64748b; padding: 10px 12px; font-size: 0.82rem;">
-                    ${row.sl_no}
-                </td>
-                <td style="padding: 10px 14px;">
-                    <div style="font-weight: 800; color: #0f172a; font-size: 0.88rem; font-family: monospace;">
-                        ${escapeHtml(row.rm_code)}
-                    </div>
-                    <div style="font-size: 0.73rem; color: #64748b; margin-top: 2px;">
-                        ${escapeHtml(row.grade || '')} • ${row.thickness}×${row.length}×${row.width} mm • ${row.weight_per_sheet} kg/sh
-                    </div>
-                </td>
-                <td style="text-align: right; padding: 10px 14px; font-weight: 700; color: #1e293b; font-size: 0.88rem;">
-                    ${maxQtyFmt}
-                </td>
-                <td style="text-align: center; padding: 10px 14px;">
-                    <span style="font-weight: 800; font-size: 0.92rem; color: ${row.sheet_stock > 0 ? '#0284c7' : '#94a3b8'};">
-                        ${sheetStockFmt}
-                    </span>
-                    <span style="font-size: 0.72rem; color: #94a3b8; display: block;">sheets</span>
-                </td>
-                <td style="text-align: right; padding: 10px 14px; font-weight: 800; font-size: 0.9rem; color: #0f172a;">
-                    ${stockKgFmt}
-                </td>
-                <td style="text-align: center; padding: 10px 12px; font-weight: 800; font-size: 0.85rem; color: ${ratioColor};">
-                    ${ratioPct}%
-                </td>
-                <td style="text-align: center; padding: 10px 14px;">
-                    <span style="display: inline-block; width: 92px; padding: 4px 0; border-radius: 4px; font-size: 0.82rem; letter-spacing: 0.5px; text-transform: uppercase; box-shadow: 0 1px 2px rgba(0,0,0,0.06); ${badgeStyle}">
-                        ${badgeText}
-                    </span>
-                </td>
-            </tr>
-        `;
-    });
-
-    tbody.innerHTML = rowsHtml;
-
-    // Update Footer Totals matching spreadsheet
+    // Always update footer totals dynamically matching active filter & spreadsheet
+    const sumObj = summary || {};
+    const footerLabel = document.getElementById("rygFooterTotalLabel");
     const footerMaxQty = document.getElementById("rygFooterTotalMaxQty");
     const footerSheets = document.getElementById("rygFooterTotalSheets");
     const footerStockKg = document.getElementById("rygFooterTotalStockKgs");
     const footerAvgRatio = document.getElementById("rygFooterAvgRatio");
 
-    if (footerMaxQty) footerMaxQty.textContent = Number(summary.total_max_qty || 0).toLocaleString('en-IN');
-    if (footerSheets) footerSheets.textContent = `${Number(summary.total_sheet_stock || 0).toLocaleString('en-IN')} Sheets`;
-    if (footerStockKg) footerStockKg.textContent = `${Number(summary.total_stock_kgs || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
-    if (footerAvgRatio) footerAvgRatio.textContent = `${summary.overall_capacity_pct ?? 0}%`;
+    const st = sumObj.filter_status;
+    if (footerLabel) {
+        footerLabel.textContent = (st && st !== "ALL") ? `Total (${st})` : "Total";
+    }
+    if (footerMaxQty) {
+        footerMaxQty.textContent = Number(sumObj.total_max_qty || 0).toLocaleString('en-IN');
+    }
+    if (footerSheets) {
+        footerSheets.textContent = `${Number(sumObj.total_sheet_stock || 0).toLocaleString('en-IN')} Sheets`;
+    }
+    if (footerStockKg) {
+        footerStockKg.textContent = `${Number(sumObj.total_stock_kgs || 0).toLocaleString('en-IN', {minimumFractionDigits: 1, maximumFractionDigits: 1})} kg`;
+    }
+    if (footerAvgRatio) {
+        footerAvgRatio.textContent = `${sumObj.overall_capacity_pct ?? 0}%`;
+    }
 }
 
 function exportRygExcel() {
