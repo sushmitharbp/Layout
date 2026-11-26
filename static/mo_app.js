@@ -1223,12 +1223,12 @@ async function selectPartForModal(partNo) {
 
             // 2. MO Produced Qty (Second Card) = moProducedQty
 
-            // 3. Balance to Produce (Third Card: Card 1 - Card 2)
+            // 3. Balance to Produce (Third Card: strictly Card 1 - Card 2)
             let balanceQty = null;
-            if (mrp.balance_to_produce !== undefined && mrp.balance_to_produce !== null) {
-                balanceQty = Math.max(0, Number(mrp.balance_to_produce));
-            } else if (baseQtyToProduce !== null) {
+            if (baseQtyToProduce !== null) {
                 balanceQty = Math.max(0, baseQtyToProduce - moProducedQty);
+            } else if (mrp.balance_to_produce !== undefined && mrp.balance_to_produce !== null) {
+                balanceQty = Math.max(0, Number(mrp.balance_to_produce));
             }
 
             const toProduceEl = document.getElementById("mrpQtyToProduceVal");
@@ -1292,6 +1292,26 @@ async function selectPartForModal(partNo) {
             window._aiSuggestionsRequestedByUser = false;
             const inlineAiBanner = document.getElementById("inlineAiPartSuggestionsBanner");
             if (inlineAiBanner) inlineAiBanner.style.display = "none";
+
+            // Immediately update automated constraints with the selected part data
+            if (typeof updateAutomatedConstraints === "function") {
+                updateAutomatedConstraints(currentIntelData?.stock_feasibility, getSelectedLayoutRecord());
+            }
+
+            // Trigger live intelligence fetch for selected part
+            const curRmCode = document.getElementById("rmErpSelect")?.value || selectedPartData.standard_rm || "";
+            const curSheetsNeeded = parseFloat(document.getElementById("sheetsRequired")?.value) || 1;
+            fetchAndDisplayIntelligence(
+                selectedPartData.part_no || partNo,
+                curRmCode,
+                selectedPartData.grade,
+                selectedPartData.thickness,
+                selectedPartData.length,
+                selectedPartData.width,
+                curSheetsNeeded,
+                false,
+                [selectedPartData.part_no || partNo]
+            );
         }
     } catch (err) {
         console.error("Failed to load part details:", err);
@@ -2363,6 +2383,29 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
     const plan = currentIntelData?.planning_summary;
     const planParts = plan?.parts;
 
+    // Helper to extract a numeric target (>0) from any part/plan/mrp object
+    function extractNumericTarget(obj) {
+        if (!obj || typeof obj !== "object") return 0;
+        const keys = [
+            "mrp_monthly_target",
+            "qty_to_produce",
+            "base_qty_to_produce",
+            "monthly_schedule",
+            "monthly_target",
+            "total_qty",
+            "balance_planning",
+            "target_qty"
+        ];
+        for (const k of keys) {
+            const v = obj[k];
+            if (v !== null && v !== undefined && v !== "N/A" && v !== "") {
+                const num = parseFloat(v);
+                if (!isNaN(num) && num > 0) return num;
+            }
+        }
+        return 0;
+    }
+
     // Collect all parts in the layout to ensure every part has a valid > 0 MRP target
     const layoutPartsList = [];
     if (layoutRecord) {
@@ -2373,15 +2416,14 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
         });
     }
 
-    if (!currentIntelData || !plan) {
-        // Intelligence not available yet or missing planning summary -> constraint fails
-        isMrpAvailable = false;
-        mrpFailureReason = "No MRP Target (N/A)";
-    } else if (planParts && planParts.length > 0) {
+    // Fallback MRP target from selectedPartData (or selectedPartData.mrp)
+    const selectedPartTarget = extractNumericTarget(selectedPartData?.mrp) || extractNumericTarget(selectedPartData);
+
+    if (planParts && planParts.length > 0) {
         // Multi-part layout or multiple parts in plan: check EACH part
         for (const p of planParts) {
-            const target = p.mrp_monthly_target;
-            if (target === null || target === undefined || target === "N/A" || isNaN(parseFloat(target)) || parseFloat(target) <= 0) {
+            const pTarget = extractNumericTarget(p) || (p.part_no === selectedPartData?.part_no ? selectedPartTarget : 0);
+            if (pTarget <= 0) {
                 isMrpAvailable = false;
                 const pName = p.child_part_no || p.part_no || "Part";
                 mrpFailureReason = `No MRP Target for ${pName} (N/A)`;
@@ -2393,19 +2435,37 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
             for (const lp of layoutPartsList) {
                 const lpNo = lp.part_no || lp.child_part_no;
                 if (!lpNo) continue;
-                const matched = planParts.find(p => (p.part_no === lpNo || p.child_part_no === lpNo));
-                if (!matched || matched.mrp_monthly_target === null || matched.mrp_monthly_target === undefined || matched.mrp_monthly_target === "N/A" || parseFloat(matched.mrp_monthly_target) <= 0) {
+                const lpClean = String(lpNo).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                const matched = planParts.find(p => {
+                    const pNo = String(p.part_no || p.child_part_no || "").replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                    return pNo === lpClean || pNo.includes(lpClean) || lpClean.includes(pNo);
+                });
+                const lpTarget = extractNumericTarget(matched) || extractNumericTarget(lp) || (lpClean.includes(String(selectedPartData?.part_no || "").replace(/[^A-Za-z0-9]/g, '').toUpperCase()) ? selectedPartTarget : 0);
+                if (lpTarget <= 0) {
                     isMrpAvailable = false;
                     mrpFailureReason = `No MRP Target for ${lpNo} (N/A)`;
                     break;
                 }
             }
         }
-    } else {
-        const target = plan.mrp_monthly_target;
-        if (target === null || target === undefined || target === "N/A" || isNaN(parseFloat(target)) || parseFloat(target) <= 0) {
+    } else if (plan) {
+        const target = extractNumericTarget(plan) || selectedPartTarget;
+        if (target <= 0) {
             isMrpAvailable = false;
             mrpFailureReason = "No MRP Target (N/A)";
+        }
+    } else if (selectedPartTarget > 0) {
+        // plan not loaded yet or offline, but selectedPartData has valid MRP demand
+        isMrpAvailable = true;
+        mrpFailureReason = null;
+    } else {
+        const inputPart = document.getElementById("partNoInput")?.value?.trim();
+        if (inputPart) {
+            isMrpAvailable = false;
+            mrpFailureReason = "No MRP Target (N/A)";
+        } else {
+            isMrpAvailable = true; // Neutral when no part selected
+            mrpFailureReason = null;
         }
     }
 
@@ -3621,9 +3681,12 @@ function renderReviewModal(mo) {
             ? Math.max(0, mo.mrp_monthly_target - mo.initial_stock)
             : (mo.mrp_monthly_target !== undefined ? mo.mrp_monthly_target : null));
 
-    const initRem = (mo.remaining_quantity !== undefined && mo.remaining_quantity !== null)
-        ? mo.remaining_quantity
-        : (initToProduce !== null ? Math.max(0, initToProduce - (mo.parts_produced || 0)) : null);
+    const partsProdCount = Number(mo.parts_produced || 0);
+    const initRem = (initToProduce !== null && initToProduce !== undefined)
+        ? Math.max(0, Number(initToProduce) - partsProdCount)
+        : (mo.remaining_quantity !== undefined && mo.remaining_quantity !== null
+            ? Math.max(0, Number(mo.remaining_quantity) - partsProdCount)
+            : null);
 
     renderDefaultSinglePartKpis(
         (mo.rm_onhand !== undefined && mo.rm_onhand !== null) ? mo.rm_onhand : null,
@@ -4117,9 +4180,19 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
     const partsValStr = (plan || (isReview && (activeReviewMo?.parts_produced !== undefined || partsProduced > 0))) ? `${partsCount} Nos` : "- Nos";
     const moSubStr = `${moCount} MO${moCount === 1 ? '' : 's'} produced`;
 
-    const remValStr = (remainingQty !== null && remainingQty !== undefined)
-        ? `${Number(remainingQty).toLocaleString()} Nos`
-        : (isReview && activeReviewMo?.remaining_quantity !== undefined && activeReviewMo?.remaining_quantity !== null ? `${Number(activeReviewMo.remaining_quantity).toLocaleString()} Nos` : "- Nos");
+    // Card 3: Balance to Produce strictly = max(0, Card 1 - Card 2)
+    const numToProduce = (toProduceVal !== null && toProduceVal !== undefined) ? Number(toProduceVal) : null;
+    const numProduced = Number(String(partsCount).replace(/,/g, '')) || 0;
+    const finalBal = (numToProduce !== null)
+        ? Math.max(0, numToProduce - numProduced)
+        : (remainingQty !== null && remainingQty !== undefined
+            ? Math.max(0, Number(remainingQty) - numProduced)
+            : (isReview && activeReviewMo?.remaining_quantity !== undefined && activeReviewMo?.remaining_quantity !== null
+                ? Math.max(0, Number(activeReviewMo.remaining_quantity) - numProduced)
+                : null));
+    const remValStr = (finalBal !== null && finalBal !== undefined)
+        ? `${Number(finalBal).toLocaleString()} Nos`
+        : "- Nos";
     const remSubStr = "MRP Bal - MO Produced";
 
     const targetPartNo = isReview 
@@ -4319,11 +4392,13 @@ function renderDefaultSinglePartKpis(rmOnHand, rm, mrpTarget, mrp, partsProduced
                             pMoSub = `${pAppMo.toLocaleString()} App MOs`;
                         }
 
-                        const pBalanceCount = (p.balance_to_produce !== null && p.balance_to_produce !== undefined)
-                            ? Math.max(0, Number(p.balance_to_produce))
-                            : ((p.remaining_quantity !== null && p.remaining_quantity !== undefined)
-                                ? Math.max(0, Number(p.remaining_quantity))
-                                : (pBaseQty !== null ? Math.max(0, pBaseQty - pProducedCount) : null));
+                        const pBalanceCount = (pBaseQty !== null)
+                            ? Math.max(0, pBaseQty - pProducedCount)
+                            : ((p.balance_to_produce !== null && p.balance_to_produce !== undefined)
+                                ? Math.max(0, Number(p.balance_to_produce))
+                                : ((p.remaining_quantity !== null && p.remaining_quantity !== undefined)
+                                    ? Math.max(0, Number(p.remaining_quantity))
+                                    : null));
                         let pRem = pBalanceCount !== null ? `${pBalanceCount.toLocaleString()} Nos` : "- Nos";
                         if (pBalanceCount === 0 && pBaseQty !== null && pBaseQty > 0) {
                             pRem = `0 Nos <small style="display:inline-block; margin-left:4px; font-size:0.68rem; font-weight:700; color:#059669; background:#d1fae5; border:1px solid #a7f3d0; padding:1px 5px; border-radius:4px;"><i class="fa-solid fa-circle-check"></i> Complete</small>`;

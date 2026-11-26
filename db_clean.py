@@ -650,7 +650,7 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
                 total_produced_qty = sheet_mo_qty + app_mo_qty
                 base_qty_to_produce = max(0.0, monthly_sched - initial_stock - sheet_mo_qty)
                 effective_stock = initial_stock + total_produced_qty
-                balance_to_produce = max(0.0, monthly_sched - initial_stock - total_produced_qty)
+                balance_to_produce = max(0.0, base_qty_to_produce - total_produced_qty)
                 return {
                     "company_id": company_id or "PEPIPL",
                     "part_no": part_clean,
@@ -682,8 +682,8 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
         base_qty_to_produce = max(0.0, monthly_sched - initial_stock - sheet_mo_qty)
         # Card 2: MO Produced Qty = sheet MOs (from Excel) + live app MOs
         effective_stock = initial_stock + total_produced_qty
-        # Card 3: Balance to Produce = max(0, monthly_sched - initial_stock - total_produced_qty)
-        balance_to_produce = max(0.0, monthly_sched - initial_stock - total_produced_qty)
+        # Card 3: Balance to Produce = max(0, Card 1 - Card 2)
+        balance_to_produce = max(0.0, base_qty_to_produce - total_produced_qty)
 
         return {
             **mrp_row,

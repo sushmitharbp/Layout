@@ -1314,8 +1314,8 @@ def get_part_intelligence(part_no):
 
                 # Card 1: Target Requirement (Qty to Produce before MOs)
                 p_qty_to_prod = float(p_mrp.get("base_qty_to_produce") if p_mrp.get("base_qty_to_produce") is not None else (p_mrp.get("qty_to_produce") if p_mrp.get("qty_to_produce") is not None else max(0.0, p_mrp_target - p_init_stock)))
-                # Card 3: Balance to Produce = max(0, Card 1 - Card 2)
-                p_remaining = float(p_mrp.get("balance_to_produce") if p_mrp.get("balance_to_produce") is not None else max(0.0, p_qty_to_prod - p_produced))
+                # Card 3: Balance to Produce strictly = max(0, Card 1 - Card 2)
+                p_remaining = max(0.0, p_qty_to_prod - p_produced)
                 p_size = (p_part.get("part_size") or p_part.get("cut_blank") or "") if p_part else ""
                 p_strip = p_part.get("strip_per_blank_qty") or p_part.get("strip_qty") or 1
 
