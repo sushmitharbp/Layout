@@ -1365,9 +1365,13 @@ class MOWorkflowEngine:
 
     def complete_mo(self, mo_number, role="erp", remarks="Executed & Released to ERP", erp_mo_number=None):
         """Explicitly mark an MO as completed/done and execute database updates"""
+        if role != "erp":
+            return None, "Unauthorized: Only the ERP Team can complete and release Material Orders."
         mo = self.get_mo(mo_number)
         if not mo:
             return None, "Material Order not found."
+        if str(mo.get("current_stage", "")).upper() == "COMPLETED" or str(mo.get("status", "")).upper() == "RELEASED_TO_ERP":
+            return mo, {"already_completed": True, "message": "Material Order is already completed and released to ERP."}
 
         if erp_mo_number:
             clean_erp_no = str(erp_mo_number).strip()

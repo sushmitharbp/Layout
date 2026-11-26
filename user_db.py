@@ -9,6 +9,7 @@ import logging
 from datetime import datetime
 import requests
 from dotenv import load_dotenv
+from werkzeug.security import generate_password_hash, check_password_hash
 
 load_dotenv()
 
@@ -176,8 +177,12 @@ def verify_user(company_id, department, password):
     if not user.get("is_active", True):
         return False, None
 
-    stored_pw = user.get("password_hash") or user.get("password") or ""
-    if str(password).strip() == str(stored_pw).strip():
+    stored_pw = str(user.get("password_hash") or user.get("password") or "").strip()
+    candidate_pw = str(password).strip()
+    if stored_pw.startswith(("scrypt:", "pbkdf2:")):
+        if check_password_hash(stored_pw, candidate_pw):
+            return True, user
+    elif candidate_pw == stored_pw:
         return True, user
 
     return False, None
@@ -198,6 +203,7 @@ def set_user_password(company_id, department, new_password):
     if len(pw) < 4:
         return False, "Password must be at least 4 characters long."
 
+    hashed_pw = generate_password_hash(pw)
     now_iso = datetime.utcnow().isoformat() + "Z"
     updated_in_db = False
 
@@ -206,7 +212,7 @@ def set_user_password(company_id, department, new_password):
         try:
             url = f"{SUPABASE_URL}/rest/v1/app_users?company_id=eq.{comp}&department=eq.{dept}"
             patch_payload = {
-                "password_hash": pw,
+                "password_hash": hashed_pw,
                 "updated_at": now_iso
             }
             res = requests.patch(url, headers=_get_headers(), json=patch_payload, timeout=8)
@@ -226,7 +232,7 @@ def set_user_password(company_id, department, new_password):
     found = False
     for u in users:
         if u.get("company_id", "").upper() == comp and u.get("department", "").lower() == dept:
-            u["password_hash"] = pw
+            u["password_hash"] = hashed_pw
             u["updated_at"] = now_iso
             found = True
             break
@@ -238,7 +244,7 @@ def set_user_password(company_id, department, new_password):
             "branch_code": comp,
             "department": dept,
             "username": dept,
-            "password_hash": pw,
+            "password_hash": hashed_pw,
             "display_name": f"{dept.capitalize()} Team",
             "is_active": True,
             "created_at": now_iso,

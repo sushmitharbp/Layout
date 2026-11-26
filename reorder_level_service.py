@@ -290,7 +290,7 @@ class ReorderLevelService:
         self._supabase_cache[target_company] = {"time": now, "data": db_rm_map}
         return db_rm_map
 
-    def get_reorder_level_data(self, customer: str = "AL", search_query: str = "", status_filter: str = "") -> Dict[str, Any]:
+    def get_reorder_level_data(self, customer: str = "AL", search_query: str = "", status_filter: str = "", grade_filter: str = "") -> Dict[str, Any]:
         """
         Builds the complete dynamic RYG table for Unit 1 (PEPIPL):
         Supports both customer programs manufactured at Unit 1:
@@ -323,6 +323,7 @@ class ReorderLevelService:
         items = []
         q_clean = search_query.strip().lower()
         filter_status = status_filter.strip().upper() if status_filter else "ALL"
+        filter_grade = (grade_filter or "").strip().lower()
 
         for std in standards:
             code = std["rm_code"]
@@ -384,10 +385,12 @@ class ReorderLevelService:
                 "action_note": eval_res["action_note"]
             }
 
-            # Filter by search & status
+            # Filter by search, status & grade
             if q_clean and (q_clean not in code.lower() and q_clean not in std["grade"].lower()):
                 continue
             if filter_status != "ALL" and eval_res["status"] != filter_status:
+                continue
+            if filter_grade and filter_grade != "all" and filter_grade not in std["grade"].lower():
                 continue
 
             items.append(row)
@@ -502,7 +505,7 @@ class ReorderLevelService:
         except (ValueError, TypeError) as e:
             return {"success": False, "error": f"Invalid max qty: {e}"}
 
-    def generate_excel_report(self, customer: str = "AL") -> bytes:
+    def generate_excel_report(self, customer: str = "AL", search_query: str = "", status_filter: str = "ALL") -> bytes:
         """
         Generates an Excel (.xlsx) workbook with exact background colors
         applied specifically to the RYG column (RED, YELLOW, GREEN, BLACK, WHITE).
@@ -518,7 +521,7 @@ class ReorderLevelService:
         import openpyxl
         from openpyxl.styles import PatternFill, Font, Alignment, Border, Side
 
-        data = self.get_reorder_level_data(customer=customer)
+        data = self.get_reorder_level_data(customer=customer, search_query=search_query, status_filter=status_filter)
         items = data.get("items", [])
         summary = data.get("summary", {})
         cust_label = data.get("customer", customer)

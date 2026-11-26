@@ -193,6 +193,20 @@ CLIENT_COMPANIES = {
 }
 
 
+@app.before_request
+def enforce_authentication():
+    """Require valid authenticated session for all protected pages and API endpoints."""
+    path = request.path or "/"
+    if path in ("/", "/login", "/logout") or path.startswith("/static/"):
+        return None
+    role = session.get("role")
+    if not role or role not in DEPARTMENT_CREDENTIALS:
+        if path.startswith("/api/"):
+            return jsonify({"error": "Authentication required. Please log in."}), 401
+        return redirect(url_for("login"))
+    return None
+
+
 @app.after_request
 def add_cache_headers(response):
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
@@ -1749,7 +1763,7 @@ def create_mo():
             except (ValueError, TypeError):
                 data["yield_pct"] = None
 
-    created_by = request.headers.get("X-Role") or session.get("role") or ""
+    created_by = session.get("role") or ""
     if created_by != "shearing":
         return jsonify({"error": "Unauthorized: Only the Shearing Production team can create or produce Material Orders. Other departments have view-only access."}), 403
 
@@ -1769,7 +1783,7 @@ def create_mo():
 @app.route("/api/mo/create-endbit", methods=["POST"])
 def create_endbit_mo():
     """Shearing team creates an MO directly from sheet end bits/offcuts without layouts"""
-    created_by = request.headers.get("X-Role") or session.get("role") or ""
+    created_by = session.get("role") or ""
     if created_by != "shearing":
         return jsonify({"error": "Unauthorized: Only the Shearing Production team can create Material Orders from end bits. Other departments have view-only access."}), 403
     if request.form or (request.content_type and "multipart/form-data" in request.content_type):
@@ -2008,7 +2022,7 @@ def optimize_2d_cut_list():
 def approve_mo(mo_number):
     """Approve an MO and advance workflow to next stage"""
     body = request.json or {}
-    role = session.get("role") or request.headers.get("X-Role") or body.get("role") or "shearing"
+    role = session.get("role") or ""
     remarks = body.get("remarks", "Approved")
     erp_mo_number = body.get("erp_mo_number") or request.args.get("erp_mo_number")
     mo, err = MO_ENGINE.approve_mo(mo_number, role, remarks, erp_mo_number=erp_mo_number)
@@ -2021,7 +2035,7 @@ def approve_mo(mo_number):
 def reject_mo(mo_number):
     """Reject an MO with required reason"""
     body = request.json or {}
-    role = session.get("role") or request.headers.get("X-Role") or body.get("role") or "shearing"
+    role = session.get("role") or ""
     reason = body.get("reason", "")
     mo, err = MO_ENGINE.reject_mo(mo_number, role, reason)
     if err:
@@ -2032,7 +2046,7 @@ def reject_mo(mo_number):
 @app.route("/api/mo/<mo_number>/resubmit", methods=["POST"])
 def resubmit_mo_endpoint(mo_number):
     """Shearing team edits and resubmits a rejected Material Order back into approval workflow"""
-    role = session.get("role") or request.headers.get("X-Role") or ""
+    role = session.get("role") or ""
     if role != "shearing":
         return jsonify({"error": "Unauthorized: Only the Shearing Production team can edit and resubmit Material Orders."}), 403
 
@@ -2059,12 +2073,14 @@ def resubmit_mo_endpoint(mo_number):
 def complete_mo_endpoint(mo_number):
     """Mark an MO as executed and update respective database tables in real-time"""
     body = request.json or {}
-    role = session.get("role") or request.headers.get("X-Role") or body.get("role") or "erp"
+    role = session.get("role") or ""
+    if role != "erp":
+        return jsonify({"error": "Unauthorized: Only the ERP Team can complete and release Material Orders."}), 403
     remarks = body.get("remarks", "Executed and released to live ERP")
     erp_mo_number = body.get("erp_mo_number") or request.args.get("erp_mo_number")
     mo, updates_summary = MO_ENGINE.complete_mo(mo_number, role=role, remarks=remarks, erp_mo_number=erp_mo_number)
     if not mo:
-        return jsonify({"error": "Failed to complete MO."}), 400
+        return jsonify({"error": updates_summary if isinstance(updates_summary, str) else "Failed to complete MO."}), 400
     return jsonify({
         "success": True,
         "mo": mo,
@@ -2099,7 +2115,7 @@ def get_endbit_stats():
 def add_manual_endbit_endpoint():
     """Manually add an offcut / end-bit into the store inventory for future use"""
     body = request.json or request.form.to_dict() or {}
-    role = request.headers.get("X-Role") or session.get("role") or ""
+    role = session.get("role") or ""
     if role != "shearing":
         return jsonify({"error": "Unauthorized: Only the Shearing Production team can add end bits to the inventory. Other departments have view-only access."}), 403
     record, err = MO_ENGINE.add_manual_endbit(body, created_by_role=role)
@@ -2112,7 +2128,7 @@ def add_manual_endbit_endpoint():
 def add_rm_endpoint():
     """ERP team adds a new Raw Material sheet to store master"""
     body = request.json or request.form.to_dict() or {}
-    role = request.headers.get("X-Role") or session.get("role") or ""
+    role = session.get("role") or ""
     if role != "erp":
         return jsonify({"error": "Unauthorized: Only the ERP Team can add new Raw Material sheets to Master Data."}), 403
 
@@ -2126,7 +2142,7 @@ def add_rm_endpoint():
 def add_part_endpoint():
     """ERP team adds a new Part master to the engineering catalog"""
     body = request.json or request.form.to_dict() or {}
-    role = request.headers.get("X-Role") or session.get("role") or ""
+    role = session.get("role") or ""
     if role != "erp":
         return jsonify({"error": "Unauthorized: Only the ERP Team can add new Part specifications to Master Data."}), 403
 
@@ -2159,7 +2175,7 @@ def add_part_endpoint():
 def add_mrp_endpoint():
     """ERP team adds or updates an MRP Demand Schedule Target"""
     body = request.json or request.form.to_dict() or {}
-    role = request.headers.get("X-Role") or session.get("role") or ""
+    role = session.get("role") or ""
     if role != "erp":
         return jsonify({"error": "Unauthorized: Only the ERP Team can manage MRP Monthly Schedules."}), 403
 
@@ -2174,7 +2190,7 @@ def add_mrp_endpoint():
 @app.route("/api/mrp/upload-csv", methods=["POST"])
 def upload_mrp_csv_endpoint():
     """ERP team bulk uploads monthly MRP demand & stock schedules via CSV"""
-    role = request.headers.get("X-Role") or session.get("role") or ""
+    role = session.get("role") or ""
     if role != "erp":
         return jsonify({"error": "Unauthorized: Only the ERP Team can upload MRP schedules."}), 403
 
@@ -2225,6 +2241,7 @@ def get_reorder_level_endpoint():
     - customer: 'AL' (default) or 'VST'
     - q: search query string
     - status: filter by RYG status ('BLACK', 'RED', 'YELLOW', 'GREEN', 'WHITE', 'ALL')
+    - grade: optional grade filter
     """
     customer = (request.args.get("customer") or "AL").strip().upper()
     if customer not in ("AL", "VST"):
@@ -2232,8 +2249,14 @@ def get_reorder_level_endpoint():
 
     q = request.args.get("q", "")
     status_filter = request.args.get("status", "ALL")
+    grade_filter = request.args.get("grade", "")
 
-    data = reorder_level_service.get_reorder_level_data(customer=customer, search_query=q, status_filter=status_filter)
+    data = reorder_level_service.get_reorder_level_data(
+        customer=customer,
+        search_query=q,
+        status_filter=status_filter,
+        grade_filter=grade_filter,
+    )
     return jsonify(data)
 
 
@@ -2245,8 +2268,14 @@ def update_reorder_level_stock_endpoint():
     sheet_stock = body.get("sheet_stock")
     if not rm_code or sheet_stock is None:
         return jsonify({"error": "rm_code and sheet_stock are required"}), 400
+    try:
+        stock_val = float(sheet_stock)
+        if stock_val < 0:
+            return jsonify({"error": "sheet_stock cannot be negative"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "sheet_stock must be a valid number"}), 400
 
-    res = reorder_level_service.update_stock(rm_code, sheet_stock)
+    res = reorder_level_service.update_stock(rm_code, stock_val)
     return jsonify(res)
 
 
@@ -2258,8 +2287,14 @@ def update_reorder_level_max_qty_endpoint():
     max_qty = body.get("max_qty")
     if not rm_code or max_qty is None:
         return jsonify({"error": "rm_code and max_qty are required"}), 400
+    try:
+        max_val = float(max_qty)
+        if max_val <= 0:
+            return jsonify({"error": "max_qty must be greater than zero"}), 400
+    except (ValueError, TypeError):
+        return jsonify({"error": "max_qty must be a valid number"}), 400
 
-    res = reorder_level_service.update_max_qty(rm_code, max_qty)
+    res = reorder_level_service.update_max_qty(rm_code, max_val)
     return jsonify(res)
 
 
@@ -2269,7 +2304,11 @@ def export_reorder_level_excel_endpoint():
     from flask import Response
     customer = (request.args.get("customer") or "AL").strip().upper()
     cust_label = "VST" if customer == "VST" else "AL"
-    excel_bytes = reorder_level_service.generate_excel_report(customer=cust_label)
+    q = request.args.get("q", "")
+    status_filter = request.args.get("status", "ALL")
+    excel_bytes = reorder_level_service.generate_excel_report(
+        customer=cust_label, search_query=q, status_filter=status_filter
+    )
     today_str = datetime.now().strftime("%Y-%m-%d")
     return Response(
         excel_bytes,
@@ -2285,7 +2324,11 @@ def export_reorder_level_csv_endpoint():
     from flask import Response
     customer = (request.args.get("customer") or "AL").strip().upper()
     cust_label = "VST" if customer == "VST" else "AL"
-    data = reorder_level_service.get_reorder_level_data(customer=cust_label)
+    q = request.args.get("q", "")
+    status_filter = request.args.get("status", "ALL")
+    data = reorder_level_service.get_reorder_level_data(
+        customer=cust_label, search_query=q, status_filter=status_filter
+    )
     items = data.get("items", [])
 
     output = io.StringIO()
@@ -2326,7 +2369,7 @@ def get_endbit_detail(endbit_id):
 def produce_part_from_endbit_endpoint(endbit_id):
     """Produce parts from an existing end bit and record the transaction"""
     body = request.json or {}
-    role = request.headers.get("X-Role") or session.get("role") or ""
+    role = session.get("role") or ""
     if role != "shearing":
         return jsonify({"error": "Unauthorized: Only the Shearing Production team can produce parts or create Material Orders from end bits. Other departments have view-only access."}), 403
     updated_eb, tx_entry, err = MO_ENGINE.produce_part_from_endbit(endbit_id, body, role=role)
@@ -2645,7 +2688,7 @@ def export_mos():
 @app.route("/api/notifications", methods=["GET"])
 def get_notifications_endpoint():
     """Returns real-time notifications for the active authenticated department and company"""
-    role = request.headers.get("X-Role") or request.args.get("role") or session.get("role") or "shearing"
+    role = session.get("role") or "shearing"
     limit = int(request.args.get("limit", 50))
     unread_only = request.args.get("unread_only", "").lower() in ("true", "1", "yes")
     company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
@@ -2657,7 +2700,7 @@ def get_notifications_endpoint():
 def mark_notifications_read_endpoint():
     """Mark a specific notification or all notifications as read for current department"""
     body = request.get_json(silent=True) or {}
-    role = request.headers.get("X-Role") or body.get("role") or session.get("role") or "shearing"
+    role = session.get("role") or "shearing"
     notif_id = body.get("notif_id")
     if notif_id in (None, "", "null", "undefined"):
         notif_id = None
@@ -2669,7 +2712,7 @@ def mark_notifications_read_endpoint():
 def dismiss_notification_endpoint():
     """Dismiss a specific notification so it is marked done and removed for current department"""
     body = request.get_json(silent=True) or {}
-    role = request.headers.get("X-Role") or body.get("role") or session.get("role") or "shearing"
+    role = session.get("role") or "shearing"
     notif_id = body.get("notif_id")
     if notif_id:
         MO_ENGINE.notification_engine.dismiss_notification(role, notif_id=notif_id)
@@ -2679,8 +2722,7 @@ def dismiss_notification_endpoint():
 @app.route("/api/notifications/clear", methods=["POST"])
 def clear_notifications_endpoint():
     """Mark all notifications as read / cleared for current department"""
-    body = request.get_json(silent=True) or {}
-    role = request.headers.get("X-Role") or body.get("role") or session.get("role") or "shearing"
+    role = session.get("role") or "shearing"
     MO_ENGINE.notification_engine.clear_notifications_for_role(role)
     return jsonify({"success": True})
 

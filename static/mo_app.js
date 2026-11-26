@@ -12181,11 +12181,21 @@ function handleRygSearch(query) {
 }
 
 function exportRygExcel() {
-    window.location.href = `/api/reorder-level/export-excel?customer=${encodeURIComponent(currentRygCustomer)}`;
+    const params = new URLSearchParams({
+        customer: currentRygCustomer || "AL",
+        status: currentRygFilter || "ALL",
+        q: currentRygSearch || ""
+    });
+    window.location.href = `/api/reorder-level/export-excel?${params.toString()}`;
 }
 
 function exportRygCsv() {
-    window.location.href = `/api/reorder-level/export-csv?customer=${encodeURIComponent(currentRygCustomer)}`;
+    const params = new URLSearchParams({
+        customer: currentRygCustomer || "AL",
+        status: currentRygFilter || "ALL",
+        q: currentRygSearch || ""
+    });
+    window.location.href = `/api/reorder-level/export-csv?${params.toString()}`;
 }
 
 function renderRygTable(items, summary) {
@@ -12303,14 +12313,6 @@ function renderRygTable(items, summary) {
     if (footerAvgRatio) {
         footerAvgRatio.textContent = `${sumObj.overall_capacity_pct ?? 0}%`;
     }
-}
-
-function exportRygExcel() {
-    window.location.href = `/api/reorder-level/export-excel?customer=${encodeURIComponent(currentRygCustomer)}`;
-}
-
-function exportRygCsv() {
-    window.location.href = `/api/reorder-level/export-csv?customer=${encodeURIComponent(currentRygCustomer)}`;
 }
 
 // Quick Stock & Max Qty Adjustment Modal
