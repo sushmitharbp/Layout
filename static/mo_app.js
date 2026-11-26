@@ -4842,7 +4842,7 @@ let dbSearchDebounceTimer = null;
 let currentTableData = null;
 
 function setActiveNavTab(tabId) {
-    const tabs = ["navTabWorkflow", "navTabEndbits", "navTabDbTables", "navTabReorderLevel"];
+    const tabs = ["navTabWorkflow", "navTabEndbits", "navTabDbTables", "navTabReorderLevel", "navTabSummary"];
     tabs.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle("active", id === tabId);
@@ -10717,19 +10717,6 @@ async function submitResubmitMo(e) {
 
 // Window bindings for resubmit modal
 window.openEditResubmitModal = openEditResubmitModal;
-window.closeEditResubmitModal = closeEditResubmitModal;
-window.submitResubmitMo = submitResubmitMo;
-
-// =========================================================================
-// Real-time Notification Engine & In-App Activity Center Logic
-// =========================================================================
-
-let lastKnownNotifIds = new Set();
-let notifsInitialFetchDone = false;
-let notificationsPollInterval = null;
-
-function formatNotifTime(isoString) {
-    if (!isoString) return "";
     try {
         const d = new Date(isoString);
         const now = new Date();
