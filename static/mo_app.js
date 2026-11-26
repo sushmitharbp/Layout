@@ -950,6 +950,187 @@ function downloadMoReportCsv() {
 }
 
 
+// Stock State Manager for MO Create Modal
+function setZeroStockUiState(isZero, rmCode = "") {
+    const stockBox = document.getElementById("rmStockBox");
+    const stockVal = document.getElementById("rmStockBoxVal");
+    const warnEl = document.getElementById("rmZeroStockWarning");
+    const rmSelect = document.getElementById("rmErpSelect");
+    const submitBtn = document.getElementById("submitMoBtn");
+    const routeBanner = document.getElementById("routePreviewBanner");
+    const routeTitle = document.getElementById("routeTitle");
+    const routeDesc = document.getElementById("routeDesc");
+
+    if (isZero) {
+        if (stockBox) {
+            stockBox.style.background = "#fee2e2";
+            stockBox.style.borderColor = "#f87171";
+            stockBox.style.color = "#b91c1c";
+        }
+        if (stockVal && (stockVal.textContent === "- Sheets" || !stockVal.textContent.includes("0"))) {
+            stockVal.textContent = "0 Sheets";
+        }
+        if (warnEl) {
+            warnEl.style.display = "block";
+            warnEl.innerHTML = `<i class="fa-solid fa-ban"></i> <strong>0 Sheets Available</strong> — MO cannot be produced. Please select another sheet from the dropdown.`;
+        }
+        if (rmSelect) {
+            rmSelect.style.border = "2px solid #ef4444";
+            rmSelect.style.backgroundColor = "#fff5f5";
+        }
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            submitBtn.style.opacity = "0.65";
+            submitBtn.style.cursor = "not-allowed";
+            submitBtn.style.backgroundColor = "#ef4444";
+            submitBtn.style.borderColor = "#dc2626";
+            submitBtn.style.color = "#ffffff";
+            submitBtn.title = "Available RM stock is 0 Sheets. MO cannot be produced. Please select another sheet.";
+            submitBtn.innerHTML = `<i class="fa-solid fa-ban"></i> Cannot Produce MO — RM Available is 0 Sheets (Select Another Sheet)`;
+        }
+        if (routeBanner && routeTitle && routeDesc) {
+            routeBanner.className = "workflow-route-preview danger";
+            routeBanner.style.border = "2px solid #f87171";
+            routeBanner.style.background = "#fef2f2";
+            routeTitle.innerHTML = `<i class="fa-solid fa-ban" style="color: #dc2626;"></i> MO Blocked: 0 RM Sheets Available in Store`;
+            routeDesc.innerHTML = `<strong style="color: #b91c1c;">MO cannot be produced because 0 sheets are available in store.</strong> Please select another sheet or layout from the RM dropdown to proceed.`;
+        }
+    } else {
+        if (stockBox) {
+            stockBox.style.background = "#ecfdf5";
+            stockBox.style.borderColor = "#a7f3d0";
+            stockBox.style.color = "#059669";
+        }
+        if (warnEl) {
+            warnEl.style.display = "none";
+        }
+        if (rmSelect) {
+            rmSelect.style.border = "";
+            rmSelect.style.backgroundColor = "";
+        }
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.style.opacity = "";
+            submitBtn.style.cursor = "";
+            submitBtn.style.backgroundColor = "";
+            submitBtn.style.borderColor = "";
+            submitBtn.style.color = "";
+            submitBtn.title = "";
+            submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Submit Material Order`;
+        }
+        if (routeBanner) {
+            routeBanner.style.border = "";
+            routeBanner.style.background = "";
+        }
+    }
+}
+
+// Complete Reset of Part-dependent fields and cards in MO modal
+function resetPartModalFields() {
+    selectedPartData = null;
+    window._activeBasePartData = null;
+    currentIntelData = null;
+
+    // Reset part search badge
+    const badgeWrap = document.getElementById("partDescBadgeWrap");
+    const badgeText = document.getElementById("partDescBadgeText");
+    if (badgeWrap) badgeWrap.style.display = "none";
+    if (badgeText) badgeText.textContent = "";
+
+    // Reset technical specification inputs
+    const basePartInput = document.getElementById("basePartInput");
+    if (basePartInput) {
+        basePartInput.value = "";
+        basePartInput.readOnly = true;
+        basePartInput.required = false;
+        basePartInput.placeholder = "Auto-populated";
+    }
+    const basePartLabel = document.getElementById("basePartLabel");
+    if (basePartLabel) basePartLabel.innerHTML = 'Base Part:';
+
+    const gradeInput = document.getElementById("gradeInput");
+    if (gradeInput) gradeInput.value = "";
+    const thicknessInput = document.getElementById("thicknessInput");
+    if (thicknessInput) thicknessInput.value = "";
+    const lengthInput = document.getElementById("lengthInput");
+    if (lengthInput) lengthInput.value = "";
+    const widthInput = document.getElementById("widthInput");
+    if (widthInput) widthInput.value = "";
+    const sheetSizeInput = document.getElementById("sheetSizeInput");
+    if (sheetSizeInput) sheetSizeInput.value = "";
+    const offtakeInput = document.getElementById("offtakeInput");
+    if (offtakeInput) offtakeInput.value = "";
+    const stripInput = document.getElementById("stripPerBlankInput");
+    if (stripInput) stripInput.value = "";
+    const yieldInput = document.getElementById("yieldPctInput");
+    if (yieldInput) yieldInput.value = "";
+
+    // Reset 3 Demand KPI Cards (1. Qty to Produce, 2. MO Produced, 3. Balance to Produce)
+    const toProduceEl = document.getElementById("mrpQtyToProduceVal");
+    const toProduceSub = document.getElementById("mrpQtyToProduceSub");
+    const moProducedEl = document.getElementById("mrpMoProducedVal");
+    const moProducedSub = document.getElementById("mrpMoProducedSub");
+    const balanceEl = document.getElementById("mrpBalanceVal");
+    const balanceSub = document.getElementById("mrpBalanceSub");
+    const hintBox = document.getElementById("mrpStockHintBox");
+    const hintVal = document.getElementById("mrpStockHintVal");
+
+    if (toProduceEl) toProduceEl.textContent = "- Nos";
+    if (toProduceSub) toProduceSub.textContent = "Schedule Target";
+    if (moProducedEl) moProducedEl.textContent = "- Nos";
+    if (moProducedSub) moProducedSub.textContent = "Total MOs Produced (0 Nos)";
+    if (balanceEl) balanceEl.textContent = "- Nos";
+    if (balanceSub) balanceSub.textContent = "Net Balance (Qty - Produced)";
+    if (hintBox) hintBox.style.display = "none";
+    if (hintVal) hintVal.textContent = "0";
+
+    // Reset RM ERP Select dropdown
+    const rmSelect = document.getElementById("rmErpSelect");
+    if (rmSelect) {
+        rmSelect.innerHTML = `
+            <option value="">-- Select RM ERP Code --</option>
+            <option value="__custom__">⚙️ Custom RM / Layout Code...</option>
+        `;
+        rmSelect.value = "";
+        rmSelect.style.border = "";
+        rmSelect.style.backgroundColor = "";
+    }
+
+    // Reset RM On Hand stock box & zero stock warning
+    const quickStockEl = document.getElementById("rmStockBoxVal");
+    if (quickStockEl) quickStockEl.textContent = "- Sheets";
+    setZeroStockUiState(false);
+
+    // Reset custom RM search
+    const customBox = document.getElementById("customRmBox");
+    if (customBox) customBox.style.display = "none";
+    const customSearchInput = document.getElementById("customRmSearchInput");
+    if (customSearchInput) customSearchInput.value = "";
+    const customDropdown = document.getElementById("customRmDropdown");
+    if (customDropdown) customDropdown.style.display = "none";
+
+    // Hide inline AI recommendations & ERP intelligence
+    window._aiSuggestionsRequestedByUser = false;
+    const inlineAiBanner = document.getElementById("inlineAiPartSuggestionsBanner");
+    if (inlineAiBanner) inlineAiBanner.style.display = "none";
+    const intelCard = document.getElementById("erpIntelligenceCard");
+    if (intelCard) intelCard.style.display = "none";
+    const historyWrap = document.getElementById("moHistoryTableWrap");
+    if (historyWrap) historyWrap.style.display = "none";
+    const ebBanner = document.getElementById("layoutEndbitsBanner");
+    if (ebBanner) ebBanner.style.display = "none";
+    const hiddenJson = document.getElementById("moEndbitsJson");
+    if (hiddenJson) hiddenJson.value = "[]";
+
+    // Reset automated constraints & route
+    if (typeof updateAutomatedConstraints === "function") {
+        updateAutomatedConstraints(null, null);
+    }
+    if (typeof recalculateWorkflowRoute === "function") {
+        recalculateWorkflowRoute();
+    }
+}
+
 // Modal: Create MO Logic
 function openCreateModal() {
     if (currentRole !== "shearing") {
@@ -1017,56 +1198,8 @@ function openCreateModal() {
     const layoutPartsBanner = document.getElementById("layoutPartsBanner");
     if (layoutPartsBanner) layoutPartsBanner.style.display = "none";
 
-    selectedPartData = null;
-    currentIntelData = null;
-    const intelCard = document.getElementById("erpIntelligenceCard");
-    if (intelCard) intelCard.style.display = "none";
-    const historyWrap = document.getElementById("moHistoryTableWrap");
-    if (historyWrap) historyWrap.style.display = "none";
-
-    const customBox = document.getElementById("customRmBox");
-    if (customBox) customBox.style.display = "none";
-    const customSearchInput = document.getElementById("customRmSearchInput");
-    if (customSearchInput) customSearchInput.value = "";
-    const customDropdown = document.getElementById("customRmDropdown");
-    if (customDropdown) customDropdown.style.display = "none";
-
-    const yieldInput = document.getElementById("yieldPctInput");
-    if (yieldInput) yieldInput.value = "";
-    const stripEl = document.getElementById("stripPerBlankInput");
-    if (stripEl) stripEl.value = "";
-    const quickStockEl = document.getElementById("rmStockBoxVal");
-    if (quickStockEl) quickStockEl.textContent = "- Sheets";
-
-    // Reset 3 Demand Cards (1. Qty to Produce, 2. MO Produced, 3. Balance to Produce)
-    const elToProduce = document.getElementById("mrpQtyToProduceVal");
-    const elMoProduced = document.getElementById("mrpMoProducedVal");
-    const elBalance = document.getElementById("mrpBalanceVal");
-    if (elToProduce) elToProduce.textContent = "- Nos";
-    if (elMoProduced) elMoProduced.textContent = "- Nos";
-    if (elBalance) elBalance.textContent = "- Nos";
-
-    const rmSelect = document.getElementById("rmErpSelect");
-    if (rmSelect) {
-        rmSelect.innerHTML = `
-            <option value="">-- Select RM ERP Code --</option>
-            <option value="__custom__">⚙️ Custom RM / Layout Code...</option>
-        `;
-        rmSelect.value = "";
-        rmSelect.style.border = "";
-    }
-
-    const basePartInput = document.getElementById("basePartInput");
-    const basePartLabel = document.getElementById("basePartLabel");
-    if (basePartInput) {
-        basePartInput.value = "";
-        basePartInput.readOnly = true;
-        basePartInput.required = false;
-        basePartInput.placeholder = "Auto-populated";
-    }
-    if (basePartLabel) {
-        basePartLabel.innerHTML = 'Base Part:';
-    }
+    // Reset part-specific fields, cards, and RM dropdown
+    resetPartModalFields();
 
     const stdCard = document.getElementById("radioCardStd");
     if (stdCard) {
@@ -1135,8 +1268,7 @@ function searchPartsForModal(query) {
     // Hide badge if input was cleared or user changed the typed text
     if (!query || query.trim().length === 0) {
         if (dropdown) dropdown.style.display = "none";
-        if (badgeWrap) badgeWrap.style.display = "none";
-        if (badgeText) badgeText.textContent = "";
+        resetPartModalFields();
         return;
     }
     if (badgeWrap && selectedPartData && selectedPartData.part_no !== query.trim()) {
@@ -1183,18 +1315,47 @@ function searchPartsForModal(query) {
 }
 
 async function selectPartForModal(partNo) {
+    if (!partNo || !partNo.trim()) {
+        resetPartModalFields();
+        return;
+    }
+    const cleanPartNo = partNo.trim();
     const input = document.getElementById("partNoInput");
     const dropdown = document.getElementById("partDropdownResults");
-    if (input) input.value = partNo;
+    if (input) input.value = cleanPartNo;
     if (dropdown) dropdown.style.display = "none";
+
+    // Cleanly reset previous part data and cards before loading the new part
+    resetPartModalFields();
+    if (input) input.value = cleanPartNo;
 
     try {
         const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
         const cid = (modalUnit && modalUnit !== "ALL") ? modalUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
         const unitParam = `?branch=${encodeURIComponent(cid)}&company_id=${encodeURIComponent(cid)}`;
-        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}${unitParam}`);
+        let res = await fetch(`/api/part/${encodeURIComponent(cleanPartNo)}${unitParam}`);
+        let partData = null;
         if (res.ok) {
-            selectedPartData = await res.json();
+            partData = await res.json();
+        } else {
+            // Fallback: search for candidate if direct lookup 404s
+            const sRes = await fetch(`/api/search?q=${encodeURIComponent(cleanPartNo)}&company_id=${encodeURIComponent(cid)}&branch=${encodeURIComponent(cid)}`);
+            if (sRes.ok) {
+                const searchResults = await sRes.json();
+                if (searchResults && searchResults.length > 0) {
+                    const best = searchResults.find(r => r.part_no.toUpperCase() === cleanPartNo.toUpperCase()) || searchResults[0];
+                    if (best && best.part_no) {
+                        const fallbackRes = await fetch(`/api/part/${encodeURIComponent(best.part_no)}${unitParam}`);
+                        if (fallbackRes.ok) {
+                            partData = await fallbackRes.json();
+                        }
+                    }
+                }
+            }
+        }
+
+        if (partData && (partData.part_no || partData.records)) {
+            selectedPartData = partData;
             if (input && selectedPartData.part_no) {
                 input.value = selectedPartData.part_no;
             }
@@ -1302,7 +1463,7 @@ async function selectPartForModal(partNo) {
             const curRmCode = document.getElementById("rmErpSelect")?.value || selectedPartData.standard_rm || "";
             const curSheetsNeeded = parseFloat(document.getElementById("sheetsRequired")?.value) || 1;
             fetchAndDisplayIntelligence(
-                selectedPartData.part_no || partNo,
+                selectedPartData.part_no || cleanPartNo,
                 curRmCode,
                 selectedPartData.grade,
                 selectedPartData.thickness,
@@ -1310,7 +1471,7 @@ async function selectPartForModal(partNo) {
                 selectedPartData.width,
                 curSheetsNeeded,
                 false,
-                [selectedPartData.part_no || partNo]
+                [selectedPartData.part_no || cleanPartNo]
             );
         }
     } catch (err) {
@@ -1346,16 +1507,22 @@ function populatePartTechnicalFields(partData) {
         strip_per_blank_qty: partData.strip_qty || partData.strip_per_blank_qty || 1
     };
 
-    document.getElementById("basePartInput").value = partData.base_part || "";
+    const basePartInput = document.getElementById("basePartInput");
+    if (basePartInput) basePartInput.value = partData.base_part || "";
 
     if (partData.grade) {
-        document.getElementById("gradeInput").value = partData.grade;
+        const gradeInput = document.getElementById("gradeInput");
+        if (gradeInput) gradeInput.value = partData.grade;
     }
     if (partData.thickness !== undefined && partData.length !== undefined && partData.width !== undefined) {
-        document.getElementById("thicknessInput").value = partData.thickness;
-        document.getElementById("lengthInput").value = partData.length;
-        document.getElementById("widthInput").value = partData.width;
-        document.getElementById("sheetSizeInput").value = `${partData.thickness} * ${partData.length} * ${partData.width}`;
+        const thkInput = document.getElementById("thicknessInput");
+        const lenInput = document.getElementById("lengthInput");
+        const widInput = document.getElementById("widthInput");
+        const szInput = document.getElementById("sheetSizeInput");
+        if (thkInput) thkInput.value = partData.thickness;
+        if (lenInput) lenInput.value = partData.length;
+        if (widInput) widInput.value = partData.width;
+        if (szInput) szInput.value = `${partData.thickness} * ${partData.length} * ${partData.width}`;
     }
 
     const offtakeInput = document.getElementById("offtakeInput");
@@ -1368,122 +1535,50 @@ function populatePartTechnicalFields(partData) {
         stripInput.value = `${partData.strip_qty || partData.strip_per_blank_qty || 1} Nos`;
     }
 
-function setZeroStockUiState(isZero, rmCode = "") {
-    const stockBox = document.getElementById("rmStockBox");
-    const stockVal = document.getElementById("rmStockBoxVal");
-    const warnEl = document.getElementById("rmZeroStockWarning");
     const rmSelect = document.getElementById("rmErpSelect");
-    const submitBtn = document.getElementById("submitMoBtn");
-    const routeBanner = document.getElementById("routePreviewBanner");
-    const routeTitle = document.getElementById("routeTitle");
-    const routeDesc = document.getElementById("routeDesc");
+    if (rmSelect) {
+        rmSelect.innerHTML = "";
+        rmSelect.style.border = "";
 
-    if (isZero) {
-        if (stockBox) {
-            stockBox.style.background = "#fee2e2";
-            stockBox.style.borderColor = "#f87171";
-            stockBox.style.color = "#b91c1c";
-        }
-        if (stockVal && (stockVal.textContent === "- Sheets" || !stockVal.textContent.includes("0"))) {
-            stockVal.textContent = "0 Sheets";
-        }
-        if (warnEl) {
-            warnEl.style.display = "block";
-            warnEl.innerHTML = `<i class="fa-solid fa-ban"></i> <strong>0 Sheets Available</strong> — MO cannot be produced. Please select another sheet from the dropdown.`;
-        }
-        if (rmSelect) {
-            rmSelect.style.border = "2px solid #ef4444";
-            rmSelect.style.backgroundColor = "#fff5f5";
-        }
-        if (submitBtn) {
-            submitBtn.disabled = true;
-            submitBtn.style.opacity = "0.65";
-            submitBtn.style.cursor = "not-allowed";
-            submitBtn.style.backgroundColor = "#ef4444";
-            submitBtn.style.borderColor = "#dc2626";
-            submitBtn.style.color = "#ffffff";
-            submitBtn.title = "Available RM stock is 0 Sheets. MO cannot be produced. Please select another sheet.";
-            submitBtn.innerHTML = `<i class="fa-solid fa-ban"></i> Cannot Produce MO — RM Available is 0 Sheets (Select Another Sheet)`;
-        }
-        if (routeBanner && routeTitle && routeDesc) {
-            routeBanner.className = "workflow-route-preview danger";
-            routeBanner.style.border = "2px solid #f87171";
-            routeBanner.style.background = "#fef2f2";
-            routeTitle.innerHTML = `<i class="fa-solid fa-ban" style="color: #dc2626;"></i> MO Blocked: 0 RM Sheets Available in Store`;
-            routeDesc.innerHTML = `<strong style="color: #b91c1c;">MO cannot be produced because 0 sheets are available in store.</strong> Please select another sheet or layout from the RM dropdown to proceed.`;
-        }
-    } else {
-        if (stockBox) {
-            stockBox.style.background = "#ecfdf5";
-            stockBox.style.borderColor = "#a7f3d0";
-            stockBox.style.color = "#059669";
-        }
-        if (warnEl) {
-            warnEl.style.display = "none";
-        }
-        if (rmSelect) {
-            rmSelect.style.border = "";
-            rmSelect.style.backgroundColor = "";
-        }
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.style.opacity = "";
-            submitBtn.style.cursor = "";
-            submitBtn.style.backgroundColor = "";
-            submitBtn.style.borderColor = "";
-            submitBtn.style.color = "";
-            submitBtn.title = "";
-            submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> Submit Material Order`;
-        }
-        if (routeBanner) {
-            routeBanner.style.border = "";
-            routeBanner.style.background = "";
-        }
-    }
-}
+        // Placeholder option
+        const placeholderOpt = document.createElement("option");
+        placeholderOpt.value = "";
+        placeholderOpt.textContent = "-- Select RM ERP Code --";
+        rmSelect.appendChild(placeholderOpt);
 
-    const rmSelect = document.getElementById("rmErpSelect");
-    rmSelect.innerHTML = "";
-    rmSelect.style.border = "";
-
-    // Placeholder option
-    const placeholderOpt = document.createElement("option");
-    placeholderOpt.value = "";
-    placeholderOpt.textContent = "-- Select RM ERP Code --";
-    rmSelect.appendChild(placeholderOpt);
-
-    const records = partData.records || [];
-    let firstWithStockIdx = -1;
-    records.forEach((r, idx) => {
-        const opt = document.createElement("option");
-        opt.value = r.rm_erp || `RM-${idx}`;
-        const avail = (r.available_sheets !== undefined && r.available_sheets !== null) ? Number(r.available_sheets) : null;
-        let stockTag = "";
-        if (avail !== null) {
-            stockTag = avail > 0 ? ` • ${avail} Sheets` : ` • [0 Sheets - Out of Stock]`;
-            if (avail > 0 && firstWithStockIdx === -1) {
-                firstWithStockIdx = idx;
+        const records = partData.records || [];
+        let firstWithStockIdx = -1;
+        records.forEach((r, idx) => {
+            const opt = document.createElement("option");
+            opt.value = r.rm_erp || `RM-${idx}`;
+            const avail = (r.available_sheets !== undefined && r.available_sheets !== null) ? Number(r.available_sheets) : null;
+            let stockTag = "";
+            if (avail !== null) {
+                stockTag = avail > 0 ? ` • ${avail} Sheets` : ` • [0 Sheets - Out of Stock]`;
+                if (avail > 0 && firstWithStockIdx === -1) {
+                    firstWithStockIdx = idx;
+                }
             }
+            opt.textContent = `${r.rm_erp} (${r.grade || 'YS'})${stockTag} - ${r.status || ''}`;
+            opt.dataset.record = JSON.stringify(r);
+            rmSelect.appendChild(opt);
+        });
+
+        // Add Custom choice at the bottom
+        const customOpt = document.createElement("option");
+        customOpt.value = "__custom__";
+        customOpt.textContent = "⚙️ Custom RM / Layout Code...";
+        rmSelect.appendChild(customOpt);
+
+        if (records.length > 0) {
+            // Automatically prefer a layout option with available stock > 0
+            const pickIdx = firstWithStockIdx >= 0 ? firstWithStockIdx : 0;
+            rmSelect.selectedIndex = pickIdx + 1;
+            onRmErpChanged(records[pickIdx].rm_erp);
+        } else {
+            rmSelect.selectedIndex = 0;
+            onRmErpChanged("");
         }
-        opt.textContent = `${r.rm_erp} (${r.grade || 'YS'})${stockTag} - ${r.status || ''}`;
-        opt.dataset.record = JSON.stringify(r);
-        rmSelect.appendChild(opt);
-    });
-
-    // Add Custom choice at the bottom
-    const customOpt = document.createElement("option");
-    customOpt.value = "__custom__";
-    customOpt.textContent = "⚙️ Custom RM / Layout Code...";
-    rmSelect.appendChild(customOpt);
-
-    if (records.length > 0) {
-        // Automatically prefer a layout option with available stock > 0
-        const pickIdx = firstWithStockIdx >= 0 ? firstWithStockIdx : 0;
-        rmSelect.selectedIndex = pickIdx + 1;
-        onRmErpChanged(records[pickIdx].rm_erp);
-    } else {
-        rmSelect.selectedIndex = 0;
-        onRmErpChanged("");
     }
 }
 

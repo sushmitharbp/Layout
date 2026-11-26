@@ -636,9 +636,13 @@ def get_part_details(part_no):
                 "mrp": {
                     "monthly_schedule": mrp_rec.get("monthly_schedule", 0),
                     "initial_stock": mrp_rec.get("initial_stock", mrp_rec.get("current_stock", 0)),
+                    "excel_mo_produced": mrp_rec.get("excel_mo_produced", mrp_rec.get("sheet_mo_produced", 0)),
                     "app_mo_produced": mrp_rec.get("app_mo_produced", 0),
+                    "mo_produced": mrp_rec.get("mo_produced", 0),
                     "current_stock": mrp_rec.get("current_stock", 0),
-                    "qty_to_produce": mrp_rec.get("qty_to_produce", 0)
+                    "base_qty_to_produce": mrp_rec.get("base_qty_to_produce", mrp_rec.get("qty_to_produce", 0)),
+                    "qty_to_produce": mrp_rec.get("qty_to_produce", 0),
+                    "balance_to_produce": mrp_rec.get("balance_to_produce", 0)
                 }
             })
     except Exception as e:

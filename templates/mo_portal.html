@@ -13,7 +13,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="/static/mo_style.css?v=112">
+    <link rel="stylesheet" href="/static/mo_style.css?v=148">
     <link rel="stylesheet" href="/static/mo_chat_widget.css?v=1">
     <link rel="stylesheet" href="/static/mo_create_v2.css?v=1">
 
@@ -155,9 +155,9 @@
             <!-- Compact Workspace Action Bar -->
             <div class="workspace-action-bar" id="deptWorkspaceBanner">
                 <div class="action-bar-left">
-                    <div class="action-bar-icon" id="bannerDeptIcon"><i class="fa-solid fa-industry"></i></div>
-                    <h2 id="bannerDeptTitle">Shearing Production</h2>
-                    <span class="action-bar-desc" id="bannerDeptDesc"></span>
+                    <div class="action-bar-icon" id="bannerDeptIcon" style="background: rgba(255, 255, 255, 0.12) !important; color: #38bdf8 !important;"><i class="fa-solid fa-industry"></i></div>
+                    <h2 id="bannerDeptTitle" style="color: #ffffff !important;">Shearing Production</h2>
+                    <span class="action-bar-desc" id="bannerDeptDesc" style="color: #94a3b8 !important;"></span>
                 </div>
                 <div class="action-bar-right">
                     <button class="btn btn-ghost" id="bannerCreateEbMoBtn" onclick="showCreateEndbitMoView()">
@@ -852,7 +852,7 @@
                             </label>
                             <div class="part-search-input-wrap">
                                 <i class="fa-solid fa-barcode"></i>
-                                <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="searchPartsForModal(this.value)" onchange="if(this.value.trim().length >= 2 && (!selectedPartData || selectedPartData.part_no !== this.value.trim())) selectPartForModal(this.value.trim());" onblur="setTimeout(() => { if(this.value.trim().length >= 2 && (!selectedPartData || selectedPartData.part_no !== this.value.trim())) selectPartForModal(this.value.trim()); }, 250);" onkeydown="if(event.key==='Enter'){event.preventDefault(); if(this.value.trim().length >= 2) selectPartForModal(this.value.trim());}">
+                                <input type="text" id="partNoInput" name="part_no" placeholder="Type Part Number (e.g. MBA01008 - Item 1, X5L00214)..." autocomplete="off" required oninput="if(!this.value.trim()){ resetPartModalFields(); } searchPartsForModal(this.value);" onchange="if(!this.value.trim()){ resetPartModalFields(); } else if(!selectedPartData || selectedPartData.part_no !== this.value.trim()){ selectPartForModal(this.value.trim()); }" onblur="setTimeout(() => { if(!this.value.trim()){ resetPartModalFields(); } else if(!selectedPartData || selectedPartData.part_no !== this.value.trim()){ selectPartForModal(this.value.trim()); } }, 250);" onkeydown="if(event.key==='Enter'){event.preventDefault(); if(this.value.trim().length >= 2) selectPartForModal(this.value.trim());}">
                                 <div class="part-dropdown-results" id="partDropdownResults" style="display: none;"></div>
                             </div>
                             <input type="hidden" id="basePartInput" name="base_part">
@@ -2521,7 +2521,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=146"></script>
+    <script src="/static/mo_app.js?v=148"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
     <script src="/static/mo_create_v2.js?v=4"></script>
 </body>
