@@ -1552,14 +1552,20 @@ function populatePartTechnicalFields(partData) {
             const opt = document.createElement("option");
             opt.value = r.rm_erp || `RM-${idx}`;
             const avail = (r.available_sheets !== undefined && r.available_sheets !== null) ? Number(r.available_sheets) : null;
-            let stockTag = "";
-            if (avail !== null) {
-                stockTag = avail > 0 ? ` • ${avail} Sheets` : ` • [0 Sheets - Out of Stock]`;
-                if (avail > 0 && firstWithStockIdx === -1) {
-                    firstWithStockIdx = idx;
-                }
+            if (avail !== null && avail > 0 && firstWithStockIdx === -1) {
+                firstWithStockIdx = idx;
             }
-            opt.textContent = `${r.rm_erp} (${r.grade || 'YS'})${stockTag} - ${r.status || ''}`;
+
+            // Show sheet specifications: (Grade, Thickness, Length, Width) without available sheets
+            let dimStr = "";
+            if (r.thickness && r.length && r.width) {
+                dimStr = `${r.thickness} × ${r.length} × ${r.width} mm`;
+            } else if (r.sheet_size) {
+                dimStr = `${r.sheet_size} mm`;
+            }
+            const gradeStr = r.grade || "YS";
+            const sheetLabel = dimStr ? `${gradeStr} • ${dimStr}` : (r.rm_erp || gradeStr);
+            opt.textContent = (r.rm_erp && !sheetLabel.includes(r.rm_erp)) ? `${sheetLabel} (${r.rm_erp})` : sheetLabel;
             opt.dataset.record = JSON.stringify(r);
             rmSelect.appendChild(opt);
         });
@@ -1922,7 +1928,10 @@ function selectCustomRmRecord(record) {
 
         const customOpt = document.createElement("option");
         customOpt.value = record.item_code;
-        customOpt.textContent = `⭐ [Custom RM] ${record.item_code} (${gradeVal}) - Stock: ${record.onhand_stock} ${record.uom || 'NOS'}`;
+        const customDim = (record.thickness && record.length && record.width)
+            ? `${record.thickness} × ${record.length} × ${record.width} mm`
+            : (record.sheet_size || record.item_code);
+        customOpt.textContent = `⭐ [Custom] ${gradeVal} • ${customDim} (${record.item_code})`;
         customOpt.dataset.isCustom = "true";
         customOpt.dataset.record = JSON.stringify({
             ...record,
@@ -2501,6 +2510,12 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
         return 0;
     }
 
+    // Helper to normalize part number strings (e.g. F5P03014 - Item 1 vs F5P03014ITEM01)
+    function normPart(p) {
+        if (!p) return "";
+        return String(p).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/ITEM0*(\d+)/g, 'ITEM$1');
+    }
+
     // Collect all parts in the layout to ensure every part has a valid > 0 MRP target
     const layoutPartsList = [];
     if (layoutRecord) {
@@ -2511,13 +2526,18 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
         });
     }
 
-    // Fallback MRP target from selectedPartData (or selectedPartData.mrp)
-    const selectedPartTarget = extractNumericTarget(selectedPartData?.mrp) || extractNumericTarget(selectedPartData);
+    // Fallback MRP target from selectedPartData (or selectedPartData.mrp, or Card 1 displayed target)
+    const activeCard1Target = parseFloat((document.getElementById("mrpQtyToProduceVal")?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
+    const activeCard3Balance = parseFloat((document.getElementById("mrpBalanceVal")?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
+    const selectedPartTarget = extractNumericTarget(selectedPartData?.mrp) || extractNumericTarget(selectedPartData) || activeCard1Target;
+    const currentSelectedPartNorm = normPart(selectedPartData?.part_no || document.getElementById("partNoInput")?.value);
 
     if (planParts && planParts.length > 0) {
         // Multi-part layout or multiple parts in plan: check EACH part
         for (const p of planParts) {
-            const pTarget = extractNumericTarget(p) || (p.part_no === selectedPartData?.part_no ? selectedPartTarget : 0);
+            const pNorm = normPart(p.part_no || p.child_part_no);
+            const isCurrentPart = pNorm && currentSelectedPartNorm && (pNorm === currentSelectedPartNorm || pNorm.includes(currentSelectedPartNorm) || currentSelectedPartNorm.includes(pNorm));
+            const pTarget = extractNumericTarget(p) || (isCurrentPart ? selectedPartTarget : 0);
             if (pTarget <= 0) {
                 isMrpAvailable = false;
                 const pName = p.child_part_no || p.part_no || "Part";
@@ -2530,12 +2550,13 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
             for (const lp of layoutPartsList) {
                 const lpNo = lp.part_no || lp.child_part_no;
                 if (!lpNo) continue;
-                const lpClean = String(lpNo).replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                const lpNorm = normPart(lpNo);
+                const isCurrentPart = lpNorm && currentSelectedPartNorm && (lpNorm === currentSelectedPartNorm || lpNorm.includes(currentSelectedPartNorm) || currentSelectedPartNorm.includes(lpNorm));
                 const matched = planParts.find(p => {
-                    const pNo = String(p.part_no || p.child_part_no || "").replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-                    return pNo === lpClean || pNo.includes(lpClean) || lpClean.includes(pNo);
+                    const pNorm = normPart(p.part_no || p.child_part_no);
+                    return pNorm && (pNorm === lpNorm || pNorm.includes(lpNorm) || lpNorm.includes(pNorm));
                 });
-                const lpTarget = extractNumericTarget(matched) || extractNumericTarget(lp) || (lpClean.includes(String(selectedPartData?.part_no || "").replace(/[^A-Za-z0-9]/g, '').toUpperCase()) ? selectedPartTarget : 0);
+                const lpTarget = extractNumericTarget(matched) || extractNumericTarget(lp) || (isCurrentPart ? selectedPartTarget : 0);
                 if (lpTarget <= 0) {
                     isMrpAvailable = false;
                     mrpFailureReason = `No MRP Target for ${lpNo} (N/A)`;
@@ -2583,18 +2604,29 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
                     partStripQty = parseFloat(layoutItem.strip_qty) || 1;
                 }
                 const partCurrentPlan = Math.round(sheetsNeeded * partBlankQty * partStripQty);
-                const remQty = (p.remaining_quantity !== null && p.remaining_quantity !== undefined)
+                let remQty = (p.remaining_quantity !== null && p.remaining_quantity !== undefined)
                     ? parseFloat(p.remaining_quantity)
                     : null;
+                const pNorm = normPart(p.part_no || p.child_part_no);
+                const isCurrentPart = pNorm && currentSelectedPartNorm && (pNorm === currentSelectedPartNorm || pNorm.includes(currentSelectedPartNorm) || currentSelectedPartNorm.includes(pNorm));
+                if ((remQty === null || remQty <= 0) && isCurrentPart && activeCard3Balance > 0) {
+                    remQty = activeCard3Balance;
+                }
                 if (remQty !== null) {
                     if (remQty < partCurrentPlan) {
                         isRemainingSufficient = false;
                     }
                 }
             });
-        } else if (plan && plan.remaining_quantity !== null && plan.remaining_quantity !== undefined) {
+        } else {
             const currentPlanTotal = parseFloat(document.getElementById("targetQty")?.value) || sheetsNeeded;
-            if (parseFloat(plan.remaining_quantity) < currentPlanTotal) {
+            let planRem = (plan && plan.remaining_quantity !== null && plan.remaining_quantity !== undefined)
+                ? parseFloat(plan.remaining_quantity)
+                : null;
+            if ((planRem === null || planRem <= 0) && activeCard3Balance > 0) {
+                planRem = activeCard3Balance;
+            }
+            if (planRem !== null && planRem < currentPlanTotal) {
                 isRemainingSufficient = false;
             }
         }
@@ -2932,7 +2964,9 @@ function applyRmAgentRecommendation(idx) {
     if (!targetOpt) {
         targetOpt = document.createElement("option");
         targetOpt.value = rec.rm_erp;
-        targetOpt.textContent = `${rec.rm_erp} (${rec.grade || basePart.grade || 'YS'}) - ${rec.status || 'AI Recommended RM'}`;
+        const recDim = (rec.thickness && rec.length && rec.width) ? `${rec.thickness} × ${rec.length} × ${rec.width} mm` : '';
+        const recGrade = rec.grade || basePart.grade || 'YS';
+        targetOpt.textContent = recDim ? `✨ ${recGrade} • ${recDim} (${rec.rm_erp})` : `✨ ${rec.rm_erp} (${recGrade})`;
         // Insert right before custom option
         rmSelect.insertBefore(targetOpt, rmSelect.lastElementChild);
     }
