@@ -10717,6 +10717,19 @@ async function submitResubmitMo(e) {
 
 // Window bindings for resubmit modal
 window.openEditResubmitModal = openEditResubmitModal;
+window.closeEditResubmitModal = closeEditResubmitModal;
+window.submitResubmitMo = submitResubmitMo;
+
+// =========================================================================
+// Real-time Notification Engine & In-App Activity Center Logic
+// =========================================================================
+
+let lastKnownNotifIds = new Set();
+let notifsInitialFetchDone = false;
+let notificationsPollInterval = null;
+
+function formatNotifTime(isoString) {
+    if (!isoString) return "";
     try {
         const d = new Date(isoString);
         const now = new Date();
