@@ -4955,11 +4955,13 @@ function showMoWorkflowView() {
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
     const rygView = document.getElementById("reorderLevelView");
+    const summaryView = document.getElementById("summaryView");
     if (workflowView) workflowView.style.display = "flex";
     if (explorerView) explorerView.style.display = "none";
     if (ebView) ebView.style.display = "none";
     if (createEbView) createEbView.style.display = "none";
     if (rygView) rygView.style.display = "none";
+    if (summaryView) summaryView.style.display = "none";
 
     setActiveNavTab("navTabWorkflow");
     renderSidebarTablesList();
@@ -4975,11 +4977,13 @@ async function showEndbitsStoreView() {
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
     const rygView = document.getElementById("reorderLevelView");
+    const summaryView = document.getElementById("summaryView");
     if (workflowView) workflowView.style.display = "none";
     if (explorerView) explorerView.style.display = "none";
     if (ebView) ebView.style.display = "flex";
     if (createEbView) createEbView.style.display = "none";
     if (rygView) rygView.style.display = "none";
+    if (summaryView) summaryView.style.display = "none";
 
     setActiveNavTab("navTabEndbits");
     renderSidebarTablesList();
@@ -5003,11 +5007,13 @@ async function showCreateEndbitMoView(preselectedEndbitId = null) {
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
     const rygView = document.getElementById("reorderLevelView");
+    const summaryView = document.getElementById("summaryView");
     if (workflowView) workflowView.style.display = "none";
     if (explorerView) explorerView.style.display = "none";
     if (ebView) ebView.style.display = "none";
     if (createEbView) createEbView.style.display = "flex";
     if (rygView) rygView.style.display = "none";
+    if (summaryView) summaryView.style.display = "none";
 
     setActiveNavTab("navTabEndbits");
     // Reset layout attachment state
@@ -5049,11 +5055,13 @@ async function openDbTable(tableName) {
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
     const rygView = document.getElementById("reorderLevelView");
+    const summaryView = document.getElementById("summaryView");
     if (workflowView) workflowView.style.display = "none";
     if (explorerView) explorerView.style.display = "flex";
     if (ebView) ebView.style.display = "none";
     if (createEbView) createEbView.style.display = "none";
     if (rygView) rygView.style.display = "none";
+    if (summaryView) summaryView.style.display = "none";
 
     setActiveNavTab("navTabDbTables");
     renderSidebarTablesList();
@@ -11913,12 +11921,14 @@ function showReorderLevelView() {
     const ebView = document.getElementById("endbitsStoreView");
     const createEbView = document.getElementById("createEndbitMoView");
     const rygView = document.getElementById("reorderLevelView");
+    const summaryView = document.getElementById("summaryView");
 
     if (workflowView) workflowView.style.display = "none";
     if (explorerView) explorerView.style.display = "none";
     if (ebView) ebView.style.display = "none";
     if (createEbView) createEbView.style.display = "none";
     if (rygView) rygView.style.display = "flex";
+    if (summaryView) summaryView.style.display = "none";
 
     setActiveNavTab("navTabReorderLevel");
 
@@ -12479,4 +12489,163 @@ window.openAdjustStockModal = openAdjustStockModal;
 window.closeAdjustStockModal = closeAdjustStockModal;
 window.updateModalRygPreview = updateModalRygPreview;
 window.saveAdjustStockModal = saveAdjustStockModal;
+
+// =========================================================================
+// LIVE MO PRODUCTION & MATERIAL YIELD SUMMARY PAGE
+// =========================================================================
+function showSummaryView() {
+    currentDbTable = null;
+    const panel = document.getElementById("dbTablesPanel");
+    if (panel) panel.style.display = "none";
+
+    const workflowView = document.getElementById("moWorkflowView");
+    const explorerView = document.getElementById("dbExplorerView") || document.getElementById("dbTableView");
+    const ebView = document.getElementById("endbitsStoreView");
+    const createEbView = document.getElementById("createEndbitMoView");
+    const rygView = document.getElementById("reorderLevelView");
+    const summaryView = document.getElementById("summaryView");
+
+    if (workflowView) workflowView.style.display = "none";
+    if (explorerView) explorerView.style.display = "none";
+    if (ebView) ebView.style.display = "none";
+    if (createEbView) createEbView.style.display = "none";
+    if (rygView) rygView.style.display = "none";
+    if (summaryView) summaryView.style.display = "flex";
+
+    setActiveNavTab("navTabSummary");
+    loadSummaryData();
+}
+
+async function loadSummaryData() {
+    const tbody = document.getElementById("summaryTableBody");
+    const q = (document.getElementById("summarySearchInput")?.value || "").trim();
+    const status = document.getElementById("summaryStatusFilter")?.value || "";
+    const cid = window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
+
+    const params = new URLSearchParams({
+        company_id: cid,
+        q: q,
+        status: status
+    });
+
+    try {
+        const res = await fetch(`/api/mo/summary?${params.toString()}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        renderSummaryView(data);
+    } catch (err) {
+        console.error("Failed to load MO summary:", err);
+        if (tbody) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 24px; color: #ef4444;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> Error loading live summary: ${escapeHtml(err.message || "Server error")}
+                    </td>
+                </tr>
+            `;
+        }
+    }
+}
+
+function renderSummaryView(data) {
+    const sum = (data && data.summary) || {};
+    const rows = (data && data.rows) || [];
+
+    // 1. Update 2 Live KPI Cards above the table
+    const yieldEl = document.getElementById("summaryMonthlyYieldVal");
+    const yieldSub = document.getElementById("summaryMonthlyYieldSub");
+    const scrapEl = document.getElementById("summaryScrapWeightVal");
+    const scrapSub = document.getElementById("summaryScrapWeightSub");
+    const pillEl = document.getElementById("summaryTotalMosPill");
+
+    const totalRmWt = Number(sum.total_rm_weight_kg || 0);
+    const totalPartWt = Number(sum.total_part_weight_kg || 0);
+    const monthlyYield = Number(sum.monthly_yield_pct || 0);
+    const scrapWt = Number(sum.scrap_weight_kg || 0);
+
+    if (yieldEl) yieldEl.textContent = `${monthlyYield.toFixed(2)}%`;
+    if (yieldSub) {
+        yieldSub.textContent = `(${totalPartWt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg Parts / ${totalRmWt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg RM) × 100`;
+    }
+
+    if (scrapEl) scrapEl.textContent = `${scrapWt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`;
+    if (scrapSub) {
+        scrapSub.textContent = `${totalRmWt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg RM - ${totalPartWt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg Parts Produced`;
+    }
+
+    if (pillEl) pillEl.textContent = `${sum.total_mos ?? rows.length} MOs`;
+
+    // 2. Render Table Rows
+    const tbody = document.getElementById("summaryTableBody");
+    if (tbody) {
+        if (rows.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" style="text-align: center; padding: 32px; color: #94a3b8;">
+                        No Material Orders found matching the current filter.
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML = rows.map(row => {
+                const partsHtml = (row.parts || []).map(p => {
+                    const qtyFmt = Number(p.qty || 0).toLocaleString("en-IN");
+                    return `
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0;">
+                            <strong style="color: #0f172a; font-size: 0.84rem;">${escapeHtml(p.part_no || "-")}</strong>
+                            <span style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 1px 8px; border-radius: 12px; font-size: 0.74rem; font-weight: 700;">${qtyFmt} Nos</span>
+                        </div>
+                    `;
+                }).join("");
+
+                const yVal = Number(row.yield_pct || 0);
+                const yBg = yVal >= 85 ? "#dcfce7" : (yVal >= 70 ? "#fef9c3" : "#fee2e2");
+                const yCol = yVal >= 85 ? "#166534" : (yVal >= 70 ? "#854d0e" : "#991b1b");
+
+                return `
+                    <tr>
+                        <td>
+                            <div style="font-weight: 800; color: #0f172a;">${escapeHtml(row.mo_number || "-")}</div>
+                            <small class="text-muted">${escapeHtml(row.date || "")}${row.status ? ` • ${escapeHtml(row.status)}` : ""}</small>
+                        </td>
+                        <td style="min-width: 220px;">${partsHtml}</td>
+                        <td>
+                            <div><code>${escapeHtml(row.rm_erp || "-")}</code></div>
+                            ${row.grade ? `<small class="text-muted">${escapeHtml(row.grade)}</small>` : ""}
+                        </td>
+                        <td style="text-align: center; font-weight: 700; color: #0284c7;">
+                            ${Number(row.sheets_used || 0).toLocaleString("en-IN")} Sheets
+                        </td>
+                        <td style="text-align: right; font-weight: 700; color: #0f172a;">
+                            ${Number(row.rm_weight_kg || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+                        </td>
+                        <td style="text-align: right; font-weight: 700; color: #059669;">
+                            ${Number(row.part_weight_kg || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg
+                        </td>
+                        <td style="text-align: center;">
+                            <span style="display: inline-block; padding: 3px 10px; border-radius: 14px; font-weight: 800; font-size: 0.8rem; background: ${yBg}; color: ${yCol};">
+                                ${yVal.toFixed(2)}%
+                            </span>
+                        </td>
+                    </tr>
+                `;
+            }).join("");
+        }
+    }
+
+    // 3. Update Footer Totals
+    const fSheets = document.getElementById("summaryFooterSheets");
+    const fRmWt = document.getElementById("summaryFooterRmWeight");
+    const fPartWt = document.getElementById("summaryFooterPartWeight");
+    const fYield = document.getElementById("summaryFooterYield");
+
+    if (fSheets) fSheets.textContent = `${Number(sum.total_sheets || 0).toLocaleString("en-IN")} Sheets`;
+    if (fRmWt) fRmWt.textContent = `${totalRmWt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`;
+    if (fPartWt) fPartWt.textContent = `${totalPartWt.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kg`;
+    if (fYield) fYield.textContent = `${monthlyYield.toFixed(2)}%`;
+}
+
+window.showSummaryView = showSummaryView;
+window.loadSummaryData = loadSummaryData;
+
 

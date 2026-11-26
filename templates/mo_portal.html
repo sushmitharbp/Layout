@@ -59,6 +59,10 @@
                         <span>Reorder Level (RYG)</span>
                     </button>
                     {% endif %}
+                    <button class="mo-nav-tab" id="navTabSummary" onclick="showSummaryView()">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <span>Summary</span>
+                    </button>
                 </nav>
             </div>
 
@@ -812,6 +816,125 @@
                             </td>
                             <td style="padding: 12px 14px; text-align: center; color: #64748b; font-size: 0.8rem; font-weight: normal;">
                                 Dynamic ERP Calculation
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </main>
+
+        <!-- 6. Live Production & Material Yield Summary View -->
+        <main class="mo-main-content" id="summaryView" style="display: none; padding: 20px 24px; flex-direction: column; gap: 16px; background: #f8fafc; overflow-y: auto;">
+            <!-- Header Bar -->
+            <div class="view-header-bar" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.04); flex-wrap: wrap; gap: 12px;">
+                <div class="view-header-left" style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 40px; height: 40px; border-radius: 10px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                        <i class="fa-solid fa-chart-pie"></i>
+                    </div>
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                            <h2 style="margin: 0; font-size: 1.25rem; font-weight: 800; color: #0f172a;">MO Production &amp; Yield Summary</h2>
+                            <span class="header-count-pill" id="summaryTotalMosPill" style="background: #dbeafe; color: #1d4ed8; font-weight: 700; padding: 3px 10px; border-radius: 20px; font-size: 0.78rem;">
+                                0 MOs
+                            </span>
+                        </div>
+                        <p style="margin: 2px 0 0 0; font-size: 0.8rem; color: #64748b;">
+                            Live Material Order summary tracking produced parts, raw material weight, part weight, monthly yield %, and scrap generated
+                        </p>
+                    </div>
+                </div>
+                <div class="view-header-actions" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                    <div class="search-input-wrap" style="position: relative;">
+                        <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 0.85rem;"></i>
+                        <input type="text" id="summarySearchInput" placeholder="Search MO#, Part, RM..." oninput="loadSummaryData()" style="height: 36px; padding-left: 32px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.82rem; width: 210px;">
+                    </div>
+                    <select id="summaryStatusFilter" onchange="loadSummaryData()" style="height: 36px; border-radius: 6px; border: 1.5px solid #cbd5e1; font-size: 0.82rem; padding: 0 10px; background: #ffffff; color: #1e293b; font-weight: 600;">
+                        <option value="">All MOs (Live)</option>
+                        <option value="RELEASED">Released to ERP Only</option>
+                        <option value="PENDING">Pending Approval Only</option>
+                    </select>
+                    <button type="button" class="btn btn-icon" onclick="loadSummaryData()" title="Refresh Live Summary" style="height: 36px; width: 36px; border-radius: 6px; border: 1.5px solid #cbd5e1; background: #fff; cursor: pointer;">
+                        <i class="fa-solid fa-rotate"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 2 Live KPI Summary Cards -->
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px;">
+                <!-- Card 1: Monthly Yield -->
+                <div style="background: #ffffff; border: 1.5px solid #bae6fd; border-radius: 12px; padding: 18px 22px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 6px rgba(2,132,199,0.06);">
+                    <div style="width: 52px; height: 52px; border-radius: 12px; background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.45rem; flex-shrink: 0;">
+                        <i class="fa-solid fa-percent"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.78rem; font-weight: 800; color: #0369a1; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Monthly Yield
+                        </div>
+                        <div id="summaryMonthlyYieldVal" style="font-size: 1.85rem; font-weight: 800; color: #0f172a; line-height: 1.15; margin: 2px 0;">
+                            0.00%
+                        </div>
+                        <div id="summaryMonthlyYieldSub" style="font-size: 0.78rem; color: #64748b; font-weight: 600;">
+                            (Total Part Produced Wt / Total RM Wt) × 100
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Scrap Weight Generated -->
+                <div style="background: #ffffff; border: 1.5px solid #fed7aa; border-radius: 12px; padding: 18px 22px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 6px rgba(234,88,12,0.06);">
+                    <div style="width: 52px; height: 52px; border-radius: 12px; background: linear-gradient(135deg, #ea580c 0%, #dc2626 100%); color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.45rem; flex-shrink: 0;">
+                        <i class="fa-solid fa-recycle"></i>
+                    </div>
+                    <div style="flex: 1;">
+                        <div style="font-size: 0.78rem; font-weight: 800; color: #c2410c; text-transform: uppercase; letter-spacing: 0.5px;">
+                            Scrap Weight Generated
+                        </div>
+                        <div id="summaryScrapWeightVal" style="font-size: 1.85rem; font-weight: 800; color: #0f172a; line-height: 1.15; margin: 2px 0;">
+                            0.00 kg
+                        </div>
+                        <div id="summaryScrapWeightSub" style="font-size: 0.78rem; color: #64748b; font-weight: 600;">
+                            Total RM Wt - Total Parts Wt Produced till date
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MO Summary Table -->
+            <div class="mo-table-container" style="background: #ffffff; border: 1px solid var(--border-color); border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); overflow: hidden;">
+                <table class="mo-table" id="summaryDataTable" style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr>
+                            <th>MO NUMBER &amp; DATE</th>
+                            <th>PARTS PRODUCED &amp; QTY</th>
+                            <th>RM SHEET USED</th>
+                            <th style="text-align: center;">RM SHEET QTY</th>
+                            <th style="text-align: right;">RM WEIGHT (KG)</th>
+                            <th style="text-align: right;">PART WEIGHT (KG)</th>
+                            <th style="text-align: center;">YIELD %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="summaryTableBody">
+                        <tr>
+                            <td colspan="7" style="text-align: center; padding: 28px; color: #94a3b8;">
+                                <i class="fa-solid fa-circle-notch fa-spin"></i> Loading live MO summary...
+                            </td>
+                        </tr>
+                    </tbody>
+                    <tfoot style="background: #f8fafc; border-top: 2px solid #cbd5e1; font-weight: 800;">
+                        <tr>
+                            <td colspan="3" style="padding: 12px 14px; text-align: right; color: #0f172a;">
+                                Total (Live)
+                            </td>
+                            <td style="padding: 12px 14px; text-align: center; color: #0284c7;" id="summaryFooterSheets">
+                                0 Sheets
+                            </td>
+                            <td style="padding: 12px 14px; text-align: right; color: #0f172a;" id="summaryFooterRmWeight">
+                                0.00 kg
+                            </td>
+                            <td style="padding: 12px 14px; text-align: right; color: #059669;" id="summaryFooterPartWeight">
+                                0.00 kg
+                            </td>
+                            <td style="padding: 12px 14px; text-align: center; color: #2563eb;" id="summaryFooterYield">
+                                0.00%
                             </td>
                         </tr>
                     </tfoot>
@@ -2521,7 +2644,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=150"></script>
+    <script src="/static/mo_app.js?v=151"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
 

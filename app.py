@@ -1621,6 +1621,194 @@ def list_mos():
     return jsonify(mos)
 
 
+@app.route("/api/mo/summary")
+def get_mo_summary():
+    """Live MO Production & Material Yield Summary with per-MO RM weight, part weight, and yield %."""
+    company_id = session.get("company_id") or request.args.get("company_id") or "PEPIPL"
+    status_filter = (request.args.get("status") or "").strip().upper()
+    q = (request.args.get("q") or "").strip().lower()
+
+    mos = MO_ENGINE.list_mos(company_id=company_id)
+    STEEL_DENSITY = 7.85e-6  # kg per mm^3
+
+    def _parse_dims_from_str(s):
+        if not s:
+            return None
+        nums = [float(x) for x in re.findall(r'[\d.]+', str(s))]
+        if len(nums) >= 3:
+            # Heuristic: thickness is typically <= 50mm, length & width > 50mm
+            small = [n for n in nums if 0 < n <= 50]
+            large = [n for n in nums if n > 50]
+            if small and len(large) >= 2:
+                return small[0], large[0], large[1]
+            return nums[0], nums[1], nums[2]
+        return None
+
+    def _get_part_blank_weight(part_no, mo_rec=None):
+        p_info = None
+        if part_no:
+            p_info = PARTS.get(part_no)
+            if not p_info:
+                nk = normalize_key(part_no)
+                if nk in NORM_PARTS:
+                    p_info = PARTS.get(NORM_PARTS[nk])
+        t = l = w = 0.0
+        if p_info:
+            t = float(p_info.get("thickness") or 0)
+            l = float(p_info.get("length") or 0)
+            w = float(p_info.get("width") or 0)
+            if (not t or not l or not w) and p_info.get("records"):
+                r0 = p_info["records"][0]
+                p1 = r0.get("part1") or {}
+                bs = p1.get("blank_size") or {}
+                t = t or float(bs.get("thickness") or r0.get("thickness") or 0)
+                l = l or float(bs.get("length") or 0)
+                w = w or float(bs.get("width") or 0)
+        if (not t or not l or not w) and mo_rec:
+            t = t or float(mo_rec.get("thickness") or 0)
+            # Only use mo length/width if they look like blank dims (not raw sheet 2500x1250)
+        if t > 0 and l > 0 and w > 0:
+            return t * l * w * STEEL_DENSITY
+        return 0.0
+
+    rows = []
+    total_rm_wt = 0.0
+    total_part_wt = 0.0
+    total_sheets = 0.0
+    rm_wt_cache = {}
+
+    for mo in mos:
+        mo_status = str(mo.get("status") or "").upper()
+        mo_stage = str(mo.get("current_stage") or "").upper()
+        if status_filter == "RELEASED" and mo_stage != "COMPLETED" and mo_status != "RELEASED_TO_ERP":
+            continue
+        if status_filter == "PENDING" and (mo_stage == "COMPLETED" or mo_status in ("RELEASED_TO_ERP", "REJECTED")):
+            continue
+
+        mo_num = mo.get("mo_number") or mo.get("mo_no") or "-"
+        rm_erp = mo.get("rm_erp") or mo.get("rm_code") or "-"
+        grade = mo.get("grade") or ""
+        sheets_used = float(mo.get("sheets_required") or mo.get("no_of_rm_sheets") or 1)
+        stored_yield = float(mo.get("yield_pct") or 0)
+
+        # Compute RM sheet unit weight & total RM weight
+        wt_per_sheet = 0.0
+        if rm_erp and rm_erp != "-":
+            if rm_erp in rm_wt_cache:
+                wt_per_sheet = rm_wt_cache[rm_erp]
+            else:
+                try:
+                    rm_db = clean_db.get_rm(rm_erp, branch=company_id, company_id=company_id)
+                    if rm_db and rm_db.get("weight_per_sheet"):
+                        wt_per_sheet = float(rm_db.get("weight_per_sheet") or 0)
+                except Exception:
+                    pass
+                rm_wt_cache[rm_erp] = wt_per_sheet
+        if wt_per_sheet <= 0:
+            t = float(mo.get("thickness") or 0)
+            l = float(mo.get("length") or 0)
+            w = float(mo.get("width") or 0)
+            if t > 0 and l > 0 and w > 0:
+                wt_per_sheet = t * l * w * STEEL_DENSITY
+            else:
+                parsed = _parse_dims_from_str(rm_erp)
+                if parsed:
+                    wt_per_sheet = parsed[0] * parsed[1] * parsed[2] * STEEL_DENSITY
+
+        rm_weight_kg = round(wt_per_sheet * sheets_used, 2)
+
+        # Extract parts & respective quantities produced in this MO
+        parts_list = []
+        raw_parts = (
+            mo.get("parts_list")
+            or mo.get("parts_payload")
+            or (mo.get("constraints_status") or {}).get("parts_list")
+            or mo.get("parts")
+        )
+        if isinstance(raw_parts, str):
+            try:
+                raw_parts = json.loads(raw_parts)
+            except Exception:
+                raw_parts = None
+
+        if isinstance(raw_parts, list) and len(raw_parts) > 0:
+            for item in raw_parts:
+                if isinstance(item, dict):
+                    p_no = item.get("part_no") or item.get("child_part_no") or mo.get("part_no") or "-"
+                    p_qty = float(item.get("qty") or item.get("target_qty") or item.get("qty_produced") or item.get("parts_qty") or 0)
+                    if p_no and p_no != "-":
+                        parts_list.append({"part_no": p_no, "qty": p_qty})
+        if not parts_list:
+            main_part = mo.get("part_no") or mo.get("base_part") or "-"
+            main_qty = float(mo.get("target_qty") or mo.get("parts_produced") or mo.get("parts_qty") or 0)
+            parts_list.append({"part_no": main_part, "qty": main_qty})
+
+        # Compute Part Weight
+        calc_part_wt = 0.0
+        for p_item in parts_list:
+            unit_wt = _get_part_blank_weight(p_item["part_no"], mo)
+            p_item_wt = round(unit_wt * p_item["qty"], 2) if unit_wt > 0 and p_item["qty"] > 0 else 0.0
+            p_item["part_weight_kg"] = p_item_wt
+            calc_part_wt += p_item_wt
+
+        # Conserve physical mass: if part weight unavailable or outlier qty, derive from yield_pct * rm_weight
+        if rm_weight_kg > 0 and (calc_part_wt <= 0 or calc_part_wt > rm_weight_kg * 1.05):
+            if 0 < stored_yield <= 100:
+                part_weight_kg = round(rm_weight_kg * (stored_yield / 100.0), 2)
+            else:
+                part_weight_kg = round(calc_part_wt, 2)
+        else:
+            part_weight_kg = round(calc_part_wt, 2)
+
+        # Compute Yield %
+        if rm_weight_kg > 0 and part_weight_kg > 0:
+            yield_pct = round(min(100.0, (part_weight_kg / rm_weight_kg) * 100.0), 2)
+        else:
+            yield_pct = round(stored_yield, 2)
+
+        if q:
+            haystack = f"{mo_num} {rm_erp} {grade} " + " ".join(p["part_no"] for p in parts_list)
+            if q not in haystack.lower():
+                continue
+
+        total_rm_wt += rm_weight_kg
+        total_part_wt += part_weight_kg
+        total_sheets += sheets_used
+
+        rows.append({
+            "mo_number": mo_num,
+            "erp_mo_number": mo.get("erp_mo_number") or "",
+            "date": mo.get("date") or str(mo.get("created_at") or "")[:10],
+            "status": mo.get("status") or "",
+            "current_stage": mo.get("current_stage") or "",
+            "parts": parts_list,
+            "rm_erp": rm_erp,
+            "grade": grade,
+            "sheets_used": round(sheets_used, 2),
+            "rm_weight_kg": rm_weight_kg,
+            "part_weight_kg": part_weight_kg,
+            "scrap_weight_kg": round(max(0.0, rm_weight_kg - part_weight_kg), 2),
+            "yield_pct": yield_pct,
+        })
+
+    total_rm_wt = round(total_rm_wt, 2)
+    total_part_wt = round(total_part_wt, 2)
+    monthly_yield_pct = round((total_part_wt / total_rm_wt) * 100.0, 2) if total_rm_wt > 0 else 0.0
+    scrap_weight_kg = round(max(0.0, total_rm_wt - total_part_wt), 2)
+
+    return jsonify({
+        "summary": {
+            "total_mos": len(rows),
+            "total_sheets": round(total_sheets, 2),
+            "total_rm_weight_kg": total_rm_wt,
+            "total_part_weight_kg": total_part_wt,
+            "monthly_yield_pct": monthly_yield_pct,
+            "scrap_weight_kg": scrap_weight_kg,
+        },
+        "rows": rows,
+    })
+
+
 @app.route("/api/mo/<mo_number>")
 def get_mo_detail(mo_number):
     """Get detailed MO view with complete audit trail"""
