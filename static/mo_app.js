@@ -2559,6 +2559,25 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
         if (!p) return "";
         return String(p).toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/ITEM0*(\d+)/g, 'ITEM$1');
     }
+    function extractBasePrefix(p) {
+        if (!p) return "";
+        return String(p).split(" - ")[0].split("_")[0].replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+    }
+    function getAddedPartCardTarget(partNoStr) {
+        const targetNorm = normPart(partNoStr);
+        if (!targetNorm) return 0;
+        const rows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+        for (const r of rows) {
+            const rNo = r.querySelector(".add-part-no")?.value?.trim();
+            if (rNo && normPart(rNo) === targetNorm) {
+                const rIdx = r.id.replace("modalAddPartRow_", "");
+                const el = document.getElementById(`addPartToProduce_${rIdx}`);
+                const v = parseFloat((el?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
+                if (v > 0) return v;
+            }
+        }
+        return 0;
+    }
 
     // Collect all parts in the layout to ensure every part has a valid > 0 MRP target
     const layoutPartsList = [];
@@ -2574,14 +2593,19 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
     const activeCard1Target = parseFloat((document.getElementById("mrpQtyToProduceVal")?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
     const activeCard3Balance = parseFloat((document.getElementById("mrpBalanceVal")?.textContent || "").replace(/[^\d\.]/g, "")) || 0;
     const selectedPartTarget = extractNumericTarget(selectedPartData?.mrp) || extractNumericTarget(selectedPartData) || activeCard1Target;
-    const currentSelectedPartNorm = normPart(selectedPartData?.part_no || document.getElementById("partNoInput")?.value);
+    const currentSelectedPartRaw = selectedPartData?.part_no || document.getElementById("partNoInput")?.value || "";
+    const currentSelectedPartNorm = normPart(currentSelectedPartRaw);
+    const currentBasePrefix = extractBasePrefix(document.getElementById("basePartInput")?.value || currentSelectedPartRaw);
 
     if (planParts && planParts.length > 0) {
         // Multi-part layout or multiple parts in plan: check EACH part
         for (const p of planParts) {
-            const pNorm = normPart(p.part_no || p.child_part_no);
-            const isCurrentPart = pNorm && currentSelectedPartNorm && (pNorm === currentSelectedPartNorm || pNorm.includes(currentSelectedPartNorm) || currentSelectedPartNorm.includes(pNorm));
-            const pTarget = extractNumericTarget(p) || (isCurrentPart ? selectedPartTarget : 0);
+            const pRaw = p.part_no || p.child_part_no;
+            const pNorm = normPart(pRaw);
+            const pBase = extractBasePrefix(pRaw);
+            const isCurrentOrSibling = (pNorm && currentSelectedPartNorm && (pNorm === currentSelectedPartNorm || pNorm.includes(currentSelectedPartNorm) || currentSelectedPartNorm.includes(pNorm)))
+                || (pBase && currentBasePrefix && pBase === currentBasePrefix);
+            const pTarget = extractNumericTarget(p) || getAddedPartCardTarget(pRaw) || (isCurrentOrSibling ? selectedPartTarget : 0);
             if (pTarget <= 0) {
                 isMrpAvailable = false;
                 const pName = p.child_part_no || p.part_no || "Part";
@@ -2595,12 +2619,14 @@ function updateAutomatedConstraints(feasibility = null, layoutRecord = null) {
                 const lpNo = lp.part_no || lp.child_part_no;
                 if (!lpNo) continue;
                 const lpNorm = normPart(lpNo);
-                const isCurrentPart = lpNorm && currentSelectedPartNorm && (lpNorm === currentSelectedPartNorm || lpNorm.includes(currentSelectedPartNorm) || currentSelectedPartNorm.includes(lpNorm));
+                const lpBase = extractBasePrefix(lpNo);
+                const isCurrentOrSibling = (lpNorm && currentSelectedPartNorm && (lpNorm === currentSelectedPartNorm || lpNorm.includes(currentSelectedPartNorm) || currentSelectedPartNorm.includes(lpNorm)))
+                    || (lpBase && currentBasePrefix && lpBase === currentBasePrefix);
                 const matched = planParts.find(p => {
                     const pNorm = normPart(p.part_no || p.child_part_no);
                     return pNorm && (pNorm === lpNorm || pNorm.includes(lpNorm) || lpNorm.includes(pNorm));
                 });
-                const lpTarget = extractNumericTarget(matched) || extractNumericTarget(lp) || (isCurrentPart ? selectedPartTarget : 0);
+                const lpTarget = extractNumericTarget(matched) || extractNumericTarget(lp) || getAddedPartCardTarget(lpNo) || (isCurrentOrSibling ? selectedPartTarget : 0);
                 if (lpTarget <= 0) {
                     isMrpAvailable = false;
                     mrpFailureReason = `No MRP Target for ${lpNo} (N/A)`;
