@@ -2068,8 +2068,52 @@ function recalculateTargetQtyFromLayout() {
         p1Blanks = window._basePartPlacedBlanks;
     } else if (record.part1?.blank_qty) {
         p1Blanks = parseFloat(record.part1.blank_qty) || 1;
+    } else if (record.part1?.total_blank_qty_sheet) {
+        p1Blanks = parseFloat(record.part1.total_blank_qty_sheet) || 1;
     } else if (record.blank_qty) {
         p1Blanks = parseFloat(record.blank_qty) || 1;
+    }
+
+    // Fallback 1: Match sheet dimensions against CAD layouts in selectedPartData.records
+    if (p1Blanks <= 1 && selectedPartData?.records && selectedPartData.records.length > 0) {
+        const recLen = parseFloat(record.length || document.getElementById("lengthInput")?.value || 0);
+        const recWid = parseFloat(record.width || document.getElementById("widthInput")?.value || 0);
+        const cadMatch = selectedPartData.records.find(r => {
+            const rBlanks = parseFloat(r.part1?.blank_qty || r.part1?.total_blank_qty_sheet || r.blank_qty || 0);
+            if (rBlanks <= 1) return false;
+            const rL = parseFloat(r.length || r.sheet_length || 0);
+            const rW = parseFloat(r.width || r.sheet_width || 0);
+            return (recLen > 0 && recWid > 0 && Math.abs(rL - recLen) < 5 && Math.abs(rW - recWid) < 5) || selectedPartData.records.length === 1;
+        });
+        if (cadMatch) {
+            p1Blanks = parseFloat(cadMatch.part1?.blank_qty || cadMatch.part1?.total_blank_qty_sheet || cadMatch.blank_qty) || 1;
+            const yInp = document.getElementById("yieldPctInput");
+            if (yInp && (!yInp.value || yInp.value === "N/A") && cadMatch.per_sheet?.yield_pct) {
+                yInp.value = cadMatch.per_sheet.yield_pct;
+            }
+        }
+    }
+
+    // Fallback 2: Geometric blanks-per-sheet from sheet (L x W) and active part blank (L x W)
+    if (p1Blanks <= 1) {
+        const bp = window._activeBasePartData || selectedPartData || {};
+        const partL = parseFloat(bp.length || 0);
+        const partW = parseFloat(bp.width || 0);
+        const sheetL = parseFloat(record.length || record.sheet_length || 0);
+        const sheetW = parseFloat(record.width || record.sheet_width || 0);
+        if (partL > 0 && partW > 0 && sheetL >= Math.min(partL, partW) && sheetW >= Math.min(partL, partW)) {
+            const fitNormal = Math.floor(sheetL / partL) * Math.floor(sheetW / partW);
+            const fitRot = Math.floor(sheetL / partW) * Math.floor(sheetW / partL);
+            const geomBlanks = Math.max(fitNormal, fitRot);
+            if (geomBlanks > 1) {
+                p1Blanks = geomBlanks;
+            }
+        }
+    }
+
+    const offtakeEl = document.getElementById("offtakeInput");
+    if (offtakeEl && p1Blanks > 1) {
+        offtakeEl.value = `${p1Blanks} Nos`;
     }
 
     const p1TotalQty = Math.round(sheetsNeeded * p1Blanks * p1Strip);
@@ -2720,6 +2764,10 @@ function onFileSelected(input) {
 
 function recalculateWorkflowRoute(failedConstraintsList = null) {
     const isStd = document.querySelector('input[name="is_standard_layout"]:checked')?.value === "true";
+    const yieldRaw = document.getElementById("yieldPctInput")?.value || "";
+    const yieldVal = parseFloat(String(yieldRaw).replace(/[^\d.]/g, ""));
+    const highYieldBypass = (!isNaN(yieldVal) && yieldVal > 96);
+
     const stockEl = document.getElementById("constraintStock");
     const mrpEl = document.getElementById("constraintMrp");
     const remEl = document.getElementById("constraintRemaining");
@@ -2735,10 +2783,10 @@ function recalculateWorkflowRoute(failedConstraintsList = null) {
 
     if (!banner || !title || !desc) return;
 
-    if (!isStd) {
+    if (!isStd && !highYieldBypass) {
         banner.className = "workflow-route-preview krysalis";
         title.innerHTML = `<i class="fa-solid fa-compass-drafting"></i> Route: Shearing ➔ Krysalis Review ➔ Purchase ➔ ERP`;
-        desc.textContent = "Non-standard layout detected. Requires layout document review by Consultants (Krysalis), followed by Purchase clearance and ERP release.";
+        desc.textContent = "Non-standard layout detected (Yield ≤ 96%). Requires layout document review by Consultants (Krysalis), followed by Purchase clearance and ERP release.";
     } else if (!constraintsMet) {
         banner.className = "workflow-route-preview warning";
         title.innerHTML = `<i class="fa-solid fa-cart-shopping"></i> Route: Shearing ➔ Purchase Approval ➔ ERP`;
@@ -2749,7 +2797,9 @@ function recalculateWorkflowRoute(failedConstraintsList = null) {
     } else {
         banner.className = "workflow-route-preview";
         title.innerHTML = `<i class="fa-solid fa-bolt"></i> Route: Fast-Track Directly to ERP Release`;
-        desc.textContent = "All 3 constraints (RM Stock, MRP Target, Remaining Demand) satisfied. Order skips Krysalis & Purchase and routes directly to ERP release!";
+        desc.textContent = (!isStd && highYieldBypass)
+            ? `High-yield layout (${yieldVal.toFixed(1)}% > 96%) with all constraints satisfied. Order skips Krysalis & Purchase and routes directly to ERP release!`
+            : "All 3 constraints (RM Stock, MRP Target, Remaining Demand) satisfied. Order skips Krysalis & Purchase and routes directly to ERP release!";
     }
 }
 

@@ -512,14 +512,26 @@ class MOWorkflowEngine:
         return mo
 
 
-    def evaluate_workflow_path(self, is_standard_layout, constraints_satisfied):
+    def evaluate_workflow_path(self, is_standard_layout, constraints_satisfied, yield_pct=None):
         """
         Determines the approval pipeline based on rules:
-        1. Standard + All Constraints Satisfied => DIRECT_ERP (Shearing -> ERP)
-        2. Standard + Any Constraint Failed     => PURCHASE_ERP (Shearing -> Purchase -> ERP)
-        3. Non-Standard Layout                  => KRYSALIS_PURCHASE_ERP (Shearing -> Krysalis -> Purchase -> ERP)
+        1. Yield > 96% (Standard or Non-Standard):
+           - All constraints satisfied -> DIRECT_ERP (Shearing -> ERP)
+           - Any constraint failed     -> PURCHASE_ERP (Shearing -> Purchase -> ERP)
+        2. Standard (Yield <= 96% or unknown) + All Constraints Satisfied => DIRECT_ERP
+        3. Standard (Yield <= 96% or unknown) + Any Constraint Failed     => PURCHASE_ERP
+        4. Non-Standard (Yield <= 96% or unknown)                        => KRYSALIS_PURCHASE_ERP
         """
-        if not is_standard_layout:
+        y_val = None
+        if yield_pct is not None and str(yield_pct).strip() not in ("", "N/A", "None"):
+            try:
+                y_val = float(str(yield_pct).replace("%", "").strip())
+            except (ValueError, TypeError):
+                y_val = None
+
+        high_yield_bypass = (y_val is not None and y_val > 96.0)
+
+        if not is_standard_layout and not high_yield_bypass:
             return {
                 "path": "KRYSALIS_PURCHASE_ERP",
                 "first_stage": "KRYSALIS",
@@ -539,7 +551,11 @@ class MOWorkflowEngine:
             "path": "DIRECT_ERP",
             "first_stage": "ERP",
             "status": "PENDING_ERP",
-            "description": "Standardized layout with all constraints satisfied. Fast-tracked directly to ERP approval."
+            "description": (
+                f"High-yield layout ({y_val:.1f}% > 96%) with all constraints satisfied. Fast-tracked directly to ERP approval."
+                if (not is_standard_layout and high_yield_bypass)
+                else "Standardized layout with all constraints satisfied. Fast-tracked directly to ERP approval."
+            )
         }
 
     def create_mo(self, mo_data, created_by_role="shearing"):
@@ -563,7 +579,7 @@ class MOWorkflowEngine:
         if yield_pct is not None and isinstance(constraints, dict):
             constraints["yield_pct"] = yield_pct
 
-        routing = self.evaluate_workflow_path(is_std, constraints_satisfied)
+        routing = self.evaluate_workflow_path(is_std, constraints_satisfied, yield_pct=yield_pct)
         now_iso = datetime.utcnow().isoformat() + "Z"
 
         mo_id = mo_data.get("mo_number") or f"MO-{int(time.time())}"
@@ -2508,7 +2524,8 @@ class MOWorkflowEngine:
                 mo["is_standard_layout"] = is_std
 
             constraints_satisfied = bool(cs.get("all_satisfied", True))
-            routing = self.evaluate_workflow_path(is_std, constraints_satisfied)
+            resub_yield = form_data.get("yield_pct") if "yield_pct" in form_data else mo.get("yield_pct")
+            routing = self.evaluate_workflow_path(is_std, constraints_satisfied, yield_pct=resub_yield)
 
         audit_trail.append({
             "action": "RESUBMITTED",

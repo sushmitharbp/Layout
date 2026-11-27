@@ -591,6 +591,12 @@ def get_part_details(part_no):
                     lr_copy["weight_per_sheet"] = rm_match.get("weight_per_sheet", 0)
                     if not lr_copy.get("grade"):
                         lr_copy["grade"] = rm_match.get("grade")
+                p1_rec = lr_copy.get("part1") or {}
+                p1_blanks = p1_rec.get("blank_qty") or p1_rec.get("total_blank_qty_sheet")
+                if p1_blanks and not lr_copy.get("blank_qty"):
+                    lr_copy["blank_qty"] = p1_blanks
+                if p1_rec.get("strip_qty") and not lr_copy.get("strip_qty"):
+                    lr_copy["strip_qty"] = p1_rec.get("strip_qty")
                 records.append(lr_copy)
 
             # If no layout records found from layout_records (e.g. custom parts), construct from matching_rms
