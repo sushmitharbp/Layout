@@ -10502,6 +10502,13 @@ async function applyCutOptimizerResults() {
             nonStdYieldEl.textContent = `${yieldVal}%`;
         }
 
+        // Preserve any standard companion part rows before switching to Non-Standard
+        // (toggleLayoutType(false) removes .std-companion-part-row unless converted)
+        document.querySelectorAll("#modalAdditionalPartsList .std-companion-part-row").forEach(r => {
+            r.classList.remove("std-companion-part-row");
+            delete r.dataset.stdPart;
+        });
+
         // Automatically mark layout as Non-Standard (custom OptiCutter 2D nesting)
         const nonStdRadio = document.querySelector('input[name="is_standard_layout"][value="false"]');
         if (nonStdRadio) nonStdRadio.checked = true;
@@ -10509,24 +10516,74 @@ async function applyCutOptimizerResults() {
 
         // Multi-part nesting synchronization from OptiCutter results
         if (currentCutOptResult.parts_summary && currentCutOptResult.parts_summary.length > 0) {
-            const modalAddRows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
-            const basePartNo = document.getElementById("partNoInput")?.value?.trim();
+            const basePartNo = document.getElementById("partNoInput")?.value?.trim() || "";
+            const normPartKey = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/ITEM0*(\d+)/g, "ITEM$1");
+            const baseNorm = normPartKey(basePartNo);
 
-            currentCutOptResult.parts_summary.forEach((ps, idx) => {
-                if (ps.is_base || (basePartNo && ps.part_no && ps.part_no === basePartNo) || idx === 0) {
+            for (let idx = 0; idx < currentCutOptResult.parts_summary.length; idx++) {
+                const ps = currentCutOptResult.parts_summary[idx];
+                const psNorm = normPartKey(ps.part_no);
+                const isBase = Boolean(ps.is_base) || (baseNorm && psNorm && psNorm === baseNorm) || idx === 0;
+
+                if (isBase) {
                     window._basePartPlacedBlanks = ps.placed_qty;
+                    continue;
                 }
-                if (modalAddRows && modalAddRows.length > 0) {
-                    modalAddRows.forEach((row, rIdx) => {
-                        const rowPartNo = row.querySelector(".add-part-no")?.value?.trim();
-                        if (rowPartNo && ps.part_no && (rowPartNo === ps.part_no || (ps.row_id && ps.row_id === (rIdx + 2)))) {
-                            const qInput = row.querySelector(".add-part-qty");
-                            if (qInput) qInput.value = ps.placed_qty;
-                            row.dataset.placedBlanks = ps.placed_qty;
+
+                // Find existing row in #modalAdditionalPartsList or create one
+                const modalAddRows = Array.from(document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row"));
+                let targetRow = modalAddRows.find((row, rIdx) => {
+                    const rowPartNo = row.querySelector(".add-part-no")?.value?.trim();
+                    const rowNorm = normPartKey(rowPartNo);
+                    return (rowNorm && psNorm && rowNorm === psNorm) || (ps.row_id && ps.row_id === (rIdx + 2));
+                });
+
+                if (!targetRow && ps.part_no) {
+                    addModalAdditionalPartRow();
+                    const updatedRows = document.querySelectorAll("#modalAdditionalPartsList .modal-add-part-row");
+                    targetRow = updatedRows[updatedRows.length - 1];
+                    if (targetRow) {
+                        const rIdx = parseInt(targetRow.id.replace("modalAddPartRow_", ""), 10);
+                        const noInp = targetRow.querySelector(".add-part-no");
+                        const gradeInp = targetRow.querySelector(".add-part-grade");
+                        const sizeInp = targetRow.querySelector(".add-part-size");
+                        const lenInp = targetRow.querySelector(".add-part-len");
+                        const widInp = targetRow.querySelector(".add-part-wid");
+                        const thickInp = targetRow.querySelector(".add-part-thick");
+                        const stripInp = targetRow.querySelector(".add-part-strip");
+                        const offtakeInp = targetRow.querySelector(".add-part-offtake");
+
+                        const thk = ps.thickness || parseFloat(document.getElementById("thicknessInput")?.value) || "";
+                        const len = ps.length || "";
+                        const wid = ps.width || "";
+                        if (noInp) noInp.value = ps.part_no;
+                        if (gradeInp) gradeInp.value = ps.grade || document.getElementById("gradeInput")?.value || "YS";
+                        if (lenInp && len) lenInp.value = len;
+                        if (widInp && wid) widInp.value = wid;
+                        if (thickInp && thk) thickInp.value = thk;
+                        if (sizeInp && len && wid) sizeInp.value = `${thk ? thk + " * " : ""}${len} * ${wid}`;
+                        if (stripInp) stripInp.value = `${ps.strip_qty || 1} Nos`;
+                        if (offtakeInp) offtakeInp.value = `${ps.placed_qty || 1} Nos`;
+                        if (!isNaN(rIdx) && typeof selectAdditionalPartForModal === "function") {
+                            try { await selectAdditionalPartForModal(rIdx, ps.part_no); } catch (e) {}
                         }
-                    });
+                    }
                 }
-            });
+
+                if (targetRow) {
+                    const qInput = targetRow.querySelector(".add-part-qty");
+                    const sheetsNow = Math.max(1, parseFloat(document.getElementById("sheetsRequired")?.value) || 1);
+                    const totalPlaced = Math.max(1, Math.round((parseFloat(ps.placed_qty) || 1) * sheetsNow));
+                    if (qInput) qInput.value = totalPlaced;
+                    targetRow.dataset.placedBlanks = ps.placed_qty;
+                    targetRow.dataset.blanksPerSheet = ps.placed_qty;
+                    const offtakeInp = targetRow.querySelector(".add-part-offtake");
+                    if (offtakeInp) offtakeInp.value = `${ps.placed_qty || 1} Nos`;
+                }
+            }
+            if (typeof updateModalAddPartsCountBadge === "function") {
+                updateModalAddPartsCountBadge();
+            }
         } else if (totalBlanks > 0) {
             window._basePartPlacedBlanks = totalBlanks;
         }
