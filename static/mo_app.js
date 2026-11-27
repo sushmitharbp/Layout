@@ -3897,17 +3897,19 @@ function renderReviewModal(mo) {
             const isCustomImg = /\.(png|jpe?g|svg|webp|gif)$/i.test(mo.layout_doc_filename || mo.layout_doc_url || '') || String(mo.layout_doc_url).startsWith('data:image/');
             if (isCustomImg) {
                 docHtml += `
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; padding: 10px 14px; border-radius: 8px; border: 1.5px solid #0284c7; margin-bottom: ${imgUrl ? '10px' : '0'};">
-                        <div style="display: flex; align-items: center; gap: 12px;">
-                            <img src="${escapeHtml(mo.layout_doc_url)}" alt="Custom Attached Layout Drawing" style="width: 60px; height: 42px; object-fit: contain; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; background: #f8fafc;" onclick="window.open('${escapeHtml(mo.layout_doc_url)}', '_blank')">
+                    <div style="background: #fff; padding: 12px 14px; border-radius: 10px; border: 1.5px solid #0284c7; margin-bottom: ${imgUrl ? '12px' : '0'};">
+                        <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
                             <div>
-                                <strong style="color: #0369a1;"><i class="fa-solid fa-file-image"></i> ${escapeHtml(mo.layout_doc_filename || 'Custom Attached Layout Drawing')}</strong>
-                                <small class="text-muted" style="display: block;">Custom uploaded layout verification drawing</small>
+                                <strong style="color: #0369a1;"><i class="fa-solid fa-file-image"></i> ${escapeHtml(mo.layout_doc_filename || 'Attached / OptiCutter Layout Screenshot')}</strong>
+                                <small class="text-muted" style="display: block;">Click screenshot to open full size in a new tab</small>
                             </div>
+                            <a href="${escapeHtml(mo.layout_doc_url)}" target="_blank" class="btn btn-secondary btn-sm" style="color: #0284c7; border-color: #0284c7;">
+                                <i class="fa-solid fa-arrow-up-right-from-square"></i> View Full Size
+                            </a>
                         </div>
-                        <a href="${escapeHtml(mo.layout_doc_url)}" target="_blank" class="btn btn-secondary btn-sm" style="color: #0284c7; border-color: #0284c7;">
-                            <i class="fa-solid fa-arrow-up-right-from-square"></i> View Drawing
-                        </a>
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; text-align: center;">
+                            <img src="${escapeHtml(mo.layout_doc_url)}" alt="Attached Layout Screenshot" style="max-width: 100%; max-height: 360px; object-fit: contain; border-radius: 4px; cursor: zoom-in;" onclick="window.open('${escapeHtml(mo.layout_doc_url)}', '_blank')">
+                        </div>
                     </div>
                 `;
             } else {
@@ -3926,17 +3928,19 @@ function renderReviewModal(mo) {
         }
         if (imgUrl) {
             docHtml += `
-                <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; background: #fff; padding: 10px 14px; border-radius: 8px; border: 1px solid #e2e8f0;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <img src="${escapeHtml(imgUrl)}" alt="Layout Drawing Preview" style="width: 60px; height: 42px; object-fit: contain; border: 1px solid #cbd5e1; border-radius: 4px; cursor: pointer; background: #f8fafc;" onclick="window.open('${escapeHtml(imgUrl)}', '_blank')">
+                <div style="background: #fff; padding: 12px 14px; border-radius: 10px; border: 1px solid #cbd5e1;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px;">
                         <div>
-                            <strong style="color: #1e293b;"><i class="fa-solid fa-image"></i> Layout Drawing Preview</strong>
-                            <small class="text-muted" style="display: block;">Click thumbnail to inspect full drawing</small>
+                            <strong style="color: #1e293b;"><i class="fa-solid fa-image"></i> Standardized CAD Layout Drawing</strong>
+                            <small class="text-muted" style="display: block;">Click drawing to inspect full size in a new tab</small>
                         </div>
+                        <a href="${escapeHtml(imgUrl)}" target="_blank" class="btn btn-secondary btn-sm">
+                            <i class="fa-solid fa-arrow-up-right-from-square"></i> View Full Size
+                        </a>
                     </div>
-                    <a href="${escapeHtml(imgUrl)}" target="_blank" class="btn btn-secondary btn-sm">
-                        <i class="fa-solid fa-arrow-up-right-from-square"></i> View Drawing
-                    </a>
+                    <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; text-align: center;">
+                        <img src="${escapeHtml(imgUrl)}" alt="Standardized CAD Layout Drawing" style="max-width: 100%; max-height: 360px; object-fit: contain; border-radius: 4px; cursor: zoom-in;" onclick="window.open('${escapeHtml(imgUrl)}', '_blank')">
+                    </div>
                 </div>
             `;
         }

@@ -1821,6 +1821,21 @@ def get_mo_detail(mo_number):
     mo = MO_ENGINE.get_mo(mo_number)
     if not mo:
         return jsonify({"error": "Material Order not found"}), 404
+
+    is_std = mo.get("is_standard_layout") is not False and str(mo.get("is_standard_layout", "")).lower() not in ("false", "0", "no")
+    if is_std and not mo.get("image_url"):
+        p_no = mo.get("part_no") or mo.get("base_part") or ""
+        rm_erp = str(mo.get("rm_erp") or mo.get("rm_code") or "").strip().lower()
+        recs = get_layout_records_for(p_no)
+        if recs:
+            matched = next(
+                (r for r in recs if r.get("image_url") and rm_erp and str(r.get("rm_erp") or "").strip().lower() in rm_erp),
+                None
+            ) or next((r for r in recs if r.get("image_url")), None)
+            if matched:
+                mo["image_url"] = matched.get("image_url")
+                if not mo.get("layout_record"):
+                    mo["layout_record"] = matched
     return jsonify(mo)
 
 
@@ -1938,10 +1953,19 @@ def create_mo():
         if "layout_doc" in request.files:
             file = request.files["layout_doc"]
             if file and file.filename and allowed_file(file.filename):
+                import base64
+                raw_bytes = file.read()
                 filename = secure_filename(f"mo_{int(time.time())}_{file.filename}")
                 filepath = os.path.join(MO_UPLOAD_DIR, filename)
-                file.save(filepath)
-                data["layout_doc_url"] = f"/static/uploads/mo_documents/{filename}"
+                with open(filepath, "wb") as out_f:
+                    out_f.write(raw_bytes)
+                ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+                mime_map = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg", "svg": "image/svg+xml", "webp": "image/webp", "gif": "image/gif"}
+                if ext in mime_map and len(raw_bytes) <= 1_500_000:
+                    b64 = base64.b64encode(raw_bytes).decode("ascii")
+                    data["layout_doc_url"] = f"data:{mime_map[ext]};base64,{b64}"
+                else:
+                    data["layout_doc_url"] = f"/static/uploads/mo_documents/{filename}"
                 data["layout_doc_filename"] = file.filename
     else:
         data = request.json or {}
