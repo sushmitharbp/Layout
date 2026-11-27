@@ -9891,7 +9891,23 @@ async function openCutOptimizerForModal() {
     if (nonStdPartsList.length > 0) {
         currentCutOptPartsList = nonStdPartsList;
     } else {
-        currentCutOptPartsList = [];
+        const sMax = Math.max(sLen, sWid);
+        const sMin = Math.min(sLen, sWid);
+        const bMax = Math.max(bLen, bWid);
+        const bMin = Math.min(bLen, bWid);
+        const geomMax = (sMax > 0 && sMin > 0 && bMax > 0 && bMin > 0)
+            ? Math.max(1, Math.floor(sMax / bMax) * Math.floor(sMin / bMin), Math.floor(sMax / bMin) * Math.floor(sMin / bMax))
+            : 1;
+        const modalQty = parseInt(document.getElementById("targetQtyManual")?.value || document.getElementById("targetQty")?.value || 0, 10);
+        const initQty = (modalQty > 1) ? modalQty : geomMax;
+        currentCutOptPartsList = [{
+            row_id: 0,
+            part_no: partNo,
+            length: bMax,
+            width: bMin,
+            qty: initQty,
+            is_base: true
+        }];
     }
 
     const multiSec = document.getElementById("optMultiPartsSection");
@@ -9913,12 +9929,12 @@ async function openCutOptimizerForModal() {
     if (swEl) swEl.value = Math.min(sLen, sWid);
     if (kfEl) kfEl.value = 0;
 
+    if (multiSec) multiSec.style.display = "block";
+    if (multiCountEl) multiCountEl.textContent = currentCutOptPartsList.length;
+    renderOptMultiPartBadges(currentCutOptPartsList);
+
     if (currentCutOptPartsList.length > 1) {
         // Multi-Part Batch Mode
-        if (multiSec) multiSec.style.display = "block";
-        if (multiCountEl) multiCountEl.textContent = currentCutOptPartsList.length;
-        renderOptMultiPartBadges(currentCutOptPartsList);
-
         if (plEl) plEl.value = `${currentCutOptPartsList.length} Parts Batch`;
         if (blEl) {
             blEl.value = currentCutOptPartsList[0].length;
@@ -9929,7 +9945,6 @@ async function openCutOptimizerForModal() {
             bwEl.disabled = true;
         }
     } else {
-        if (multiSec) multiSec.style.display = "none";
         if (blEl) {
             blEl.value = Math.max(bLen, bWid);
             blEl.disabled = false;
@@ -9970,8 +9985,8 @@ function renderOptMultiPartBadges(partsList, summaryList = null) {
 
     const summaryMap = {};
     if (summaryList && Array.isArray(summaryList)) {
-        summaryList.forEach(s => {
-            summaryMap[s.part_idx] = s;
+        summaryList.forEach((s, sIdx) => {
+            summaryMap[s.part_idx ?? sIdx] = s;
         });
     }
 
@@ -10166,6 +10181,11 @@ async function run2DCutOptimization() {
 
     if (currentCutOptPartsList && currentCutOptPartsList.length > 1) {
         payload.parts = currentCutOptPartsList;
+    } else if (currentCutOptPartsList && currentCutOptPartsList.length === 1) {
+        currentCutOptPartsList[0].length = Math.max(bLen, bWid);
+        currentCutOptPartsList[0].width = Math.min(bLen, bWid);
+        currentCutOptPartsList[0].part_no = partNo;
+        payload.target_qty = currentCutOptPartsList[0].qty;
     }
 
     try {
@@ -10204,6 +10224,9 @@ async function run2DCutOptimization() {
         } else {
             if (kpiBlanks) kpiBlanks.textContent = `${data.total_blanks} Nos`;
             if (kpiBlanksSub) kpiBlanksSub.textContent = "Per Sheet";
+            if (currentCutOptPartsList && currentCutOptPartsList.length === 1) {
+                renderOptMultiPartBadges(currentCutOptPartsList, data.parts_summary);
+            }
         }
 
         if (kpiRemnants) {
