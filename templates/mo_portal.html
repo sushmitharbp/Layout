@@ -2444,21 +2444,14 @@
                     </div>
                 </div>
 
-                <!-- Multi-Part Batch Items Strip (always visible in OptiCutter so users can view & add 2nd+ parts) -->
-                <div id="optMultiPartsSection" style="display: block; background: #ffffff; border: 1.5px solid #93c5fd; border-radius: 8px; padding: 12px 16px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+                <!-- Multi-Part Batch Items Strip (visible when multiple parts are being nested) -->
+                <div id="optMultiPartsSection" style="display: none; background: #ffffff; border: 1.5px solid #93c5fd; border-radius: 8px; padding: 12px 16px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                         <div style="display: flex; align-items: center; gap: 8px;">
                             <span style="background: #0284c7; color: #fff; padding: 2px 7px; border-radius: 4px; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.5px;">BATCH NESTING</span>
-                            <strong style="font-size: 0.88rem; color: #0f172a;"><i class="fa-solid fa-layer-group" style="color: #0284c7;"></i> Parts in This Cutting Batch (<span id="optMultiPartsCount">1</span> Parts)</strong>
+                            <strong style="font-size: 0.88rem; color: #0f172a;"><i class="fa-solid fa-layer-group" style="color: #0284c7;"></i> Parts in This Cutting Batch (<span id="optMultiPartsCount">0</span> Parts)</strong>
                         </div>
-                        <!-- Add 2nd / Additional Part directly inside OptiCutter -->
-                        <div style="position: relative; display: flex; align-items: center; gap: 6px;">
-                            <div style="position: relative;">
-                                <i class="fa-solid fa-plus" style="position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: #0284c7; font-size: 0.78rem;"></i>
-                                <input type="text" id="optAddPartSearchInput" placeholder="Add 2nd Part (type Part #)..." autocomplete="off" oninput="searchOptAddPart(this.value)" style="height: 32px; padding: 0 10px 0 26px; border: 1.5px solid #38bdf8; border-radius: 6px; font-size: 0.8rem; width: 220px; background: #f0f9ff; color: #0f172a; font-weight: 600;">
-                                <div id="optAddPartDropdown" class="part-dropdown-results" style="display: none; min-width: 280px; right: 0; left: auto; z-index: 2500;"></div>
-                            </div>
-                        </div>
+                        <span style="font-size: 0.75rem; color: #64748b;">All parts below are placed together onto the sheet</span>
                     </div>
                     <div id="optMultiPartsList" style="display: flex; flex-wrap: wrap; gap: 10px;">
                         <!-- Dynamically filled with part cards -->
@@ -2651,7 +2644,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=157"></script>
+    <script src="/static/mo_app.js?v=158"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
 

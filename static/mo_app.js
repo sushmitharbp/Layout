@@ -9891,23 +9891,11 @@ async function openCutOptimizerForModal() {
     if (nonStdPartsList.length > 0) {
         currentCutOptPartsList = nonStdPartsList;
     } else {
-        const baseQty = Math.max(1, parseInt(document.getElementById("targetQtyManual")?.value || document.getElementById("targetQty")?.value || 1, 10));
-        currentCutOptPartsList = [{
-            row_id: 0,
-            part_no: partNo,
-            length: Math.max(bLen, bWid),
-            width: Math.min(bLen, bWid),
-            qty: baseQty,
-            is_base: true
-        }];
+        currentCutOptPartsList = [];
     }
 
     const multiSec = document.getElementById("optMultiPartsSection");
     const multiCountEl = document.getElementById("optMultiPartsCount");
-    const addSearchInp = document.getElementById("optAddPartSearchInput");
-    const addDropdown = document.getElementById("optAddPartDropdown");
-    if (addSearchInp) addSearchInp.value = "";
-    if (addDropdown) addDropdown.style.display = "none";
 
     // Show modal immediately so user sees responsive feedback
     const modal = document.getElementById("cutOptimizerModal");
@@ -9925,12 +9913,12 @@ async function openCutOptimizerForModal() {
     if (swEl) swEl.value = Math.min(sLen, sWid);
     if (kfEl) kfEl.value = 0;
 
-    if (multiSec) multiSec.style.display = "block";
-    if (multiCountEl) multiCountEl.textContent = currentCutOptPartsList.length;
-    renderOptMultiPartBadges(currentCutOptPartsList);
-
     if (currentCutOptPartsList.length > 1) {
         // Multi-Part Batch Mode
+        if (multiSec) multiSec.style.display = "block";
+        if (multiCountEl) multiCountEl.textContent = currentCutOptPartsList.length;
+        renderOptMultiPartBadges(currentCutOptPartsList);
+
         if (plEl) plEl.value = `${currentCutOptPartsList.length} Parts Batch`;
         if (blEl) {
             blEl.value = currentCutOptPartsList[0].length;
@@ -9941,6 +9929,7 @@ async function openCutOptimizerForModal() {
             bwEl.disabled = true;
         }
     } else {
+        if (multiSec) multiSec.style.display = "none";
         if (blEl) {
             blEl.value = Math.max(bLen, bWid);
             blEl.disabled = false;
@@ -10007,144 +9996,24 @@ function renderOptMultiPartBadges(partsList, summaryList = null) {
                 <div style="font-size: 0.74rem; font-weight: 700; border-radius: 4px; padding: 2px 7px; ${isFull ? 'background: #f0fdf4; color: #15803d; border: 1px solid #86efac;' : 'background: #fffbeb; color: #b45309; border: 1px solid #fde68a;'}">
                     ${sumItem ? `${placed}/${p.qty} Placed` : `${p.qty} Nos`}
                 </div>
-                ${idx > 0 ? `<button type="button" onclick="removeOptMultiPart(${idx})" title="Remove part from batch" style="border: none; background: #fee2e2; color: #b91c1c; width: 22px; height: 22px; border-radius: 4px; cursor: pointer; font-weight: 800; display: flex; align-items: center; justify-content: center;">×</button>` : ''}
             </div>
         `;
     }).join("");
 }
 
 /**
- * Handles quantity update for a part in the optimizer modal
+ * Handles quantity update for a part in the optimizer modal (debounced for fast response)
  */
+let optQtyDebounceTimer = null;
 function updateOptMultiPartQty(idx, val) {
     if (!currentCutOptPartsList || !currentCutOptPartsList[idx]) return;
     const q = Math.max(1, parseInt(val) || 1);
     currentCutOptPartsList[idx].qty = q;
-    run2DCutOptimization();
+    clearTimeout(optQtyDebounceTimer);
+    optQtyDebounceTimer = setTimeout(() => {
+        run2DCutOptimization();
+    }, 200);
 }
-
-let optAddSearchTimer = null;
-function searchOptAddPart(query) {
-    clearTimeout(optAddSearchTimer);
-    const dropdown = document.getElementById("optAddPartDropdown");
-    if (!query || query.trim().length < 2) {
-        if (dropdown) dropdown.style.display = "none";
-        return;
-    }
-    optAddSearchTimer = setTimeout(async () => {
-        try {
-            const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
-            const cid = (modalUnit && modalUnit !== "ALL") ? modalUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
-            const res = await fetch(`/api/search?q=${encodeURIComponent(query.trim())}&company_id=${encodeURIComponent(cid)}&branch=${encodeURIComponent(cid)}`);
-            if (!res.ok || !dropdown) return;
-            const results = await res.json();
-            if (!results || results.length === 0) {
-                dropdown.innerHTML = `<div class="part-dropdown-item text-muted">No matching parts found.</div>`;
-            } else {
-                dropdown.innerHTML = results.map(r => {
-                    const sizeStr = (r.thickness && r.length && r.width) ? `${r.thickness}×${r.length}×${r.width} mm` : "";
-                    return `
-                        <div class="part-dropdown-item" onmousedown="event.preventDefault(); addPartToCutOptimizer('${escapeHtml(r.part_no)}')">
-                            <div style="flex: 1;">
-                                <strong style="color: #0f172a; font-size: 0.82rem;">${escapeHtml(r.part_no)}</strong>
-                                ${sizeStr ? `<small style="display: block; font-size: 0.72rem; color: #0284c7;">${escapeHtml(sizeStr)}</small>` : ''}
-                            </div>
-                            <span style="font-size: 0.72rem; font-weight: 700; color: #059669;">+ Add</span>
-                        </div>
-                    `;
-                }).join("");
-            }
-            dropdown.style.display = "block";
-        } catch (err) {
-            console.error("OptiCutter part search error:", err);
-        }
-    }, 180);
-}
-
-async function addPartToCutOptimizer(partNo) {
-    const inp = document.getElementById("optAddPartSearchInput");
-    const dropdown = document.getElementById("optAddPartDropdown");
-    if (inp) inp.value = "";
-    if (dropdown) dropdown.style.display = "none";
-    if (!partNo) return;
-
-    try {
-        const modalUnit = document.getElementById("modalUnitSelect")?.value || window._activeUnit || window.AUTH_COMPANY_ID || "PEPIPL";
-        const cid = (modalUnit && modalUnit !== "ALL") ? modalUnit : (window.AUTH_COMPANY_ID || "PEPIPL");
-        const res = await fetch(`/api/part/${encodeURIComponent(partNo)}?company_id=${encodeURIComponent(cid)}&branch=${encodeURIComponent(cid)}`);
-        if (!res.ok) return;
-        const pData = await res.json();
-        const pL = parseFloat(pData.length || pData.records?.[0]?.part1?.blank_size?.length || 0);
-        const pW = parseFloat(pData.width || pData.records?.[0]?.part1?.blank_size?.width || 0);
-        if (pL <= 0 || pW <= 0) {
-            alert(`Part ${partNo} does not have valid blank dimensions (Length × Width).`);
-            return;
-        }
-        const pQty = Math.max(1, parseInt(pData.offtake || pData.records?.[0]?.part1?.blank_qty || 10, 10));
-
-        // Ensure base part is present as row 0 if list was empty
-        if (!currentCutOptPartsList || currentCutOptPartsList.length === 0) {
-            const bLen = parseFloat(document.getElementById("optBlankLength")?.value) || 0;
-            const bWid = parseFloat(document.getElementById("optBlankWidth")?.value) || 0;
-            const bNo = document.getElementById("optPartLabel")?.value?.trim() || "Base Part";
-            currentCutOptPartsList = [{
-                row_id: 0,
-                part_no: bNo,
-                length: Math.max(bLen, bWid),
-                width: Math.min(bLen, bWid),
-                qty: 10,
-                is_base: true
-            }];
-        }
-
-        currentCutOptPartsList.push({
-            row_id: currentCutOptPartsList.length + 1,
-            part_no: pData.part_no || partNo,
-            length: Math.max(pL, pW),
-            width: Math.min(pL, pW),
-            thickness: pData.thickness,
-            grade: pData.grade,
-            qty: pQty
-        });
-
-        const multiCountEl = document.getElementById("optMultiPartsCount");
-        const plEl = document.getElementById("optPartLabel");
-        const blEl = document.getElementById("optBlankLength");
-        const bwEl = document.getElementById("optBlankWidth");
-        if (multiCountEl) multiCountEl.textContent = currentCutOptPartsList.length;
-        if (plEl && currentCutOptPartsList.length > 1) plEl.value = `${currentCutOptPartsList.length} Parts Batch`;
-        if (blEl) blEl.disabled = currentCutOptPartsList.length > 1;
-        if (bwEl) bwEl.disabled = currentCutOptPartsList.length > 1;
-
-        renderOptMultiPartBadges(currentCutOptPartsList);
-        await run2DCutOptimization();
-    } catch (err) {
-        console.error("Failed to add part to OptiCutter:", err);
-    }
-}
-
-function removeOptMultiPart(idx) {
-    if (!currentCutOptPartsList || idx <= 0 || idx >= currentCutOptPartsList.length) return;
-    currentCutOptPartsList.splice(idx, 1);
-    const multiCountEl = document.getElementById("optMultiPartsCount");
-    const plEl = document.getElementById("optPartLabel");
-    const blEl = document.getElementById("optBlankLength");
-    const bwEl = document.getElementById("optBlankWidth");
-    if (multiCountEl) multiCountEl.textContent = currentCutOptPartsList.length;
-    if (currentCutOptPartsList.length <= 1) {
-        if (plEl && currentCutOptPartsList[0]) plEl.value = currentCutOptPartsList[0].part_no;
-        if (blEl) blEl.disabled = false;
-        if (bwEl) bwEl.disabled = false;
-    } else if (plEl) {
-        plEl.value = `${currentCutOptPartsList.length} Parts Batch`;
-    }
-    renderOptMultiPartBadges(currentCutOptPartsList);
-    run2DCutOptimization();
-}
-
-window.searchOptAddPart = searchOptAddPart;
-window.addPartToCutOptimizer = addPartToCutOptimizer;
-window.removeOptMultiPart = removeOptMultiPart;
 
 /**
  * Opens 2D Cut Optimizer for End Bit MO View
@@ -10266,7 +10135,12 @@ function closeCutOptimizerModal() {
 /**
  * Executes 2D Nesting Optimization via Backend Engine
  */
+let cutOptAbortCtrl = null;
 async function run2DCutOptimization() {
+    if (cutOptAbortCtrl) {
+        try { cutOptAbortCtrl.abort(); } catch (e) {}
+    }
+    cutOptAbortCtrl = new AbortController();
     const sLen = parseFloat(document.getElementById("optSheetLength")?.value) || 0;
     const sWid = parseFloat(document.getElementById("optSheetWidth")?.value) || 0;
     const bLen = parseFloat(document.getElementById("optBlankLength")?.value) || 0;
@@ -10298,6 +10172,7 @@ async function run2DCutOptimization() {
         const res = await fetch("/api/optimizer/2d-cut-list", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            signal: cutOptAbortCtrl ? cutOptAbortCtrl.signal : undefined,
             body: JSON.stringify(payload)
         });
 
@@ -10348,6 +10223,7 @@ async function run2DCutOptimization() {
         renderOptSvgCutMap(data);
 
     } catch (err) {
+        if (err && err.name === "AbortError") return;
         console.error("2D Nesting error:", err);
         if (svgContainer) {
             svgContainer.innerHTML = `<span style="color: #ef4444; font-size: 0.85rem;"><i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(err.message)}</span>`;
