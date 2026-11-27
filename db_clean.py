@@ -648,7 +648,7 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
                 sheet_mo_qty = float(sheet_rec.get("mo_produced", 0) or 0)
                 app_mo_qty = get_produced_qty_from_app_mo(part_clean, company_id=company_id)
                 total_produced_qty = sheet_mo_qty + app_mo_qty
-                base_qty_to_produce = max(0.0, monthly_sched - initial_stock - sheet_mo_qty)
+                base_qty_to_produce = max(0.0, monthly_sched - initial_stock)
                 effective_stock = initial_stock + total_produced_qty
                 balance_to_produce = max(0.0, base_qty_to_produce - total_produced_qty)
                 return {
@@ -678,8 +678,8 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
         initial_stock = float(mrp_row.get("current_stock") if mrp_row.get("current_stock") is not None else (sheet_rec.get("current_stock", 0) or 0))
         monthly_sched = float(mrp_row.get("monthly_schedule") if mrp_row.get("monthly_schedule") is not None else (sheet_rec.get("monthly_schedule", 0) or 0))
 
-        # Card 1: Target Requirement (Qty to Produce = max(0, monthly_schedule - current_stock - mo_produced_excel))
-        base_qty_to_produce = max(0.0, monthly_sched - initial_stock - sheet_mo_qty)
+        # Card 1: Target Requirement (Qty to Produce = max(0, monthly_schedule - initial_stock))
+        base_qty_to_produce = max(0.0, monthly_sched - initial_stock)
         # Card 2: MO Produced Qty = sheet MOs (from Excel) + live app MOs
         effective_stock = initial_stock + total_produced_qty
         # Card 3: Balance to Produce = max(0, Card 1 - Card 2)
