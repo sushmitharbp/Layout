@@ -7010,7 +7010,7 @@ function switchMrpTab(tabName) {
 
     if (tabName === "manual") {
         if (csvTab) csvTab.style.display = "none";
-        if (manualTab) manualTab.style.display = "block";
+        if (manualTab) manualTab.style.display = "flex";
         if (btnCsv) {
             btnCsv.style.borderBottom = "2.5px solid transparent";
             btnCsv.style.color = "#64748b";
@@ -7023,7 +7023,7 @@ function switchMrpTab(tabName) {
         }
         setTimeout(() => { document.getElementById("newMrpPartNo")?.focus(); }, 150);
     } else {
-        if (csvTab) csvTab.style.display = "block";
+        if (csvTab) csvTab.style.display = "flex";
         if (manualTab) manualTab.style.display = "none";
         if (btnCsv) {
             btnCsv.style.borderBottom = "2.5px solid #7c3aed";

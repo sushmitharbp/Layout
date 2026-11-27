@@ -2197,7 +2197,7 @@
             </div>
 
             <!-- 1. CSV Bulk Upload Tab View -->
-            <div id="mrpTabCsvView" style="display: block;">
+            <div id="mrpTabCsvView" style="display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden;">
                 <form id="uploadMrpCsvForm" onsubmit="submitMrpCsvUpload(event)">
                     <div class="mo-modal-body" style="padding: 20px 24px; gap: 14px;">
                         <!-- What Columns are Needed Instruction Box -->
@@ -2288,7 +2288,7 @@
             </div>
 
             <!-- 2. Single Part Entry Tab View -->
-            <div id="mrpTabManualView" style="display: none;">
+            <div id="mrpTabManualView" style="display: none; flex-direction: column; flex: 1 1 auto; min-height: 0; overflow: hidden;">
                 <form id="addMrpForm" onsubmit="submitAddMrpForm(event)">
                     <div class="mo-modal-body" style="padding: 20px 24px; gap: 14px;">
                         <!-- Part Number Autocomplete Search -->
@@ -2644,7 +2644,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <!-- Scripts -->
-    <script src="/static/mo_app.js?v=159"></script>
+    <script src="/static/mo_app.js?v=160"></script>
     <script src="/static/mo_chat_widget.js?v=3"></script>
 </body>
 
