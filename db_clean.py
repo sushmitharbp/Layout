@@ -670,8 +670,10 @@ def get_mrp_for_part(part_no, month_year=None, company_id=None):
 
         mrp_row = rows[0]
         actual_part_no = mrp_row.get("part_no") or part_clean
+        mrp_month = str(mrp_row.get("month_year") or "").strip()
         sheet_rec = _get_sheet_mrp_data(actual_part_no)
-        sheet_mo_qty = float(sheet_rec.get("mo_produced", 0) or 0)
+        sheet_month = str(sheet_rec.get("month_year") or "").strip()
+        sheet_mo_qty = float(sheet_rec.get("mo_produced", 0) or 0) if (sheet_rec and mrp_month and sheet_month == mrp_month) else 0.0
         app_mo_qty = get_produced_qty_from_app_mo(actual_part_no, company_id=company_id)
         total_produced_qty = sheet_mo_qty + app_mo_qty
 
